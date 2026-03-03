@@ -67,17 +67,18 @@ pub struct TranscriptionStatus {
 
 /// Start recording with default devices
 pub async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
-    start_recording_with_meeting_name(app, None).await
+    start_recording_with_meeting_name(app, None, None).await
 }
 
-/// Start recording with default devices and optional meeting name
+/// Start recording with default devices, optional meeting name, and optional meeting ID
 pub async fn start_recording_with_meeting_name<R: Runtime>(
     app: AppHandle<R>,
     meeting_name: Option<String>,
+    meeting_id: Option<String>,
 ) -> Result<(), String> {
     info!(
-        "Starting recording with default devices, meeting: {:?}",
-        meeting_name
+        "Starting recording with default devices, meeting: {:?}, meeting_id: {:?}",
+        meeting_name, meeting_id
     );
 
     // Check if already recording
@@ -224,6 +225,12 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     });
     manager.set_meeting_name(Some(effective_meeting_name));
 
+    // Set meeting ID if provided (for attaching recording to existing note)
+    if let Some(id) = meeting_id {
+        info!("📝 Setting meeting_id for recording: {}", id);
+        manager.set_meeting_id(Some(id));
+    }
+
     // Set up error callback
     let app_for_error = app.clone();
     manager.set_error_callback(move |error| {
@@ -308,19 +315,20 @@ pub async fn start_recording_with_devices<R: Runtime>(
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
 ) -> Result<(), String> {
-    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None).await
+    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None, None).await
 }
 
-/// Start recording with specific devices and optional meeting name
+/// Start recording with specific devices, optional meeting name, and optional meeting ID
 pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     app: AppHandle<R>,
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
     meeting_name: Option<String>,
+    meeting_id: Option<String>,
 ) -> Result<(), String> {
     info!(
-        "Starting recording with specific devices: mic={:?}, system={:?}, meeting={:?}",
-        mic_device_name, system_device_name, meeting_name
+        "Starting recording with specific devices: mic={:?}, system={:?}, meeting={:?}, meeting_id={:?}",
+        mic_device_name, system_device_name, meeting_name, meeting_id
     );
 
     // Check if already recording
@@ -391,6 +399,12 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         )
     });
     manager.set_meeting_name(Some(effective_meeting_name));
+
+    // Set meeting ID if provided (for attaching recording to existing note)
+    if let Some(id) = meeting_id {
+        info!("📝 Setting meeting_id for recording: {}", id);
+        manager.set_meeting_id(Some(id));
+    }
 
     // Set up error callback
     let app_for_error = app.clone();

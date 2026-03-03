@@ -171,8 +171,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         }));
         setModels(modelList);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load Ollama models');
-        console.error('Error loading models:', err);
+        // Silently handle Ollama connection errors - it's an optional service
+        // If Ollama isn't running, the app still works for notes/transcription
+        console.warn('Ollama not available (this is OK if you\'re using a different LLM provider):', err);
+        setModels([]); // Clear models list
       }
     };
 

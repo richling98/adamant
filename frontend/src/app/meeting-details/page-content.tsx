@@ -6,6 +6,7 @@ import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import Analytics from '@/lib/analytics';
 import { TranscriptPanel } from '@/components/MeetingDetails/TranscriptPanel';
 import { SummaryPanel } from '@/components/MeetingDetails/SummaryPanel';
+import { NotesPanel } from '@/components/NotesPanel';
 
 // Custom hooks
 import { useMeetingData } from '@/hooks/meeting-details/useMeetingData';
@@ -21,6 +22,10 @@ export default function PageContent({
   shouldAutoGenerate = false,
   onAutoGenerateComplete,
   onMeetingUpdated,
+  // New note mode props
+  isNewNote = false,
+  draftMeetingId = null,
+  onMeetingCreated,
   // Pagination props for efficient transcript loading
   segments,
   hasMore,
@@ -34,6 +39,10 @@ export default function PageContent({
   shouldAutoGenerate?: boolean;
   onAutoGenerateComplete?: () => void;
   onMeetingUpdated?: () => Promise<void>;
+  // New note mode props
+  isNewNote?: boolean;
+  draftMeetingId?: string | null;
+  onMeetingCreated?: (actualMeetingId: string) => void;
   // Pagination props
   segments?: any[];
   hasMore?: boolean;
@@ -150,6 +159,13 @@ export default function PageContent({
       className="flex flex-col h-screen bg-gray-50"
     >
       <div className="flex flex-1 overflow-hidden">
+        {/* Three-panel layout: Notes | Transcripts | Summary */}
+        <NotesPanel
+          meetingId={meeting.id}
+          isNewNote={isNewNote}
+          draftMeetingId={draftMeetingId}
+          onMeetingCreated={onMeetingCreated}
+        />
         <TranscriptPanel
           transcripts={meetingData.transcripts}
           customPrompt={customPrompt}

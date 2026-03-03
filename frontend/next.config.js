@@ -21,6 +21,10 @@ const nextConfig = {
     }
     return config;
   },
+
+  // Turbopack configuration (Next.js 16+)
+  // Empty config allows build to proceed with webpack fallbacks
+  turbopack: {},
 }
 
 module.exports = nextConfig

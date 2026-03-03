@@ -107,6 +107,32 @@ class TranscriptRequest(BaseModel):
     overlap: Optional[int] = 1000
     custom_prompt: Optional[str] = "Generate a summary of the meeting transcript."
 
+# Meeting Notes Pydantic models
+class MeetingNote(BaseModel):
+    """Response model for meeting note"""
+    id: str
+    meeting_id: str
+    content_json: Optional[str] = None
+    content_markdown: Optional[str] = None
+    version: int
+    created_at: str
+    updated_at: str
+
+class CreateNoteRequest(BaseModel):
+    """Request model for creating a new note"""
+    content_json: str
+    content_markdown: str
+
+class UpdateNoteRequest(BaseModel):
+    """Request model for updating an existing note"""
+    content_json: str
+    content_markdown: str
+    version: int  # Current version for conflict detection
+
+class CreateMeetingRequest(BaseModel):
+    """Request model for creating a meeting without transcripts"""
+    title: str
+
 class SummaryProcessor:
     """Handles the processing of summaries in a thread-safe way"""
     def __init__(self):
@@ -214,6 +240,100 @@ async def delete_meeting(data: DeleteMeetingRequest):
             raise HTTPException(status_code=500, detail="Failed to delete meeting")
     except Exception as e:
         logger.error(f"Error deleting meeting: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Meeting Notes Endpoints
+@app.post("/api/meetings", response_model=MeetingResponse)
+async def create_meeting_without_transcripts(data: CreateMeetingRequest):
+    """Create a new meeting without transcripts (for notes-only meetings)"""
+    try:
+        import uuid
+        from datetime import datetime
+
+        meeting_id = str(uuid.uuid4())
+        now = datetime.utcnow().isoformat()
+
+        # Use the existing database manager to create a meeting entry
+        # We'll call the internal method directly since save_meeting requires transcripts
+        import sqlite3
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO meetings (id, title, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+        """, (meeting_id, data.title, now, now))
+
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Created notes-only meeting: {meeting_id}")
+        return MeetingResponse(id=meeting_id, title=data.title)
+    except Exception as e:
+        logger.error(f"Error creating meeting: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/meetings/{meeting_id}/notes", response_model=MeetingNote)
+async def create_meeting_note(meeting_id: str, data: CreateNoteRequest):
+    """Create a new note for a meeting"""
+    try:
+        note_id = await db.create_meeting_note(
+            meeting_id=meeting_id,
+            content_json=data.content_json,
+            content_markdown=data.content_markdown
+        )
+
+        # Fetch the created note to return full object
+        note = await db.get_meeting_note(meeting_id)
+        if not note:
+            raise HTTPException(status_code=500, detail="Failed to retrieve created note")
+
+        return MeetingNote(**note)
+    except Exception as e:
+        logger.error(f"Error creating note: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/meetings/{meeting_id}/notes", response_model=Optional[MeetingNote])
+async def get_meeting_note(meeting_id: str):
+    """Get the latest note for a meeting"""
+    try:
+        note = await db.get_meeting_note(meeting_id)
+        if note:
+            return MeetingNote(**note)
+        # Return 404 if no note exists
+        raise HTTPException(status_code=404, detail="No note found for this meeting")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting note: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/meetings/{meeting_id}/notes")
+async def update_meeting_note(meeting_id: str, data: UpdateNoteRequest):
+    """Update an existing note (increments version)"""
+    try:
+        success = await db.update_meeting_note(
+            meeting_id=meeting_id,
+            content_json=data.content_json,
+            content_markdown=data.content_markdown,
+            current_version=data.version
+        )
+
+        if success:
+            # Fetch updated note
+            note = await db.get_meeting_note(meeting_id)
+            if note:
+                return MeetingNote(**note)
+            return {"message": "Note updated successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update note")
+    except ValueError as e:
+        # Version conflict
+        if "conflict" in str(e).lower():
+            raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating note: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 async def process_transcript_background(process_id: str, transcript: TranscriptRequest, custom_prompt: str):

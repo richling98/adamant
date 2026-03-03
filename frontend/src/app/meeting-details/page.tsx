@@ -32,7 +32,30 @@ function MeetingDetailsContent() {
   const [shouldAutoGenerate, setShouldAutoGenerate] = useState<boolean>(false);
   const [hasCheckedAutoGen, setHasCheckedAutoGen] = useState<boolean>(false);
 
-  // Use pagination hook for efficient transcript loading
+  // New note mode state
+  const [isNewNote, setIsNewNote] = useState<boolean>(false);
+  const [draftMeetingId, setDraftMeetingId] = useState<string | null>(null);
+
+  // Detect new note mode
+  useEffect(() => {
+    if (meetingId === 'new') {
+      setIsNewNote(true);
+      setIsLoading(false);
+      // Initialize empty meeting object for new note
+      setMeetingDetails({
+        id: 'new',
+        title: 'Untitled Note',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        transcripts: []
+      });
+    } else {
+      setIsNewNote(false);
+      setDraftMeetingId(null);
+    }
+  }, [meetingId]);
+
+  // Use pagination hook for efficient transcript loading (skip for new notes)
   const {
     metadata,
     segments,
@@ -44,7 +67,7 @@ function MeetingDetailsContent() {
     loadedCount,
     loadMore,
     error: transcriptError,
-  } = usePaginatedTranscripts({ meetingId: meetingId || '' });
+  } = usePaginatedTranscripts({ meetingId: meetingId === 'new' ? '' : (meetingId || '') });
 
   // Check if gemma3:1b model is available in Ollama
   const checkForGemmaModel = useCallback(async (): Promise<boolean> => {
@@ -138,13 +161,13 @@ function MeetingDetailsContent() {
     }
   }, [metadata, transcripts, meetingId, setCurrentMeeting]);
 
-  // Handle transcript loading errors
+  // Handle transcript loading errors (skip for new note mode)
   useEffect(() => {
-    if (transcriptError) {
+    if (transcriptError && !isNewNote) {
       console.error('Error loading transcripts:', transcriptError);
       setError(transcriptError);
     }
-  }, [transcriptError]);
+  }, [transcriptError, isNewNote]);
 
   // Extract fetchMeetingDetails for use in child components (now refetches via hook)
   const fetchMeetingDetails = useCallback(async () => {
@@ -159,6 +182,11 @@ function MeetingDetailsContent() {
 
   // Reset states when meetingId changes (prevent race conditions)
   useEffect(() => {
+    // Skip reset for new note mode - it's already initialized
+    if (meetingId === 'new') {
+      return;
+    }
+
     setMeetingDetails(null);
     setMeetingSummary(null);
     setError(null);
@@ -180,6 +208,14 @@ function MeetingDetailsContent() {
 
   useEffect(() => {
     console.log('MeetingDetails useEffect triggered - meetingId:', meetingId);
+
+    // Skip data fetching for new note mode (check meetingId directly to avoid race conditions)
+    if (meetingId === 'new') {
+      console.log('New note mode detected, skipping data fetch');
+      setIsLoading(false); // Important: Set loading to false for new notes
+      Analytics.trackPageView('meeting_details_new_note');
+      return;
+    }
 
     if (!meetingId || meetingId === 'intro-call') {
       console.warn('No valid meeting ID in URL - meetingId:', meetingId);
@@ -307,7 +343,7 @@ function MeetingDetailsContent() {
     };
 
     loadData();
-  }, [meetingId]);
+  }, [meetingId, isNewNote]);
 
   // Auto-generation check: runs when meeting is loaded with no summary
   useEffect(() => {
@@ -348,8 +384,8 @@ function MeetingDetailsContent() {
     );
   }
 
-  // Show loading spinner while initial data loads
-  if ((isLoading || isLoadingTranscripts) || !meetingDetails) {
+  // Show loading spinner while initial data loads (skip transcript loading check for new notes)
+  if ((isLoading || (!isNewNote && isLoadingTranscripts)) || !meetingDetails) {
     return <div className="flex items-center justify-center h-screen">
       <LoaderIcon className="animate-spin size-6 " />
     </div>;
@@ -365,6 +401,16 @@ function MeetingDetailsContent() {
       await fetchMeetingDetails();
       // Refetch meetings list to update sidebar
       await refetchMeetings();
+    }}
+    // New note mode props
+    isNewNote={isNewNote}
+    draftMeetingId={draftMeetingId}
+    onMeetingCreated={async (actualMeetingId: string) => {
+      // Update URL to actual meeting ID
+      router.replace(`/meeting-details?id=${actualMeetingId}`);
+      // Refresh sidebar to show newly created note
+      await refetchMeetings();
+      console.log('✅ Sidebar refreshed with new note:', actualMeetingId);
     }}
     // Pagination props for efficient transcript loading
     segments={segments}

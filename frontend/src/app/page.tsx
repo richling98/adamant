@@ -21,6 +21,8 @@ import { TranscriptRecovery } from '@/components/TranscriptRecovery';
 import { indexedDBService } from '@/services/indexedDBService';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { Pencil } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function Home() {
   // Local page state (not moved to contexts)
@@ -231,7 +233,31 @@ export default function Home() {
                 }}
               >
                 <div className="w-2/3 max-w-[750px] flex justify-center">
-                  <div className="bg-white rounded-full shadow-lg flex items-center">
+                  <div className="bg-white rounded-full shadow-lg flex items-center px-2">
+                    {/* New Note button */}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => {
+                              Analytics.trackButtonClick('new_note', 'home_page');
+                              router.push('/meeting-details?id=new');
+                            }}
+                            className="w-10 h-10 flex items-center justify-center bg-white border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 rounded-full text-gray-600 transition-colors mr-2"
+                            aria-label="New Note"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>New Note</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+
+                    {/* Vertical divider */}
+                    <div className="w-px h-6 bg-gray-200 mx-1" />
+
                     <RecordingControls
                       isRecording={recordingState.isRecording}
                       onRecordingStop={(callApi = true) => handleRecordingStop(callApi)}

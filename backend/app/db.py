@@ -156,6 +156,26 @@ class DatabaseManager:
                 )
             """)
 
+            # Create meeting_notes table for user-typed notes
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS meeting_notes (
+                    id TEXT PRIMARY KEY,
+                    meeting_id TEXT NOT NULL,
+                    content_json TEXT,
+                    content_markdown TEXT,
+                    version INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
+                )
+            """)
+
+            # Create index on meeting_id for fast lookups
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_meeting_notes_meeting_id
+                ON meeting_notes(meeting_id)
+            """)
+
             conn.commit()
 
     @asynccontextmanager
@@ -885,29 +905,122 @@ class DatabaseManager:
                 # Check if the meeting exists
                 cursor = await conn.execute("SELECT id FROM meetings WHERE id = ?", (meeting_id,))
                 meeting = await cursor.fetchone()
-                
+
                 if not meeting:
                     raise ValueError(f"Meeting with ID {meeting_id} not found")
-                
+
                 # Update the summary in the summary_processes table
                 await conn.execute("""
                     UPDATE summary_processes
                     SET result = ?, updated_at = ?
                     WHERE meeting_id = ?
                 """, (json.dumps(summary), now, meeting_id))
-                
+
                 # Update the meeting's updated_at timestamp
                 await conn.execute("""
                     UPDATE meetings
                     SET updated_at = ?
                     WHERE id = ?
                 """, (now, meeting_id))
-                
+
                 await conn.commit()
                 return True
         except Exception as e:
             logger.error(f"Error updating meeting summary: {str(e)}")
             raise
 
-   
+    # Meeting Notes CRUD operations
+    async def create_meeting_note(self, meeting_id: str, content_json: str, content_markdown: str) -> str:
+        """
+        Create a new note for a meeting.
+        Returns the note ID.
+        """
+        import uuid
+        note_id = str(uuid.uuid4())
+        now = datetime.utcnow().isoformat()
+
+        try:
+            async with self._get_connection() as conn:
+                await conn.execute("""
+                    INSERT INTO meeting_notes
+                    (id, meeting_id, content_json, content_markdown, version, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 1, ?, ?)
+                """, (note_id, meeting_id, content_json, content_markdown, now, now))
+
+                await conn.commit()
+                logger.info(f"Created note {note_id} for meeting {meeting_id}")
+                return note_id
+        except Exception as e:
+            logger.error(f"Error creating meeting note: {str(e)}")
+            raise
+
+    async def get_meeting_note(self, meeting_id: str) -> Optional[Dict]:
+        """
+        Get the latest note for a meeting.
+        Returns dict with note data or None if no note exists.
+        """
+        try:
+            async with self._get_connection() as conn:
+                cursor = await conn.execute("""
+                    SELECT id, meeting_id, content_json, content_markdown, version, created_at, updated_at
+                    FROM meeting_notes
+                    WHERE meeting_id = ?
+                    ORDER BY version DESC
+                    LIMIT 1
+                """, (meeting_id,))
+
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        'id': row[0],
+                        'meeting_id': row[1],
+                        'content_json': row[2],
+                        'content_markdown': row[3],
+                        'version': row[4],
+                        'created_at': row[5],
+                        'updated_at': row[6]
+                    }
+                return None
+        except Exception as e:
+            logger.error(f"Error getting meeting note: {str(e)}")
+            raise
+
+    async def update_meeting_note(self, meeting_id: str, content_json: str, content_markdown: str, current_version: int) -> bool:
+        """
+        Update an existing note (increments version).
+        Returns True if successful, raises exception if version conflict.
+        """
+        now = datetime.utcnow().isoformat()
+
+        try:
+            async with self._get_connection() as conn:
+                # Check current version to detect conflicts
+                cursor = await conn.execute("""
+                    SELECT version FROM meeting_notes
+                    WHERE meeting_id = ?
+                    ORDER BY version DESC
+                    LIMIT 1
+                """, (meeting_id,))
+
+                row = await cursor.fetchone()
+                if row and row[0] != current_version:
+                    # Version conflict - another update happened
+                    raise ValueError(f"Version conflict: expected {current_version}, got {row[0]}")
+
+                # Update the note (increment version)
+                new_version = current_version + 1
+                await conn.execute("""
+                    UPDATE meeting_notes
+                    SET content_json = ?, content_markdown = ?, version = ?, updated_at = ?
+                    WHERE meeting_id = ?
+                """, (content_json, content_markdown, new_version, now, meeting_id))
+
+                await conn.commit()
+                logger.info(f"Updated note for meeting {meeting_id} to version {new_version}")
+                return True
+        except Exception as e:
+            logger.error(f"Error updating meeting note: {str(e)}")
+            raise
+
+
 

@@ -82,25 +82,28 @@ async fn start_recording<R: Runtime>(
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
     meeting_name: Option<String>,
+    meeting_id: Option<String>,
 ) -> Result<(), String> {
-    log_info!("🔥 CALLED start_recording with meeting: {:?}", meeting_name);
+    log_info!("🔥 CALLED start_recording with meeting: {:?}, meeting_id: {:?}", meeting_name, meeting_id);
     log_info!(
-        "📋 Backend received parameters - mic: {:?}, system: {:?}, meeting: {:?}",
+        "📋 Backend received parameters - mic: {:?}, system: {:?}, meeting: {:?}, meeting_id: {:?}",
         mic_device_name,
         system_device_name,
-        meeting_name
+        meeting_name,
+        meeting_id
     );
 
     if is_recording().await {
         return Err("Recording already in progress".to_string());
     }
 
-    // Call the actual audio recording system with meeting name
+    // Call the actual audio recording system with meeting name and optional meeting ID
     match audio::recording_commands::start_recording_with_devices_and_meeting(
         app.clone(),
         mic_device_name,
         system_device_name,
         meeting_name.clone(),
+        meeting_id.clone(),
     )
     .await
     {
@@ -319,7 +322,7 @@ async fn start_recording_with_devices_and_meeting<R: Runtime>(
                 "No devices specified, starting with defaults and meeting: {:?}",
                 meeting_name
             );
-            audio::recording_commands::start_recording_with_meeting_name(app.clone(), meeting_name)
+            audio::recording_commands::start_recording_with_meeting_name(app.clone(), meeting_name, None)
                 .await
         }
         _ => {
@@ -334,6 +337,7 @@ async fn start_recording_with_devices_and_meeting<R: Runtime>(
                 mic_device_name,
                 system_device_name,
                 meeting_name,
+                None,
             )
             .await
         }
@@ -625,6 +629,9 @@ pub fn run() {
             api::api_get_meeting_transcripts,
             api::api_save_meeting_title,
             api::api_save_transcript,
+            api::api_create_meeting,
+            api::api_get_note,
+            api::api_save_note,
             api::open_meeting_folder,
             api::test_backend_connection,
             api::debug_backend_connection,

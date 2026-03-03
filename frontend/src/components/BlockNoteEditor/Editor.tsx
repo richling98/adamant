@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { PartialBlock, Block } from "@blocknote/core";
 import "@blocknote/shadcn/style.css";
-import "@blocknote/core/fonts/inter.css";
 
 interface EditorProps {
   initialContent?: Block[];

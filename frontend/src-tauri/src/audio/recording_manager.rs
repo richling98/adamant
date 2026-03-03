@@ -434,6 +434,16 @@ impl RecordingManager {
         self.recording_saver.set_meeting_name(name);
     }
 
+    /// Set the meeting ID for this recording
+    pub fn set_meeting_id(&mut self, id: Option<String>) {
+        self.recording_saver.set_meeting_id(id);
+    }
+
+    /// Get the meeting ID
+    pub fn get_meeting_id(&self) -> Option<String> {
+        self.recording_saver.get_meeting_id()
+    }
+
     /// Add a structured transcript segment to be saved later
     pub fn add_transcript_segment(&self, segment: super::recording_saver::TranscriptSegment) {
         self.recording_saver.add_transcript_segment(segment);

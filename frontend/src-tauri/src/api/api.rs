@@ -1,7 +1,7 @@
 use log::{debug as log_debug, error as log_error, info as log_info, warn as log_warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_store::StoreExt;
 
 use crate::{
@@ -12,7 +12,6 @@ use crate::{
             transcript::TranscriptsRepository,
         },
     },
-    onboarding::load_onboarding_status,
     state::AppState,
     summary::CustomOpenAIConfig,
 };
@@ -1378,4 +1377,114 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
             }
         }
     }
+}
+
+// ===== Note Management Commands =====
+
+/// Creates a new empty meeting for note-taking
+#[tauri::command]
+pub async fn api_create_meeting<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    title: String,
+) -> Result<serde_json::Value, String> {
+    log_info!("api_create_meeting called with title: {}", title);
+
+    let pool = state.db_manager.pool();
+
+    let meeting_id = format!("meeting-{}", uuid::Uuid::new_v4());
+    let now = chrono::Utc::now();
+
+    sqlx::query::<sqlx::Sqlite>(
+        "INSERT INTO meetings (id, title, created_at, updated_at, folder_path) VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(&meeting_id)
+    .bind(&title)
+    .bind(now)
+    .bind(now)
+    .bind::<Option<String>>(None) // No folder path for notes
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to create meeting: {}", e))?;
+
+    log_info!("✅ Successfully created meeting: {}", meeting_id);
+
+    Ok(serde_json::json!({
+        "id": meeting_id,
+        "title": title,
+        "created_at": now.to_rfc3339(),
+        "updated_at": now.to_rfc3339(),
+    }))
+}
+
+/// Gets a note for a meeting (stored in meeting_notes table)
+#[tauri::command]
+pub async fn api_get_note<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+) -> Result<Option<serde_json::Value>, String> {
+    log_info!("api_get_note called for meeting_id: {}", meeting_id);
+
+    let pool = state.db_manager.pool();
+
+    let note: Option<(String, String)> = sqlx::query_as::<_, (String, String)>(
+        "SELECT notes_json, updated_at FROM meeting_notes WHERE meeting_id = ?",
+    )
+    .bind(&meeting_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to fetch note: {}", e))?;
+
+    if let Some((notes_json, updated_at)) = note {
+        Ok(Some(serde_json::json!({
+            "content_json": notes_json,
+            "format": "blocknote",
+            "version": 1,
+            "updated_at": updated_at,
+        })))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Saves or updates a note for a meeting
+#[tauri::command]
+pub async fn api_save_note<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+    content_json: String,
+    content_markdown: String,
+    _version: Option<i64>,
+) -> Result<serde_json::Value, String> {
+    log_info!("api_save_note called for meeting_id: {}", meeting_id);
+
+    let pool = state.db_manager.pool();
+    let now = chrono::Utc::now();
+
+    // Use UPSERT (INSERT OR REPLACE) to handle both create and update
+    sqlx::query::<sqlx::Sqlite>(
+        "INSERT INTO meeting_notes (meeting_id, notes_json, notes_markdown, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(meeting_id) DO UPDATE SET
+            notes_json = excluded.notes_json,
+            notes_markdown = excluded.notes_markdown,
+            updated_at = excluded.updated_at",
+    )
+    .bind(&meeting_id)
+    .bind(&content_json)
+    .bind(&content_markdown)
+    .bind(now.to_rfc3339())
+    .bind(now.to_rfc3339())
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to save note: {}", e))?;
+
+    log_info!("✅ Saved note for meeting: {}", meeting_id);
+
+    Ok(serde_json::json!({
+        "version": 1,
+        "updated_at": now.to_rfc3339(),
+    }))
 }
