@@ -38,7 +38,7 @@ export function RecordingPostProcessingProvider({ children }: { children: React.
 
           // Call the post-processing handler
           // event.payload is the callApi boolean (true for normal stops)
-          handleRecordingStop(event.payload);
+          handleRecordingStop({ source: 'backend_event', callApi: event.payload });
         });
 
         console.log('[RecordingPostProcessing] Event listener set up successfully');

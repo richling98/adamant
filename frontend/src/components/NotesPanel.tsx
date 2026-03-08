@@ -6,7 +6,16 @@ import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import debounce from 'lodash/debounce';
 import { invoke } from '@tauri-apps/api/core';
+import { Copy } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import '@blocknote/shadcn/style.css';
+import {
+  MEETING_PANE_CONTAINER_CLASS,
+  MEETING_PANE_HEADER_CLASS,
+  MEETING_PANE_HEADER_ROW_CLASS,
+  MEETING_PANE_TITLE_CLASS,
+} from '@/components/MeetingDetails/paneHeaderStyles';
 
 interface NotesPanelProps {
   meetingId: string;
@@ -59,6 +68,10 @@ export function NotesPanel({
   const editorRef = useRef<any>(null);
   const justSavedRef = useRef<boolean>(false); // Track if we just saved to avoid reload
   const editorContentRef = useRef<Block[] | null>(null); // Preserve content across re-renders
+  // Prevents editor.replaceBlocks() (used for content restoration) from
+  // triggering a debounced autosave. BlockNote fires onChange synchronously
+  // during replaceBlocks; we clear the flag after a microtask to be safe.
+  const isRestoringContent = useRef<boolean>(false);
 
   // Track component mount/unmount
   useEffect(() => {
@@ -149,6 +162,12 @@ export function NotesPanel({
         // Preserve content in ref before URL transition triggers prop changes
         editorContentRef.current = blocks;
 
+        // Cancel any pending debounce timer. The URL is about to change from
+        // ?id=new to ?id=<uuid>, which causes prop changes and re-renders.
+        // Any timer still queued at that point would fire the stale saveNote
+        // (isNewNote=true / actualMeetingId=null) and create another meeting.
+        debouncedSave.cancel();
+
         // Notify parent component AFTER note is saved to prevent race condition
         console.log('🔍 DEBUG: About to call onMeetingCreated callback');
         if (onMeetingCreated) {
@@ -183,10 +202,19 @@ export function NotesPanel({
     }
   }, [isNewNote, actualMeetingId, meetingId, noteVersion, onMeetingCreated]);
 
+  // Keep a stable ref to the latest saveNote so the debounced wrapper (created
+  // once) never calls a stale closure. Without this, debouncedSave would always
+  // invoke the initial saveNote where isNewNote=true / actualMeetingId=null,
+  // causing infinite meeting creation after the first autosave.
+  const latestSaveNote = useRef(saveNote);
+  useEffect(() => {
+    latestSaveNote.current = saveNote;
+  }, [saveNote]);
+
   // Debounced save - 2 second delay
   const debouncedSave = useRef(
     debounce((blocks: Block[]) => {
-      saveNote(blocks);
+      latestSaveNote.current(blocks);
     }, 2000)
   ).current;
 
@@ -245,6 +273,9 @@ export function NotesPanel({
 
   const editor = useCreateBlockNote({
     initialContent: isMounted ? initialContent as any : undefined,
+    placeholders: {
+      default: "enter text or type '/'",
+    },
   });
 
   console.log('🎨 EDITOR state:', {
@@ -255,6 +286,10 @@ export function NotesPanel({
 
   // Handle content changes
   const handleEditorChange = useCallback((blocks: Block[]) => {
+    // Ignore changes triggered by editor.replaceBlocks() during content
+    // restoration — those are not user edits and must not create new meetings.
+    if (isRestoringContent.current) return;
+
     const firstBlockContent = (blocks[0] as any)?.content?.[0]?.text || '';
     console.log('📝 EDITOR CHANGE:', {
       blocksCount: blocks.length,
@@ -299,9 +334,13 @@ export function NotesPanel({
         console.log('🔍 DEBUG Skipping load (just saved, restoring content from ref)');
         justSavedRef.current = false; // Reset flag
 
-        // Restore content using BlockNote API to prevent blank editor after URL transition
+        // Restore content using BlockNote API to prevent blank editor after URL transition.
+        // Guard with isRestoringContent so the onChange fired by replaceBlocks is ignored.
         if (editorContentRef.current && editor) {
+          isRestoringContent.current = true;
           editor.replaceBlocks(editor.document, editorContentRef.current);
+          // Clear flag after a microtask — BlockNote may dispatch onChange asynchronously.
+          setTimeout(() => { isRestoringContent.current = false; }, 0);
           console.log('✅ Content restored from ref:', editorContentRef.current.length, 'blocks');
         }
         setIsEditorReady(true);
@@ -331,6 +370,17 @@ export function NotesPanel({
           editorContentRef.current = content; // Keep ref in sync with database content
           setNoteVersion(data.version || 1);
           setLastSaved(data.updated_at ? new Date(data.updated_at) : null);
+
+          // Push loaded content into the editor. useCreateBlockNote() only uses
+          // initialContent at creation time — it does NOT react to subsequent state
+          // changes. Without this call the editor stays blank even though noteContent
+          // state is correctly populated.
+          if (content && editor) {
+            isRestoringContent.current = true;
+            editor.replaceBlocks(editor.document, content);
+            setTimeout(() => { isRestoringContent.current = false; }, 0);
+          }
+
           console.log('✅ NotesPanel: Loaded note', { hasContent: !!content, version: data.version });
         } else {
           // No note exists yet - start with empty
@@ -351,47 +401,73 @@ export function NotesPanel({
   }, [meetingId, isNewNote]);
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden">
+    <div className={MEETING_PANE_CONTAINER_CLASS}>
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {isNewNote ? 'New Note' : 'Meeting Notes'}
-          </h2>
-          <div className="text-sm text-gray-500">
-            {isSaving && (
-              <span className="flex items-center gap-1">
-                <div className="inline-block animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-blue-500"></div>
-                Saving...
-              </span>
-            )}
-            {!isSaving && lastSaved && (
-              <span>Saved {formatTimestamp(lastSaved)}</span>
-            )}
+      <div className={MEETING_PANE_HEADER_CLASS}>
+        <div className={MEETING_PANE_HEADER_ROW_CLASS}>
+          <h2 className={MEETING_PANE_TITLE_CLASS}>My Notes</h2>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Copy notes to clipboard */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (!editor) return;
+                try {
+                  const markdown = await editor.blocksToMarkdownLossy(editor.document);
+                  await navigator.clipboard.writeText(markdown);
+                  toast.success('Notes copied to clipboard');
+                } catch {
+                  toast.error('Failed to copy notes');
+                }
+              }}
+              disabled={
+                !isEditorReady ||
+                // Disabled when document has only one empty default block
+                (editor?.document?.length === 1 &&
+                  !(editor.document[0].content as any[])?.length)
+              }
+              title="Copy notes to clipboard"
+            >
+              <Copy size={16} />
+              <span className="hidden lg:inline">Copy</span>
+            </Button>
+            {/* Save status indicator */}
+            <div className="text-sm text-foreground/60">
+              {isSaving && (
+                <span className="flex items-center gap-1">
+                  <div className="inline-block animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-emerald-400"></div>
+                  Saving...
+                </span>
+              )}
+              {!isSaving && lastSaved && (
+                <span>Saved {formatTimestamp(lastSaved)}</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto px-4 lg:px-6 py-6">
         {isLoading && (
           <div className="flex items-center justify-center h-full">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-400"></div>
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-700 text-sm">{error}</p>
+          <div className="bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-4">
+            <p className="text-emerald-200 text-sm">{error}</p>
           </div>
         )}
 
         {!isLoading && !error && isEditorReady && isMounted && (
-          <div className="h-full">
+          <div className="h-full notes-editor-surface">
             <BlockNoteView
               editor={editor}
               editable={true}
-              theme="light"
+              theme="dark"
             />
           </div>
         )}

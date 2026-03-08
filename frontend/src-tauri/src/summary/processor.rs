@@ -11,6 +11,12 @@ use tracing::{error, info};
 static THINKING_TAG_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?s)<think(?:ing)?>.*?</think(?:ing)?>").unwrap()
 });
+static TABLE_SEPARATOR_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*\|?[\s:\-]+(\|[\s:\-]+)+\|?\s*$").unwrap()
+});
+static MULTI_NEWLINE_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\n{3,}").unwrap()
+});
 
 /// Rough token count estimation using character count
 pub fn rough_token_count(s: &str) -> usize {
@@ -113,12 +119,112 @@ pub fn clean_llm_markdown_output(markdown: &str) -> String {
         if trimmed.starts_with(prefix) && trimmed.ends_with(SUFFIX) {
             // Extract content between the fences
             let content = &trimmed[prefix.len()..trimmed.len() - SUFFIX.len()];
-            return content.trim().to_string();
+            return convert_markdown_tables_to_bullets(content.trim());
         }
     }
 
     // If no fences found, return the trimmed string
-    trimmed.to_string()
+    convert_markdown_tables_to_bullets(trimmed)
+}
+
+fn strip_inline_markdown(text: &str) -> String {
+    text
+        .replace("**", "")
+        .replace('*', "")
+        .replace('`', "")
+        .replace('_', "")
+        .trim()
+        .to_string()
+}
+
+fn parse_table_row_cells(line: &str) -> Vec<String> {
+    let trimmed = line.trim();
+    if !trimmed.starts_with('|') || !trimmed.ends_with('|') {
+        return Vec::new();
+    }
+
+    trimmed
+        .trim_matches('|')
+        .split('|')
+        .map(|cell| cell.trim().to_string())
+        .filter(|cell| !cell.is_empty())
+        .collect()
+}
+
+fn is_markdown_table_row(line: &str) -> bool {
+    parse_table_row_cells(line).len() >= 2
+}
+
+fn convert_markdown_tables_to_bullets(markdown: &str) -> String {
+    let lines: Vec<&str> = markdown.lines().collect();
+    let mut converted: Vec<String> = Vec::new();
+    let mut i = 0;
+    let mut in_code_fence = false;
+
+    while i < lines.len() {
+        let line = lines[i];
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("```") {
+            in_code_fence = !in_code_fence;
+            converted.push(line.to_string());
+            i += 1;
+            continue;
+        }
+
+        if !in_code_fence && i + 1 < lines.len() {
+            let divider = lines[i + 1];
+            if is_markdown_table_row(line) && TABLE_SEPARATOR_REGEX.is_match(divider.trim()) {
+                let headers: Vec<String> = parse_table_row_cells(line)
+                    .into_iter()
+                    .map(|header| strip_inline_markdown(&header))
+                    .collect();
+
+                i += 2;
+
+                while i < lines.len() && is_markdown_table_row(lines[i]) {
+                    let cells = parse_table_row_cells(lines[i]);
+                    let mut fields: Vec<String> = Vec::new();
+
+                    for (index, cell) in cells.iter().enumerate() {
+                        let value = cell.trim();
+                        if value.is_empty() {
+                            continue;
+                        }
+
+                        let label = headers
+                            .get(index)
+                            .map(|s| s.as_str())
+                            .filter(|label| !label.is_empty())
+                            .unwrap_or("Item");
+
+                        fields.push(format!("**{}**: {}", label, value));
+                    }
+
+                    if !fields.is_empty() {
+                        converted.push(format!("- {}", fields.join("; ")));
+                    }
+
+                    i += 1;
+                }
+
+                if converted.last().map(|line| !line.is_empty()).unwrap_or(false) {
+                    converted.push(String::new());
+                }
+
+                continue;
+            }
+        }
+
+        converted.push(line.to_string());
+        i += 1;
+    }
+
+    let collapsed = MULTI_NEWLINE_REGEX
+        .replace_all(&converted.join("\n"), "\n\n")
+        .to_string();
+
+    collapsed.trim().to_string()
 }
 
 /// Extracts meeting name from the first heading in markdown
@@ -323,6 +429,7 @@ pub async fn generate_meeting_summary(
 4. If a section has no relevant info, write "None noted in this section."
 5. Output **only** the completed Markdown report.
 6. If unsure about something, omit it.
+7. Never output markdown tables. Use bullet points with bold labels instead.
 
 **SECTION-SPECIFIC INSTRUCTIONS:**
 {}

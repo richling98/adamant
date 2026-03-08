@@ -405,9 +405,9 @@ export function ModelManager({
     return (
       <div className={`space-y-3 ${className}`}>
         <div className="animate-pulse space-y-3">
-          <div className="h-20 bg-gray-100 rounded-lg"></div>
-          <div className="h-20 bg-gray-100 rounded-lg"></div>
-          <div className="h-20 bg-gray-100 rounded-lg"></div>
+          <div className="h-20 bg-white/10 rounded-lg"></div>
+          <div className="h-20 bg-white/10 rounded-lg"></div>
+          <div className="h-20 bg-white/10 rounded-lg"></div>
         </div>
       </div>
     );
@@ -415,9 +415,9 @@ export function ModelManager({
 
   if (error) {
     return (
-      <div className={`bg-red-50 border border-red-200 rounded-lg p-4 ${className}`}>
-        <p className="text-sm text-red-800">Failed to load models</p>
-        <p className="text-xs text-red-600 mt-1">{error}</p>
+      <div className={`bg-red-900/20 border border-red-800/30 rounded-lg p-4 ${className}`}>
+        <p className="text-sm text-red-400">Failed to load models</p>
+        <p className="text-xs text-red-300 mt-1">{error}</p>
       </div>
     );
   }
@@ -492,7 +492,7 @@ export function ModelManager({
         <motion.div
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-xs text-gray-500 text-center pt-2"
+          className="text-xs text-zinc-500 text-center pt-2"
         >
           Using {getDisplayName(selectedModel)} for transcription
         </motion.div>
@@ -546,10 +546,10 @@ function ModelCard({
       className={`
         relative rounded-lg border-2 transition-all cursor-pointer
         ${isSelected && isAvailable
-          ? 'border-blue-500 bg-blue-50'
+          ? 'border-blue-500/70 bg-blue-900/20'
           : isAvailable
-            ? 'border-gray-200 hover:border-gray-300 bg-white'
-            : 'border-gray-200 bg-gray-50'
+            ? 'border-white/10 hover:border-white/20 bg-white/5'
+            : 'border-white/10 bg-white/5'
         }
         ${isAvailable ? '' : 'cursor-default'}
       `}
@@ -570,7 +570,7 @@ function ModelCard({
             {/* Model Name */}
             <div className="flex items-center gap-2 mb-1">
               <span className="text-2xl">{getModelIcon(model.accuracy)}</span>
-              <h3 className="font-semibold text-gray-900">{displayName}</h3>
+              <h3 className="font-semibold text-white">{displayName}</h3>
               {isSelected && isAvailable && (
                 <motion.span
                   initial={{ scale: 0 }}
@@ -583,10 +583,10 @@ function ModelCard({
               {isQuantizedModel(model.name) && (
                 <span className={`px-2 py-0.5 rounded-full text-xs ${
                   getModelPerformanceBadge(model.name).color === 'green'
-                    ? 'bg-green-100 text-green-700'
+                    ? 'bg-green-900/20 text-green-400'
                     : getModelPerformanceBadge(model.name).color === 'orange'
-                      ? 'bg-orange-100 text-orange-700'
-                      : 'bg-gray-100 text-gray-700'
+                      ? 'bg-orange-900/20 text-orange-400'
+                      : 'bg-white/10 text-zinc-400'
                 }`}>
                   {getModelPerformanceBadge(model.name).label}
                 </span>
@@ -594,10 +594,10 @@ function ModelCard({
             </div>
 
             {/* Tagline */}
-            <p className="text-sm text-gray-600 ml-9">{getModelTagline(model.name, model.speed, model.accuracy)}</p>
+            <p className="text-sm text-zinc-400 ml-9">{getModelTagline(model.name, model.speed, model.accuracy)}</p>
 
             {/* Model Specs */}
-            <div className="flex items-center space-x-4 text-sm text-gray-600 ml-9 mt-2">
+            <div className="flex items-center space-x-4 text-sm text-zinc-400 ml-9 mt-2">
               <span className="flex items-center space-x-1">
                 <span>📦</span>
                 <span>{formatFileSize(model.size_mb)}</span>
@@ -632,7 +632,7 @@ function ModelCard({
                         e.stopPropagation();
                         onDelete();
                       }}
-                      className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                      className="text-zinc-500 hover:text-red-400 transition-colors p-1"
                       title="Delete model to free up space"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -699,7 +699,7 @@ function ModelCard({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="mt-3 pt-3 border-t border-gray-200"
+            className="mt-3 pt-3 border-t border-white/10"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -711,13 +711,13 @@ function ModelCard({
                   e.stopPropagation();
                   onCancel();
                 }}
-                className="text-xs text-gray-600 hover:text-red-600 font-medium transition-colors px-2 py-1 rounded hover:bg-red-50"
+                className="text-xs text-zinc-400 hover:text-red-400 font-medium transition-colors px-2 py-1 rounded hover:bg-red-900/20"
                 title="Cancel download"
               >
                 Cancel
               </button>
             </div>
-            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
               <motion.div
                 className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"
                 initial={{ width: 0 }}
@@ -725,7 +725,7 @@ function ModelCard({
                 transition={{ duration: 0.3, ease: 'easeOut' }}
               />
             </div>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-zinc-500 mt-1">
               {model.size_mb ? (
                 <>
                   {formatFileSize(model.size_mb * downloadProgress / 100)} / {formatFileSize(model.size_mb)}

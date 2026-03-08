@@ -30,21 +30,25 @@ export interface Meeting {
  */
 export class StorageService {
   /**
-   * Save meeting transcript to SQLite database
+   * Save meeting transcript to SQLite database.
    * @param meetingTitle - Title of the meeting
    * @param transcripts - Array of transcript segments
    * @param folderPath - Optional folder path for audio file
+   * @param existingMeetingId - When provided, transcripts are attached to this existing
+   *   meeting row instead of creating a new one (notes + recording unified flow).
    * @returns Promise with { meeting_id: string }
    */
   async saveMeeting(
     meetingTitle: string,
     transcripts: Transcript[],
-    folderPath: string | null
+    folderPath: string | null,
+    existingMeetingId?: string
   ): Promise<SaveMeetingResponse> {
     return invoke<SaveMeetingResponse>('api_save_transcript', {
       meetingTitle,
       transcripts,
       folderPath,
+      existingMeetingId: existingMeetingId ?? null,
     });
   }
 

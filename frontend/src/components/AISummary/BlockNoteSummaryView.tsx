@@ -7,6 +7,7 @@ import { AISummary } from './index';
 import { Block } from '@blocknote/core';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
+import { detectMarkdownShape, normalizeSummaryMarkdown, SummaryMarkdownShape } from '@/lib/summaryMarkdown';
 import "@blocknote/shadcn/style.css";
 
 // Dynamically import BlockNote Editor to avoid SSR issues
@@ -25,6 +26,10 @@ interface BlockNoteSummaryViewProps {
     created_at: string;
   };
   onDirtyChange?: (isDirty: boolean) => void;
+  onParseStateChange?: (
+    state: 'idle' | 'parsing' | 'parsed' | 'failed',
+    diagnostics: SummaryMarkdownShape & { normalizedLength: number }
+  ) => void;
 }
 
 export interface BlockNoteSummaryViewRef {
@@ -72,28 +77,106 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
   error = null,
   onRegenerateSummary,
   meeting,
-  onDirtyChange
+  onDirtyChange,
+  onParseStateChange
 }, ref) => {
   const { format, data } = detectSummaryFormat(summaryData);
   const [isDirty, setIsDirty] = useState(false);
   const [currentBlocks, setCurrentBlocks] = useState<Block[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
+  const [parseState, setParseState] = useState<'idle' | 'parsing' | 'parsed' | 'failed'>('idle');
+  const [fallbackMarkdown, setFallbackMarkdown] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
   const isContentLoaded = useRef(false);
+  const latestDiagnosticsRef = useRef<SummaryMarkdownShape & { normalizedLength: number }>({
+    hasInstructionLeak: false,
+    hasTable: false,
+    hasTemplateArtifacts: false,
+    lineCount: 0,
+    markdownLength: 0,
+    normalizedLength: 0,
+  });
 
   // Create BlockNote editor for markdown parsing
   const editor = useCreateBlockNote({
     initialContent: undefined
   });
 
+  const emitParseState = useCallback((
+    state: 'idle' | 'parsing' | 'parsed' | 'failed',
+    diagnostics?: SummaryMarkdownShape & { normalizedLength: number }
+  ) => {
+    setParseState(state);
+    onParseStateChange?.(state, diagnostics || latestDiagnosticsRef.current);
+  }, [onParseStateChange]);
+
+  const blockHasMeaningfulContent = useCallback((block: any): boolean => {
+    if (!block) return false;
+
+    if (typeof block.content === 'string' && block.content.trim().length > 0) {
+      return true;
+    }
+
+    if (Array.isArray(block.content)) {
+      const inlineHasContent = block.content.some((item: any) => {
+        if (typeof item === 'string') return item.trim().length > 0;
+        if (item && typeof item.text === 'string') return item.text.trim().length > 0;
+        return false;
+      });
+      if (inlineHasContent) return true;
+    }
+
+    if (Array.isArray(block.children)) {
+      return block.children.some((child: any) => blockHasMeaningfulContent(child));
+    }
+
+    return false;
+  }, []);
+
   // Parse markdown to blocks when format is markdown
   useEffect(() => {
-    if (format === 'markdown' && data?.markdown && editor) {
+    if (format === 'markdown' && editor) {
       const loadMarkdown = async () => {
+        const rawMarkdown = typeof data?.markdown === 'string' ? data.markdown : '';
+        const normalizedMarkdown = normalizeSummaryMarkdown(rawMarkdown);
+        const markdownShape = detectMarkdownShape(rawMarkdown);
+        const diagnostics = {
+          ...markdownShape,
+          normalizedLength: normalizedMarkdown.length,
+        };
+        latestDiagnosticsRef.current = diagnostics;
+        setFallbackMarkdown(normalizedMarkdown || rawMarkdown || '');
+
+        console.log('[summary-render-diagnostics]', {
+          meetingId: meeting?.id || 'unknown',
+          format,
+          parseState: 'parsing',
+          ...diagnostics,
+        });
+
+        emitParseState('parsing', diagnostics);
+        isContentLoaded.current = false;
+
+        if (!normalizedMarkdown.trim()) {
+          console.warn('⚠️ Markdown is empty after normalization; rendering fallback.');
+          emitParseState('failed', diagnostics);
+          return;
+        }
+
         try {
           console.log('📝 Parsing markdown to BlockNote blocks...');
-          const blocks = await editor.tryParseMarkdownToBlocks(data.markdown);
+          const blocks = await editor.tryParseMarkdownToBlocks(normalizedMarkdown);
+          const hasMeaningfulContent = blocks.some((block) => blockHasMeaningfulContent(block as any));
+
+          if (!blocks.length || !hasMeaningfulContent) {
+            console.warn('⚠️ Parsed markdown has no meaningful content; rendering fallback.');
+            emitParseState('failed', diagnostics);
+            return;
+          }
+
           editor.replaceBlocks(editor.document, blocks);
+          setCurrentBlocks(blocks as Block[]);
           console.log('✅ Markdown parsed successfully');
+          emitParseState('parsed', diagnostics);
 
           // Delay to ensure editor has finished rendering before allowing onChange
           setTimeout(() => {
@@ -101,21 +184,29 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
           }, 100);
         } catch (err) {
           console.error('❌ Failed to parse markdown:', err);
+          emitParseState('failed', diagnostics);
         }
       };
       loadMarkdown();
     }
-  }, [format, data?.markdown, editor]);
+  }, [format, data?.markdown, editor, emitParseState, blockHasMeaningfulContent, meeting?.id, retryCount]);
 
   // Set content loaded flag for blocknote format
   useEffect(() => {
     if (format === 'blocknote' && data?.summary_json) {
+      emitParseState('parsed', latestDiagnosticsRef.current);
       // Delay to ensure editor has finished rendering
       setTimeout(() => {
         isContentLoaded.current = true;
       }, 100);
     }
-  }, [format, data?.summary_json]);
+  }, [format, data?.summary_json, emitParseState]);
+
+  useEffect(() => {
+    if (format === 'legacy') {
+      emitParseState('idle', latestDiagnosticsRef.current);
+    }
+  }, [format, emitParseState]);
 
   const handleEditorChange = useCallback((blocks: Block[]) => {
     // Only set dirty flag if content has finished loading
@@ -134,8 +225,6 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
 
   const handleSave = useCallback(async () => {
     if (!onSave || !isDirty) return;
-
-    setIsSaving(true);
     try {
       console.log('💾 Saving BlockNote content...');
 
@@ -152,8 +241,6 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
     } catch (err) {
       console.error('❌ Save failed:', err);
       alert('Failed to save changes. Please try again.');
-    } finally {
-      setIsSaving(false);
     }
   }, [onSave, isDirty, currentBlocks, editor]);
 
@@ -168,10 +255,14 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
 
         // For markdown format - use the main editor
         if (format === 'markdown' && editor) {
+          if (parseState === 'failed' && fallbackMarkdown) {
+            console.log('📝 Markdown parse failed; using fallback markdown for export/copy');
+            return fallbackMarkdown;
+          }
           console.log('📝 Using markdown editor, blocks:', editor.document.length);
           const markdown = await editor.blocksToMarkdownLossy(editor.document);
           console.log('📝 Generated markdown length:', markdown.length);
-          return markdown;
+          return markdown.trim() ? markdown : fallbackMarkdown;
         }
 
         // For blocknote format - use currentBlocks state
@@ -198,7 +289,7 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
       }
     },
     isDirty
-  }), [handleSave, isDirty, editor, format, currentBlocks, data]);
+  }), [handleSave, isDirty, editor, format, currentBlocks, data, parseState, fallbackMarkdown]);
 
   // Render legacy format
   if (format === 'legacy') {
@@ -236,6 +327,34 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
 
   // Render Markdown format (parse and display in BlockNote)
   if (format === 'markdown') {
+    if (parseState === 'failed') {
+      console.log('🎨 Rendering MARKDOWN fallback (compatibility mode)');
+      return (
+        <div className="flex flex-col w-full gap-3 rounded-lg border border-amber-400/30 bg-transparent p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-amber-100">
+              Rendered in compatibility mode (structured editor parse failed).
+            </p>
+            <button
+              type="button"
+              className="rounded-md border border-white/20 px-2 py-1 text-xs text-foreground/90 hover:bg-white/10"
+              onClick={() => {
+                emitParseState('idle', latestDiagnosticsRef.current);
+                setRetryCount((prev) => prev + 1);
+              }}
+            >
+              Retry structured render
+            </button>
+          </div>
+          <div className="max-h-[65vh] overflow-y-auto overflow-x-auto rounded-md border border-white/10 bg-transparent p-4">
+            <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90 font-mono">
+              {fallbackMarkdown || 'No summary content available.'}
+            </pre>
+          </div>
+        </div>
+      );
+    }
+
     console.log('🎨 Rendering MARKDOWN format (parsed to BlockNote)');
     return (
       <div className="flex flex-col w-full">
@@ -248,7 +367,7 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
                 handleEditorChange(editor.document);
               }
             }}
-            theme="light"
+            theme="dark"
           />
         </div>
       </div>

@@ -8,7 +8,9 @@ use crate::{
     database::{
         models::MeetingModel,
         repositories::{
-            meeting::MeetingsRepository, setting::SettingsRepository,
+            folder::FoldersRepository,
+            meeting::MeetingsRepository,
+            setting::SettingsRepository,
             transcript::TranscriptsRepository,
         },
     },
@@ -30,6 +32,36 @@ pub struct ApiResponse<T> {
 pub struct Meeting {
     pub id: String,
     pub title: String,
+    /// FK into the folders table; None if the meeting is unfiled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
+}
+
+/// A user-created sidebar folder returned to the frontend.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Folder {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateFolderRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RenameFolderRequest {
+    pub folder_id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoveMeetingRequest {
+    pub meeting_id: String,
+    /// None = move meeting to root (unfiled)
+    pub folder_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -341,6 +373,7 @@ pub async fn api_get_meetings<R: Runtime>(
                 .map(|m| Meeting {
                     id: m.id,
                     title: m.title,
+                    folder_id: m.folder_id,
                 })
                 .collect();
             Ok(result)
@@ -933,13 +966,17 @@ pub async fn api_save_transcript<R: Runtime>(
     meeting_title: String,
     transcripts: Vec<serde_json::Value>,
     folder_path: Option<String>,
+    // When set, transcripts are attached to this existing meeting instead of creating a new one.
+    // Used when recording is started from the meeting-details/notes page.
+    existing_meeting_id: Option<String>,
     auth_token: Option<String>,
 ) -> Result<serde_json::Value, String> {
     log_info!(
-        "api_save_transcript called for meeting: {}, transcripts: {}, folder_path: {:?}, auth_token: {}",
+        "api_save_transcript called for meeting: {}, transcripts: {}, folder_path: {:?}, existing_meeting_id: {:?}, auth_token: {}",
         meeting_title,
         transcripts.len(),
         folder_path,
+        existing_meeting_id,
         auth_token.is_some()
     );
 
@@ -978,6 +1015,7 @@ pub async fn api_save_transcript<R: Runtime>(
         &meeting_title,
         &transcripts_to_save,
         folder_path,
+        existing_meeting_id,
     )
     .await
     {
@@ -1016,7 +1054,7 @@ pub async fn open_meeting_folder<R: Runtime>(
 
     // Get meeting with folder_path
     let meeting: Option<MeetingModel> = sqlx::query_as(
-        "SELECT id, title, created_at, updated_at, folder_path FROM meetings WHERE id = ?",
+        "SELECT id, title, created_at, updated_at, folder_path, folder_id FROM meetings WHERE id = ?",
     )
     .bind(&meeting_id)
     .fetch_optional(pool)
@@ -1445,6 +1483,140 @@ pub async fn api_get_note<R: Runtime>(
         })))
     } else {
         Ok(None)
+    }
+}
+
+// ===== FOLDER COMMANDS =====
+
+/// Return all user-created folders ordered by creation time.
+#[tauri::command]
+pub async fn api_get_folders<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<Folder>, String> {
+    log_info!("api_get_folders called");
+    let pool = state.db_manager.pool();
+
+    FoldersRepository::get_all_folders(pool)
+        .await
+        .map(|folders| {
+            folders
+                .into_iter()
+                .map(|f| Folder {
+                    id: f.id,
+                    name: f.name,
+                    created_at: f.created_at.0.to_rfc3339(),
+                    updated_at: f.updated_at.0.to_rfc3339(),
+                })
+                .collect()
+        })
+        .map_err(|e| {
+            log_error!("Failed to get folders: {}", e);
+            format!("Failed to get folders: {}", e)
+        })
+}
+
+/// Create a new folder with the given name.
+#[tauri::command]
+pub async fn api_create_folder<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    name: String,
+) -> Result<Folder, String> {
+    log_info!("api_create_folder called with name: {}", name);
+
+    if name.trim().is_empty() {
+        return Err("Folder name cannot be empty".to_string());
+    }
+
+    let id = format!("folder-{}", uuid::Uuid::new_v4());
+    let pool = state.db_manager.pool();
+
+    FoldersRepository::create_folder(pool, &id, name.trim())
+        .await
+        .map(|f| Folder {
+            id: f.id,
+            name: f.name,
+            created_at: f.created_at.0.to_rfc3339(),
+            updated_at: f.updated_at.0.to_rfc3339(),
+        })
+        .map_err(|e| {
+            log_error!("Failed to create folder: {}", e);
+            format!("Failed to create folder: {}", e)
+        })
+}
+
+/// Rename an existing folder.
+#[tauri::command]
+pub async fn api_rename_folder<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    folder_id: String,
+    name: String,
+) -> Result<(), String> {
+    log_info!("api_rename_folder called: folder_id={}, name={}", folder_id, name);
+
+    if name.trim().is_empty() {
+        return Err("Folder name cannot be empty".to_string());
+    }
+
+    let pool = state.db_manager.pool();
+
+    match FoldersRepository::rename_folder(pool, &folder_id, name.trim()).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(format!("Folder not found: {}", folder_id)),
+        Err(e) => {
+            log_error!("Failed to rename folder {}: {}", folder_id, e);
+            Err(format!("Failed to rename folder: {}", e))
+        }
+    }
+}
+
+/// Delete a folder. All meetings inside it become unfiled (folder_id = NULL).
+#[tauri::command]
+pub async fn api_delete_folder<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    folder_id: String,
+) -> Result<(), String> {
+    log_info!("api_delete_folder called: folder_id={}", folder_id);
+
+    let pool = state.db_manager.pool();
+
+    match FoldersRepository::delete_folder(pool, &folder_id).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(format!("Folder not found: {}", folder_id)),
+        Err(e) => {
+            log_error!("Failed to delete folder {}: {}", folder_id, e);
+            Err(format!("Failed to delete folder: {}", e))
+        }
+    }
+}
+
+/// Assign a meeting to a folder, or remove it from all folders (pass folder_id = null).
+#[tauri::command]
+pub async fn api_move_meeting_to_folder<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+    folder_id: Option<String>,
+) -> Result<(), String> {
+    log_info!(
+        "api_move_meeting_to_folder called: meeting_id={}, folder_id={:?}",
+        meeting_id,
+        folder_id
+    );
+
+    let pool = state.db_manager.pool();
+    let folder_ref = folder_id.as_deref();
+
+    match MeetingsRepository::update_meeting_folder(pool, &meeting_id, folder_ref).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(format!("Meeting not found: {}", meeting_id)),
+        Err(e) => {
+            log_error!("Failed to move meeting {} to folder {:?}: {}", meeting_id, folder_ref, e);
+            Err(format!("Failed to move meeting to folder: {}", e))
+        }
     }
 }
 

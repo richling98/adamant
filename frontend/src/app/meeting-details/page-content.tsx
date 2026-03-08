@@ -1,20 +1,25 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Summary, SummaryResponse } from '@/types';
+import { Summary, SummaryResponse, Transcript } from '@/types';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import Analytics from '@/lib/analytics';
 import { TranscriptPanel } from '@/components/MeetingDetails/TranscriptPanel';
 import { SummaryPanel } from '@/components/MeetingDetails/SummaryPanel';
 import { NotesPanel } from '@/components/NotesPanel';
+import { invoke } from '@tauri-apps/api/core';
 
 // Custom hooks
 import { useMeetingData } from '@/hooks/meeting-details/useMeetingData';
 import { useSummaryGeneration } from '@/hooks/meeting-details/useSummaryGeneration';
-import { useTemplates } from '@/hooks/meeting-details/useTemplates';
 import { useCopyOperations } from '@/hooks/meeting-details/useCopyOperations';
 import { useMeetingOperations } from '@/hooks/meeting-details/useMeetingOperations';
 import { useConfig } from '@/contexts/ConfigContext';
+import { useRecordingStart } from '@/hooks/useRecordingStart';
+import { useRecordingStop } from '@/hooks/useRecordingStop';
+import { useRecordingState } from '@/contexts/RecordingStateContext';
+import { useTranscripts } from '@/contexts/TranscriptContext';
+import { toast } from 'sonner';
 
 export default function PageContent({
   meeting,
@@ -22,6 +27,7 @@ export default function PageContent({
   shouldAutoGenerate = false,
   onAutoGenerateComplete,
   onMeetingUpdated,
+  onSummaryUpdated,
   // New note mode props
   isNewNote = false,
   draftMeetingId = null,
@@ -39,6 +45,7 @@ export default function PageContent({
   shouldAutoGenerate?: boolean;
   onAutoGenerateComplete?: () => void;
   onMeetingUpdated?: () => Promise<void>;
+  onSummaryUpdated?: () => Promise<void>;
   // New note mode props
   isNewNote?: boolean;
   draftMeetingId?: string | null;
@@ -54,60 +61,52 @@ export default function PageContent({
   console.log('📄 PAGE CONTENT: Initializing with data:', {
     meetingId: meeting.id,
     summaryDataKeys: summaryData ? Object.keys(summaryData) : null,
-    transcriptsCount: meeting.transcripts?.length
+    transcriptsCount: meeting.transcripts?.length,
   });
 
   // State
-  const [customPrompt, setCustomPrompt] = useState<string>('');
-  const [isRecording] = useState(false);
   const [summaryResponse] = useState<SummaryResponse | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('standard_meeting');
+  const [isTemplateLoading, setIsTemplateLoading] = useState(true);
+  // Snapshot of live transcripts captured when "End Recording" is pressed.
+  // Holds the panel content stable while the API refetch completes (prevents flash).
+  const [postRecordingSnapshot, setPostRecordingSnapshot] = useState<Transcript[]>([]);
 
-  // Ref to store the modal open function from SummaryGeneratorButtonGroup
-  const openModelSettingsRef = useRef<(() => void) | null>(null);
+  // Local recording state — tracks start/stop locally for useRecordingStart guard.
+  // Global RecordingStateContext is the source of truth for all UI.
+  const [isRecordingLocal, setIsRecordingLocal] = useState(false);
+  const [, setIsRecordingDisabled] = useState(false);
 
   // Sidebar context
   const { serverAddress } = useSidebar();
 
   // Get model config from ConfigContext
-  const { modelConfig, setModelConfig } = useConfig();
+  const { modelConfig } = useConfig();
+
+  // Global recording state (synced with backend via events)
+  const recordingState = useRecordingState();
+  const { isRecording } = recordingState;
+
+  // Transcript context — live transcripts for real-time streaming + session management
+  const { setPendingMeetingId, transcripts: liveTranscripts, clearTranscripts } = useTranscripts();
+
+  // Recording hooks — start and stop are both owned here; the Transcript panel
+  // header buttons call these callbacks directly (sidebar button has been removed).
+  const { handleRecordingStart } = useRecordingStart(isRecordingLocal, setIsRecordingLocal);
+  const { handleRecordingStop } = useRecordingStop(setIsRecordingLocal, setIsRecordingDisabled);
 
   // Custom hooks
   const meetingData = useMeetingData({ meeting, summaryData, onMeetingUpdated });
-  const templates = useTemplates();
-
-  // Callback to register the modal open function
-  const handleRegisterModalOpen = (openFn: () => void) => {
-    console.log('📝 Registering modal open function in PageContent');
-    openModelSettingsRef.current = openFn;
-  };
-
-  // Callback to trigger modal open (called from error handler)
-  const handleOpenModelSettings = () => {
-    console.log('🔔 Opening model settings from PageContent');
-    if (openModelSettingsRef.current) {
-      openModelSettingsRef.current();
-    } else {
-      console.warn('⚠️ Modal open function not yet registered');
-    }
-  };
-
-  // Model config save handler (ConfigContext updates automatically via events)
-  const handleSaveModelConfig = async (config?: any) => {
-    // The actual save happens in the modal via api_save_model_config
-    // ConfigContext will be updated via event listener
-    console.log('[PageContent] Model config saved, context will update via event');
-  };
-
   const summaryGeneration = useSummaryGeneration({
     meeting,
     transcripts: meetingData.transcripts,
     modelConfig: modelConfig,
     isModelConfigLoading: false, // ConfigContext loads on mount
-    selectedTemplate: templates.selectedTemplate,
+    selectedTemplate,
     onMeetingUpdated,
+    onSummaryUpdated,
     updateMeetingTitle: meetingData.updateMeetingTitle,
     setAiSummary: meetingData.setAiSummary,
-    onOpenModelSettings: handleOpenModelSettings,
   });
 
   const copyOperations = useCopyOperations({
@@ -122,19 +121,141 @@ export default function PageContent({
     meeting,
   });
 
+  // Hide summary generation CTA whenever we already have persisted/loaded summary content.
+  const hasExistingSummary = useMemo(() => {
+    const summary = meetingData.aiSummary as any;
+    if (!summary || typeof summary !== 'object') {
+      return false;
+    }
+
+    if (typeof summary.markdown === 'string' && summary.markdown.trim().length > 0) {
+      return true;
+    }
+
+    if (Array.isArray(summary.summary_json) && summary.summary_json.length > 0) {
+      return true;
+    }
+
+    return Object.keys(summary).length > 0;
+  }, [meetingData.aiSummary]);
+
+  // Handle the "Start Recording" action on this page.
+  // If the meeting hasn't been persisted yet (id==='new'), we create it first so
+  // we have a real ID to attach the recording to. Titles are auto-named by timestamp
+  // so the user doesn't need to name the meeting before recording.
+  const handleStartRecordingOnPage = useCallback(async () => {
+    let meetingIdToUse: string = meeting.id;
+
+    if (meeting.id === 'new') {
+      // Meeting not persisted yet — create it now with a timestamp-based title.
+      // Format: "Meeting YYYY-MM-DD_HH-mm-ss" (matches home-page recording convention)
+      const timestamp = new Date().toISOString().replace('T', '_').slice(0, 19).replace(/:/g, '-');
+      const meetingData = await invoke('api_create_meeting', {
+        title: `Meeting ${timestamp}`,
+      }) as { id: string; title: string; created_at: string; updated_at: string };
+      meetingIdToUse = meetingData.id;
+      // Update the URL and sidebar so the page re-renders with the new ID
+      onMeetingCreated?.(meetingIdToUse);
+    }
+
+    // Clear snapshot and stale live transcripts from any previous session
+    setPostRecordingSnapshot([]);
+    clearTranscripts();
+
+    // Pre-seed the meeting ID: recording stop will attach transcripts here
+    setPendingMeetingId(meetingIdToUse);
+    await handleRecordingStart();
+  }, [meeting.id, onMeetingCreated, setPendingMeetingId, clearTranscripts, handleRecordingStart]);
+
+  // Stop recording — delegates to useRecordingStop (mirrors sidebar behaviour)
+  const handleStopRecordingOnPage = useCallback(() => {
+    // Capture snapshot before clearTranscripts() runs internally, so the panel
+    // stays populated during the ~1s gap while the API refetches.
+    setPostRecordingSnapshot([...meetingData.transcripts, ...liveTranscripts]);
+    toast.loading('Saving transcript...', { id: 'transcript-save' });
+    handleRecordingStop({ source: 'ui', callApi: true });
+    Analytics.trackButtonClick('stop_recording', 'meeting_details_transcript_header');
+  }, [handleRecordingStop, meetingData.transcripts, liveTranscripts]);
+
+  // Clear the post-recording snapshot once the API refetch has populated transcripts.
+  useEffect(() => {
+    if (meetingData.transcripts.length > 0 && postRecordingSnapshot.length > 0) {
+      setPostRecordingSnapshot([]);
+    }
+  }, [meetingData.transcripts.length, postRecordingSnapshot.length]);
+
+  // Dismiss the "Saving transcript..." loading toast once the stop flow completes.
+  useEffect(() => {
+    if (!recordingState.isStopping) {
+      toast.dismiss('transcript-save');
+    }
+  }, [recordingState.isStopping]);
+
   // Track page view
   useEffect(() => {
     Analytics.trackPageView('meeting_details');
   }, []);
+
+  // Resolve a valid summary template ID at runtime.
+  // Prefer standard_meeting; fall back to first available template from backend.
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveTemplate = async () => {
+      setIsTemplateLoading(true);
+      try {
+        const templates = await invoke('api_list_templates') as Array<{
+          id: string;
+          name: string;
+          description: string;
+        }>;
+
+        if (cancelled) return;
+
+        if (!templates || templates.length === 0) {
+          setSelectedTemplate('standard_meeting');
+          return;
+        }
+
+        const hasStandardMeeting = templates.some((template) => template.id === 'standard_meeting');
+        setSelectedTemplate(hasStandardMeeting ? 'standard_meeting' : templates[0].id);
+      } catch (error) {
+        console.error('Failed to resolve summary template, falling back to standard_meeting:', error);
+        if (!cancelled) {
+          setSelectedTemplate('standard_meeting');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsTemplateLoading(false);
+        }
+      }
+    };
+
+    resolveTemplate();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Accept an optional customPrompt to match SummaryGeneratorButtonGroup's call signature
+  const handleGenerateSummary = useCallback(async (customPrompt: string = '') => {
+    if (isTemplateLoading) {
+      toast.info('Loading summary template, please try again in a moment.');
+      return;
+    }
+
+    await summaryGeneration.handleGenerateSummary(customPrompt);
+  }, [isTemplateLoading, summaryGeneration]);
 
   // Auto-generate summary when flag is set
   useEffect(() => {
     let cancelled = false;
 
     const autoGenerate = async () => {
-      if (shouldAutoGenerate && meetingData.transcripts.length > 0 && !cancelled) {
+      if (shouldAutoGenerate && meetingData.transcripts.length > 0 && !cancelled && !isTemplateLoading) {
         console.log(`🤖 Auto-generating summary with ${modelConfig.provider}/${modelConfig.model}...`);
-        await summaryGeneration.handleGenerateSummary('');
+        await handleGenerateSummary();
 
         // Notify parent that auto-generation is complete (only if not cancelled)
         if (onAutoGenerateComplete && !cancelled) {
@@ -149,16 +270,16 @@ export default function PageContent({
     return () => {
       cancelled = true;
     };
-  }, [shouldAutoGenerate, meeting.id]); // Re-run if meeting changes
+  }, [shouldAutoGenerate, meeting.id, isTemplateLoading, handleGenerateSummary]); // Re-run if meeting changes
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="flex flex-col h-screen bg-gray-50"
+      className="flex flex-col h-screen min-h-0 bg-background text-foreground"
     >
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-y-hidden overflow-x-auto flex-col xl:grid xl:grid-cols-3">
         {/* Three-panel layout: Notes | Transcripts | Summary */}
         <NotesPanel
           meetingId={meeting.id}
@@ -167,16 +288,23 @@ export default function PageContent({
           onMeetingCreated={onMeetingCreated}
         />
         <TranscriptPanel
-          transcripts={meetingData.transcripts}
-          customPrompt={customPrompt}
-          onPromptChange={setCustomPrompt}
+          transcripts={
+            isRecording
+              ? [...meetingData.transcripts, ...liveTranscripts]
+              : postRecordingSnapshot.length > 0
+                ? postRecordingSnapshot
+                : meetingData.transcripts
+          }
           onCopyTranscript={copyOperations.handleCopyTranscript}
-          onOpenMeetingFolder={meetingOperations.handleOpenMeetingFolder}
+          onStartRecording={handleStartRecordingOnPage}
+          onStopRecording={handleStopRecordingOnPage}
           isRecording={isRecording}
-          disableAutoScroll={true}
-          // Pagination props for efficient loading
-          usePagination={true}
-          segments={segments}
+          isStopping={recordingState.isStopping}
+          disableAutoScroll={!isRecording}
+          // During recording or snapshot: bypass pagination and render directly.
+          // After recording and API refetch: switch back to paginated data.
+          usePagination={!isRecording && postRecordingSnapshot.length === 0}
+          segments={(!isRecording && postRecordingSnapshot.length === 0) ? segments : undefined}
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}
           totalCount={totalCount}
@@ -186,25 +314,10 @@ export default function PageContent({
         <SummaryPanel
           meeting={meeting}
           meetingTitle={meetingData.meetingTitle}
-          onTitleChange={meetingData.handleTitleChange}
-          isEditingTitle={meetingData.isEditingTitle}
-          onStartEditTitle={() => meetingData.setIsEditingTitle(true)}
-          onFinishEditTitle={() => meetingData.setIsEditingTitle(false)}
-          isTitleDirty={meetingData.isTitleDirty}
           summaryRef={meetingData.blockNoteSummaryRef}
-          isSaving={meetingData.isSaving}
-          onSaveAll={meetingData.saveAllChanges}
-          onCopySummary={copyOperations.handleCopySummary}
-          onOpenFolder={meetingOperations.handleOpenMeetingFolder}
           aiSummary={meetingData.aiSummary}
           summaryStatus={summaryGeneration.summaryStatus}
           transcripts={meetingData.transcripts}
-          modelConfig={modelConfig}
-          setModelConfig={setModelConfig}
-          onSaveModelConfig={handleSaveModelConfig}
-          onGenerateSummary={summaryGeneration.handleGenerateSummary}
-          onStopGeneration={summaryGeneration.handleStopGeneration}
-          customPrompt={customPrompt}
           summaryResponse={summaryResponse}
           onSaveSummary={meetingData.handleSaveSummary}
           onSummaryChange={meetingData.handleSummaryChange}
@@ -212,11 +325,13 @@ export default function PageContent({
           summaryError={summaryGeneration.summaryError}
           onRegenerateSummary={summaryGeneration.handleRegenerateSummary}
           getSummaryStatusMessage={summaryGeneration.getSummaryStatusMessage}
-          availableTemplates={templates.availableTemplates}
-          selectedTemplate={templates.selectedTemplate}
-          onTemplateSelect={templates.handleTemplateSelection}
-          isModelConfigLoading={false}
-          onOpenModelSettings={handleRegisterModalOpen}
+          // Header button props — Generate/Copy toggle + model check
+          hasExistingSummary={hasExistingSummary}
+          onCopySummary={copyOperations.handleCopySummary}
+          modelConfig={modelConfig}
+          onGenerateSummary={handleGenerateSummary}
+          onStopGeneration={summaryGeneration.handleStopGeneration}
+          customPrompt=""
         />
       </div>
     </motion.div>

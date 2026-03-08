@@ -1,6 +1,6 @@
 "use client"
 import { useSidebar } from "@/components/Sidebar/SidebarProvider";
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { Transcript, Summary } from "@/types";
 import PageContent from "./page-content";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -22,7 +22,7 @@ function MeetingDetailsContent() {
   const searchParams = useSearchParams();
   const meetingId = searchParams.get('id');
   const source = searchParams.get('source'); // Check if navigated from recording
-  const { setCurrentMeeting, refetchMeetings, stopSummaryPolling } = useSidebar();
+  const { setCurrentMeeting, refetchMeetings, stopSummaryPolling, setNoteSessionActive, setIsMeetingActive, pendingFolderId, setPendingFolderId } = useSidebar();
   const { isAutoSummary } = useConfig(); // Get auto-summary toggle state
   const router = useRouter();
   const [meetingDetails, setMeetingDetails] = useState<MeetingDetailsResponse | null>(null);
@@ -36,10 +36,20 @@ function MeetingDetailsContent() {
   const [isNewNote, setIsNewNote] = useState<boolean>(false);
   const [draftMeetingId, setDraftMeetingId] = useState<string | null>(null);
 
+  // Recording bar visibility: latches true when the user opens a new note and stays
+  // true even after autosave changes the URL from ?id=new to ?id=<actual-uuid>.
+  // Only resets when the user navigates to a completely different meeting.
+  const [showRecordingControls, setShowRecordingControls] = useState(false);
+  // Tracks the meeting ID that was just created by autosave so we can distinguish
+  // "autosave URL change" (keep bar visible) from "user navigated away" (hide bar).
+  const justCreatedMeetingIdRef = useRef<string | null>(null);
+
   // Detect new note mode
   useEffect(() => {
     if (meetingId === 'new') {
       setIsNewNote(true);
+      setShowRecordingControls(true);
+      setIsMeetingActive(true);
       setIsLoading(false);
       // Initialize empty meeting object for new note
       setMeetingDetails({
@@ -52,8 +62,24 @@ function MeetingDetailsContent() {
     } else {
       setIsNewNote(false);
       setDraftMeetingId(null);
+      // Keep the recording bar visible if the URL changed because autosave just created
+      // this meeting (new → actual UUID). Hide it only when navigating to a different meeting.
+      if (meetingId !== justCreatedMeetingIdRef.current) {
+        setShowRecordingControls(false);
+        setIsMeetingActive(false);
+        justCreatedMeetingIdRef.current = null;
+      }
     }
-  }, [meetingId]);
+  }, [meetingId, setIsMeetingActive]);
+
+  // Clear the active-meeting flag when the user navigates away from this page.
+  // This ensures the sidebar "Start Recording" button disappears on old meetings
+  // and on the home page after leaving an active session.
+  useEffect(() => {
+    return () => {
+      setIsMeetingActive(false);
+    };
+  }, [setIsMeetingActive]);
 
   // Use pagination hook for efficient transcript loading (skip for new notes)
   const {
@@ -66,6 +92,7 @@ function MeetingDetailsContent() {
     totalCount,
     loadedCount,
     loadMore,
+    refetch: refetchTranscripts,
     error: transcriptError,
   } = usePaginatedTranscripts({ meetingId: meetingId === 'new' ? '' : (meetingId || '') });
 
@@ -169,21 +196,139 @@ function MeetingDetailsContent() {
     }
   }, [transcriptError, isNewNote]);
 
+  // Refresh transcript list in-place when recording stop flow saves new segments
+  // to this same meeting (no route change).
+  useEffect(() => {
+    const handleMeetingTranscriptsUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ meetingId?: string }>;
+      const updatedMeetingId = customEvent.detail?.meetingId;
+
+      if (!updatedMeetingId || !meetingId || meetingId === 'new') {
+        return;
+      }
+
+      if (updatedMeetingId === meetingId) {
+        console.log('Detected transcript update for current meeting; refetching paginated transcripts...');
+        refetchTranscripts();
+      }
+    };
+
+    window.addEventListener('meeting-transcripts-updated', handleMeetingTranscriptsUpdated);
+    return () => {
+      window.removeEventListener('meeting-transcripts-updated', handleMeetingTranscriptsUpdated);
+    };
+  }, [meetingId, refetchTranscripts]);
+
   // Extract fetchMeetingDetails for use in child components (now refetches via hook)
   const fetchMeetingDetails = useCallback(async () => {
     if (!meetingId || meetingId === 'intro-call') {
       return;
     }
 
-    // The usePaginatedTranscripts hook automatically refetches when meetingId changes
-    // This function is kept for compatibility with onMeetingUpdated callback
-    console.log('fetchMeetingDetails called - pagination hook will handle refetch');
+    await refetchTranscripts();
+  }, [meetingId, refetchTranscripts]);
+
+  // Refetch summary data for the active meeting and update parent summary state.
+  // Used both on initial load and after summary generation completes.
+  const refetchSummaryForMeeting = useCallback(async (targetMeetingId?: string) => {
+    const effectiveMeetingId = targetMeetingId || meetingId;
+    if (!effectiveMeetingId || effectiveMeetingId === 'intro-call' || effectiveMeetingId === 'new') {
+      return;
+    }
+
+    try {
+      const summary = await invoke('api_get_summary', {
+        meetingId: effectiveMeetingId,
+      }) as any;
+
+      console.log('FETCH SUMMARY: Raw response:', summary);
+
+      if (summary.status === 'idle' || (!summary.data && summary.status === 'error')) {
+        console.warn('Meeting summary not found or no summary generated yet:', summary.error || 'idle');
+        setMeetingSummary(null);
+        return;
+      }
+
+      const summaryData = summary.data || {};
+
+      let parsedData = summaryData;
+      if (typeof summaryData === 'string') {
+        try {
+          parsedData = JSON.parse(summaryData);
+        } catch (e) {
+          parsedData = {};
+        }
+      }
+
+      console.log('🔍 FETCH SUMMARY: Parsed data:', parsedData);
+
+      if (parsedData.summary_json) {
+        setMeetingSummary(parsedData as any);
+        return;
+      }
+
+      if (parsedData.markdown) {
+        setMeetingSummary(parsedData as any);
+        return;
+      }
+
+      console.log('LEGACY FORMAT: Detected legacy format, applying section formatting');
+
+      const { MeetingName, _section_order, ...restSummaryData } = parsedData;
+      const formattedSummary: Summary = {};
+      const sectionKeys = _section_order || Object.keys(restSummaryData);
+
+      console.log('LEGACY FORMAT: Processing sections:', sectionKeys);
+
+      for (const key of sectionKeys) {
+        try {
+          const section = restSummaryData[key];
+          if (section &&
+            typeof section === 'object' &&
+            'title' in section &&
+            'blocks' in section) {
+            const typedSection = section as { title?: string; blocks?: any[] };
+
+            if (Array.isArray(typedSection.blocks)) {
+              formattedSummary[key] = {
+                title: typedSection.title || key,
+                blocks: typedSection.blocks.map((block: any) => ({
+                  ...block,
+                  color: 'default',
+                  content: block?.content?.trim() || ''
+                }))
+              };
+            } else {
+              console.warn(`LEGACY FORMAT: Section ${key} has invalid blocks:`, typedSection.blocks);
+              formattedSummary[key] = {
+                title: typedSection.title || key,
+                blocks: []
+              };
+            }
+          } else {
+            console.warn(`LEGACY FORMAT: Skipping invalid section ${key}:`, section);
+          }
+        } catch (error) {
+          console.warn(`LEGACY FORMAT: Error processing section ${key}:`, error);
+        }
+      }
+
+      console.log('LEGACY FORMAT: Formatted summary:', formattedSummary);
+      setMeetingSummary(formattedSummary);
+    } catch (error) {
+      console.error('FETCH SUMMARY: Error fetching meeting summary:', error);
+      setMeetingSummary(null);
+    }
   }, [meetingId]);
 
   // Reset states when meetingId changes (prevent race conditions)
   useEffect(() => {
     // Skip reset for new note mode - it's already initialized
     if (meetingId === 'new') {
+      return;
+    }
+    // Skip reset when URL changes from ?id=new to ?id=<uuid> due to autosave
+    if (meetingId === justCreatedMeetingIdRef.current) {
       return;
     }
 
@@ -217,6 +362,11 @@ function MeetingDetailsContent() {
       return;
     }
 
+    // Skip data fetch when URL changes from ?id=new to ?id=<uuid> due to autosave
+    if (meetingId === justCreatedMeetingIdRef.current) {
+      return;
+    }
+
     if (!meetingId || meetingId === 'intro-call') {
       console.warn('No valid meeting ID in URL - meetingId:', meetingId);
       setError("No meeting selected");
@@ -232,118 +382,16 @@ function MeetingDetailsContent() {
     setError(null);
     setIsLoading(true);
 
-    const fetchMeetingSummary = async () => {
-      try {
-        const summary = await invoke('api_get_summary', {
-          meetingId: meetingId,
-        }) as any;
-
-        console.log('FETCH SUMMARY: Raw response:', summary);
-
-        // Check if the summary request failed with 404 or error status, or if no summary exists yet (idle)
-        // Note: 'cancelled' and 'failed' statuses can still have data if backup was restored
-        if (summary.status === 'idle' || (!summary.data && summary.status === 'error')) {
-          console.warn('Meeting summary not found or no summary generated yet:', summary.error || 'idle');
-          setMeetingSummary(null);
-          return;
-        }
-
-        const summaryData = summary.data || {};
-
-        // Parse if it's a JSON string (backend may return double-encoded JSON)
-        let parsedData = summaryData;
-        if (typeof summaryData === 'string') {
-          try {
-            parsedData = JSON.parse(summaryData);
-          } catch (e) {
-            parsedData = {};
-          }
-        }
-
-        console.log('🔍 FETCH SUMMARY: Parsed data:', parsedData);
-
-        // Priority 1: BlockNote JSON format
-        if (parsedData.summary_json) {
-          setMeetingSummary(parsedData as any);
-          return;
-        }
-
-        // Priority 2: Markdown format
-        if (parsedData.markdown) {
-          setMeetingSummary(parsedData as any);
-          return;
-        }
-
-        // Legacy format - apply formatting
-        console.log('LEGACY FORMAT: Detected legacy format, applying section formatting');
-
-        const { MeetingName, _section_order, ...restSummaryData } = parsedData;
-
-        // Format the summary data with consistent styling - PRESERVE ORDER
-        const formattedSummary: Summary = {};
-
-        // Use section order if available to maintain exact order and handle duplicates
-        const sectionKeys = _section_order || Object.keys(restSummaryData);
-
-        console.log('LEGACY FORMAT: Processing sections:', sectionKeys);
-
-        for (const key of sectionKeys) {
-          try {
-            const section = restSummaryData[key];
-            // Comprehensive null checks to prevent the error
-            if (section &&
-              typeof section === 'object' &&
-              'title' in section &&
-              'blocks' in section) {
-              const typedSection = section as { title?: string; blocks?: any[] };
-
-              // Ensure blocks is an array before mapping
-              if (Array.isArray(typedSection.blocks)) {
-                formattedSummary[key] = {
-                  title: typedSection.title || key,
-                  blocks: typedSection.blocks.map((block: any) => ({
-                    ...block,
-                    // type: 'bullet',
-                    color: 'default',
-                    content: block?.content?.trim() || ''
-                  }))
-                };
-              } else {
-                // Handle case where blocks is not an array
-                console.warn(`LEGACY FORMAT: Section ${key} has invalid blocks:`, typedSection.blocks);
-                formattedSummary[key] = {
-                  title: typedSection.title || key,
-                  blocks: []
-                };
-              }
-            } else {
-              console.warn(`LEGACY FORMAT: Skipping invalid section ${key}:`, section);
-            }
-          } catch (error) {
-            console.warn(`LEGACY FORMAT: Error processing section ${key}:`, error);
-            // Continue processing other sections
-          }
-        }
-
-        console.log('LEGACY FORMAT: Formatted summary:', formattedSummary);
-        setMeetingSummary(formattedSummary);
-      } catch (error) {
-        console.error('FETCH SUMMARY: Error fetching meeting summary:', error);
-        // Don't set error state for summary fetch failure, set to null to show generate button
-        setMeetingSummary(null);
-      }
-    };
-
     const loadData = async () => {
       try {
-        await fetchMeetingSummary();
+        await refetchSummaryForMeeting(meetingId);
       } finally {
         setIsLoading(false);
       }
     };
 
     loadData();
-  }, [meetingId, isNewNote]);
+  }, [meetingId, isNewNote, refetchSummaryForMeeting]);
 
   // Auto-generation check: runs when meeting is loaded with no summary
   useEffect(() => {
@@ -368,6 +416,16 @@ function MeetingDetailsContent() {
     checkAutoGen();
   }, [meetingDetails, meetingSummary, hasCheckedAutoGen, setupAutoGeneration]);
 
+  // Inform the sidebar whether a note-taking session is currently open so the
+  // sidebar "Start Recording" button can append to it instead of creating a new session.
+  // Clears on unmount so the flag doesn't persist after the user navigates away.
+  useEffect(() => {
+    setNoteSessionActive(showRecordingControls);
+    return () => {
+      setNoteSessionActive(false);
+    };
+  }, [showRecordingControls, setNoteSessionActive]);
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -385,7 +443,8 @@ function MeetingDetailsContent() {
   }
 
   // Show loading spinner while initial data loads (skip transcript loading check for new notes)
-  if ((isLoading || (!isNewNote && isLoadingTranscripts)) || !meetingDetails) {
+  const isNewNoteTransition = meetingId === justCreatedMeetingIdRef.current && meetingDetails !== null;
+  if (!isNewNoteTransition && ((isLoading || (!isNewNote && isLoadingTranscripts)) || !meetingDetails)) {
     return <div className="flex items-center justify-center h-screen">
       <LoaderIcon className="animate-spin size-6 " />
     </div>;
@@ -402,13 +461,32 @@ function MeetingDetailsContent() {
       // Refetch meetings list to update sidebar
       await refetchMeetings();
     }}
+    onSummaryUpdated={async () => {
+      await refetchSummaryForMeeting(meetingId || undefined);
+    }}
     // New note mode props
     isNewNote={isNewNote}
     draftMeetingId={draftMeetingId}
     onMeetingCreated={async (actualMeetingId: string) => {
+      // Mark this ID as a new-note autosave transition so the recording bar
+      // stays visible when the URL changes from ?id=new to ?id=<actualMeetingId>.
+      justCreatedMeetingIdRef.current = actualMeetingId;
       // Update URL to actual meeting ID
       router.replace(`/meeting-details?id=${actualMeetingId}`);
-      // Refresh sidebar to show newly created note
+
+      // Assign the new meeting to a folder if the user clicked "+" on one
+      if (pendingFolderId) {
+        try {
+          await invoke('api_move_meeting_to_folder', { meetingId: actualMeetingId, folderId: pendingFolderId });
+          console.log('✅ New note assigned to folder:', pendingFolderId);
+        } catch (err) {
+          console.warn('Could not assign new note to folder:', err);
+        } finally {
+          setPendingFolderId(null);
+        }
+      }
+
+      // Refresh sidebar to show newly created note (in the correct folder if applicable)
       await refetchMeetings();
       console.log('✅ Sidebar refreshed with new note:', actualMeetingId);
     }}

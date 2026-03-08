@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import colors from "tailwindcss/colors";
 
 export default {
   content: [
@@ -16,6 +17,7 @@ export default {
         secondary: "hsl(210, 40%, 96%)", // gray-50
         accent: "hsl(221, 83%, 53%)", // blue-600
         destructive: "hsl(0, 84%, 60%)", // red-500
+        red: colors.emerald,
       },
       fontSize: {
         'display': ['32px', { lineHeight: '1.2', fontWeight: '700' }],

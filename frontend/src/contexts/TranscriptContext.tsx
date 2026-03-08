@@ -20,6 +20,9 @@ interface TranscriptContextType {
   clearTranscripts: () => void;
   currentMeetingId: string | null;
   markMeetingAsSaved: () => Promise<void>;
+  /** When set, transcripts are saved into this existing meeting on stop (instead of creating a new one). */
+  pendingMeetingId: string | null;
+  setPendingMeetingId: (id: string | null) => void;
 }
 
 const TranscriptContext = createContext<TranscriptContextType | undefined>(undefined);
@@ -28,6 +31,18 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [meetingTitle, setMeetingTitle] = useState('+ New Call');
   const [currentMeetingId, setCurrentMeetingId] = useState<string | null>(null);
+
+  // Pre-seeded meeting ID: when set, recording stop will attach transcripts to this
+  // existing meeting (notes + recording land in the same meeting row).
+  const [pendingMeetingId, setPendingMeetingIdState] = useState<string | null>(null);
+  // Keep a ref so the async recording-started handler can read the latest value without
+  // needing the effect to re-register itself.
+  const pendingMeetingIdRef = useRef<string | null>(null);
+
+  const setPendingMeetingId = useCallback((id: string | null) => {
+    pendingMeetingIdRef.current = id;
+    setPendingMeetingIdState(id);
+  }, []);
 
   // Recording state context - provides backend-synced state
   const recordingState = useRecordingState();
@@ -94,8 +109,9 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
         // Listen for recording-started event
         unlistenRecordingStarted = await recordingService.onRecordingStarted(async () => {
           try {
-            // Generate unique meeting ID
-            const meetingId = `meeting-${Date.now()}`;
+            // Use the pre-seeded pending meeting ID (notes-page recording flow) if available,
+            // otherwise generate a fresh ID for the classic home-page recording flow.
+            const meetingId = pendingMeetingIdRef.current ?? `meeting-${Date.now()}`;
             setCurrentMeetingId(meetingId);
 
             // Store in sessionStorage as fallback for markMeetingAsSaved
@@ -521,6 +537,8 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
     clearTranscripts,
     currentMeetingId,
     markMeetingAsSaved,
+    pendingMeetingId,
+    setPendingMeetingId,
   };
 
   return (

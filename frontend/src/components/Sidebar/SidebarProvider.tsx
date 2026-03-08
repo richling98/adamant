@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
-import { useRecordingState } from '@/contexts/RecordingStateContext';
 
 
 interface SidebarItem {
@@ -17,6 +16,16 @@ interface SidebarItem {
 export interface CurrentMeeting {
   id: string;
   title: string;
+  /** FK into the folders table. Undefined / null means the meeting is unfiled. */
+  folder_id?: string | null;
+}
+
+/** A user-created folder returned by the Rust backend. */
+export interface Folder {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // Search result type for transcript search
@@ -38,6 +47,10 @@ interface SidebarContextType {
   isMeetingActive: boolean;
   setIsMeetingActive: (active: boolean) => void;
   handleRecordingToggle: () => void;
+  /** True while the user has a note-taking session open (pencil flow).
+   *  Set by meeting-details/page.tsx when showRecordingControls becomes true. */
+  isNoteSessionActive: boolean;
+  setNoteSessionActive: (active: boolean) => void;
   searchTranscripts: (query: string) => Promise<void>;
   searchResults: TranscriptSearchResult[];
   isSearching: boolean;
@@ -51,7 +64,16 @@ interface SidebarContextType {
   stopSummaryPolling: (meetingId: string) => void;
   // Refetch meetings from backend
   refetchMeetings: () => Promise<void>;
-
+  // Folder management
+  folders: Folder[];
+  fetchFolders: () => Promise<void>;
+  createFolder: (name: string) => Promise<Folder>;
+  renameFolder: (folderId: string, name: string) => Promise<void>;
+  deleteFolder: (folderId: string) => Promise<void>;
+  moveMeetingToFolder: (meetingId: string, folderId: string | null) => Promise<void>;
+  /** Set before navigating to a new meeting so it gets auto-assigned to a folder. */
+  pendingFolderId: string | null;
+  setPendingFolderId: (id: string | null) => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | null>(null);
@@ -68,6 +90,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>({ id: 'intro-call', title: '+ New Call' });
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [meetings, setMeetings] = useState<CurrentMeeting[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
   const [isMeetingActive, setIsMeetingActive] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -75,23 +98,39 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [serverAddress, setServerAddress] = useState('');
   const [transcriptServerAddress, setTranscriptServerAddress] = useState('');
   const [activeSummaryPolls, setActiveSummaryPolls] = useState<Map<string, NodeJS.Timeout>>(new Map());
+  /** When set, the next newly created meeting will be auto-assigned to this folder. */
+  const [pendingFolderId, setPendingFolderId] = useState<string | null>(null);
 
-  // Use recording state from RecordingStateContext (single source of truth)
-  const { isRecording } = useRecordingState();
+  // Tracks whether the user has an active note-taking session open (pencil flow).
+  // Set by meeting-details/page.tsx when showRecordingControls becomes true.
+  const [isNoteSessionActive, setNoteSessionActive] = useState(false);
 
   const pathname = usePathname();
   const router = useRouter();
 
-  // Extract fetchMeetings as a reusable function
+  // Fetch all folders from the backend.
+  const fetchFolders = React.useCallback(async () => {
+    try {
+      const data = await invoke('api_get_folders') as Folder[];
+      setFolders(data);
+    } catch (error) {
+      console.error('Error fetching folders:', error);
+      setFolders([]);
+    }
+  }, []);
+
+  // Extract fetchMeetings as a reusable function.
+  // Preserves folder_id so meetings can be grouped under their folder.
   const fetchMeetings = React.useCallback(async () => {
     if (serverAddress) {
       try {
-        const meetings = await invoke('api_get_meetings') as Array<{ id: string, title: string }>;
-        const transformedMeetings = meetings.map((meeting: any) => ({
-          id: meeting.id,
-          title: meeting.title
+        const data = await invoke('api_get_meetings') as Array<{ id: string; title: string; folder_id?: string | null }>;
+        const transformed: CurrentMeeting[] = data.map((m) => ({
+          id: m.id,
+          title: m.title,
+          folder_id: m.folder_id ?? null,
         }));
-        setMeetings(transformedMeetings);
+        setMeetings(transformed);
         Analytics.trackBackendConnection(true);
       } catch (error) {
         console.error('Error fetching meetings:', error);
@@ -103,7 +142,32 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchMeetings();
-  }, [serverAddress, fetchMeetings]);
+    fetchFolders();
+  }, [serverAddress, fetchMeetings, fetchFolders]);
+
+  // Folder CRUD helpers — each refreshes both meetings and folders after mutation.
+
+  const createFolder = React.useCallback(async (name: string): Promise<Folder> => {
+    const folder = await invoke('api_create_folder', { name }) as Folder;
+    await fetchFolders();
+    return folder;
+  }, [fetchFolders]);
+
+  const renameFolder = React.useCallback(async (folderId: string, name: string): Promise<void> => {
+    await invoke('api_rename_folder', { folderId, name });
+    await fetchFolders();
+  }, [fetchFolders]);
+
+  const deleteFolder = React.useCallback(async (folderId: string): Promise<void> => {
+    await invoke('api_delete_folder', { folderId });
+    // Meetings inside the deleted folder become unfiled — refresh both.
+    await Promise.all([fetchFolders(), fetchMeetings()]);
+  }, [fetchFolders, fetchMeetings]);
+
+  const moveMeetingToFolder = React.useCallback(async (meetingId: string, folderId: string | null): Promise<void> => {
+    await invoke('api_move_meeting_to_folder', { meetingId, folderId });
+    await Promise.all([fetchFolders(), fetchMeetings()]);
+  }, [fetchFolders, fetchMeetings]);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -113,16 +177,23 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     fetchSettings();
   }, []);
 
-  const baseItems: SidebarItem[] = [
-    {
-      id: 'meetings',
-      title: 'Meeting Notes',
+  // Build sidebar items: user-created folders first, then unfiled meetings flat below.
+  const buildSidebarItems = React.useCallback((): SidebarItem[] => {
+    const folderItems: SidebarItem[] = folders.map((folder) => ({
+      id: folder.id,
+      title: folder.name,
       type: 'folder' as const,
-      children: [
-        ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
-      ]
-    },
-  ];
+      children: meetings
+        .filter((m) => m.folder_id === folder.id)
+        .map((m) => ({ id: m.id, title: m.title, type: 'file' as const })),
+    }));
+
+    const unfiledItems: SidebarItem[] = meetings
+      .filter((m) => !m.folder_id)
+      .map((m) => ({ id: m.id, title: m.title, type: 'file' as const }));
+
+    return [...folderItems, ...unfiledItems];
+  }, [folders, meetings]);
 
 
   const toggleCollapse = () => {
@@ -134,33 +205,23 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     if (pathname === '/') {
       setCurrentMeeting({ id: 'intro-call', title: '+ New Call' });
     }
-    setSidebarItems(baseItems);
+    setSidebarItems(buildSidebarItems());
   }, [pathname]);
 
-  // Update sidebar items when meetings change
+  // Rebuild sidebar items whenever meetings or folders change
   useEffect(() => {
-    setSidebarItems(baseItems);
-  }, [meetings]);
+    setSidebarItems(buildSidebarItems());
+  }, [meetings, folders, buildSidebarItems]);
 
-  // Function to handle recording toggle from sidebar
+  // Function to handle recording toggle from sidebar.
+  // The recording button only appears when the user is on an active meeting page,
+  // so this always dispatches to the current meeting page via DOM event.
+  // Stop is handled directly in Sidebar/index.tsx via useRecordingStop to avoid
+  // a circular dependency (useRecordingStop internally calls useSidebar).
   const handleRecordingToggle = () => {
-    if (!isRecording) {
-      // Check if already on home page
-      if (pathname === '/') {
-        // Already on home - trigger recording directly via custom event
-        console.log('Triggering recording from sidebar (already on home page)');
-        window.dispatchEvent(new CustomEvent('start-recording-from-sidebar'));
-      } else {
-        // Not on home - navigate and use auto-start mechanism
-        console.log('Navigating to home page with auto-start flag');
-        sessionStorage.setItem('autoStartRecording', 'true');
-        router.push('/');
-      }
-
-      // Track recording initiation from sidebar
-      Analytics.trackButtonClick('start_recording', 'sidebar');
-    }
-    // The actual recording start/stop is handled in the Home component
+    // Dispatch to the active meeting page to start recording there.
+    window.dispatchEvent(new CustomEvent('start-recording-on-note'));
+    Analytics.trackButtonClick('start_recording', 'sidebar');
   };
 
   // Function to search through meeting transcripts
@@ -301,6 +362,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       isMeetingActive,
       setIsMeetingActive,
       handleRecordingToggle,
+      isNoteSessionActive,
+      setNoteSessionActive,
       searchTranscripts,
       searchResults,
       isSearching,
@@ -312,7 +375,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       startSummaryPolling,
       stopSummaryPolling,
       refetchMeetings: fetchMeetings,
-
+      // Folder management
+      folders,
+      fetchFolders,
+      createFolder,
+      renameFolder,
+      deleteFolder,
+      moveMeetingToFolder,
+      pendingFolderId,
+      setPendingFolderId,
     }}>
       {children}
     </SidebarContext.Provider>

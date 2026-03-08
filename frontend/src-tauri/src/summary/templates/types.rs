@@ -35,6 +35,47 @@ pub struct Template {
 }
 
 impl Template {
+    fn strip_inline_markdown(text: &str) -> String {
+        text
+            .replace("**", "")
+            .replace('*', "")
+            .replace('`', "")
+            .replace('_', "")
+            .trim()
+            .to_string()
+    }
+
+    fn extract_item_labels(item_format: &str) -> Vec<String> {
+        let header_line = item_format
+            .lines()
+            .find(|line| line.trim().starts_with('|') && line.trim().ends_with('|'))
+            .unwrap_or("");
+
+        if header_line.is_empty() {
+            return Vec::new();
+        }
+
+        header_line
+            .trim()
+            .trim_matches('|')
+            .split('|')
+            .map(|cell| Self::strip_inline_markdown(cell))
+            .filter(|cell| !cell.is_empty())
+            .collect()
+    }
+
+    fn format_hint_as_bullet_guidance(item_format: &str) -> String {
+        let labels = Self::extract_item_labels(item_format);
+        if labels.is_empty() {
+            return "Use bullet points with concise `**Label**: value` entries.".to_string();
+        }
+
+        format!(
+            "Use bullet points with bold labels in this order: {}.",
+            labels.join(", ")
+        )
+    }
+
     /// Validates the template structure
     pub fn validate(&self) -> Result<(), String> {
         if self.name.is_empty() {
@@ -86,6 +127,9 @@ impl Template {
         let mut instructions = String::from(
             "- **For the main title (`# [AI-Generated Title]`):** Analyze the entire transcript and create a concise, descriptive title for the meeting.\n"
         );
+        instructions.push_str(
+            "- **Formatting rule for all sections:** Never use markdown tables. Use paragraphs or bullet lists only.\n"
+        );
 
         for section in &self.sections {
             instructions.push_str(&format!(
@@ -99,8 +143,8 @@ impl Template {
 
             if let Some(format) = item_format {
                 instructions.push_str(&format!(
-                    "  - Items in this section should follow the format: `{}`.\n",
-                    format
+                    "  - {}.\n",
+                    Self::format_hint_as_bullet_guidance(format)
                 ));
             }
         }

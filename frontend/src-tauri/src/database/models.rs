@@ -9,6 +9,17 @@ pub struct MeetingModel {
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
     pub folder_path: Option<String>,
+    /// FK into the folders table; None means the meeting is "unfiled"
+    pub folder_id: Option<String>,
+}
+
+/// A user-created folder for organizing meetings (one level deep, no nesting).
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct FolderModel {
+    pub id: String,
+    pub name: String,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]

@@ -62,7 +62,7 @@ impl MeetingsRepository {
 
         // Get meeting details
         let meeting: Option<MeetingModel> =
-            sqlx::query_as("SELECT id, title, created_at, updated_at, folder_path FROM meetings WHERE id = ?")
+            sqlx::query_as("SELECT id, title, created_at, updated_at, folder_path, folder_id FROM meetings WHERE id = ?")
                 .bind(meeting_id)
                 .fetch_optional(&mut *transaction)
                 .await?;
@@ -120,7 +120,7 @@ impl MeetingsRepository {
         }
 
         let meeting: Option<MeetingModel> =
-            sqlx::query_as("SELECT id, title, created_at, updated_at, folder_path FROM meetings WHERE id = ?")
+            sqlx::query_as("SELECT id, title, created_at, updated_at, folder_path, folder_id FROM meetings WHERE id = ?")
                 .bind(meeting_id)
                 .fetch_optional(pool)
                 .await?;
@@ -194,6 +194,32 @@ impl MeetingsRepository {
         }
         transaction.commit().await?;
         Ok(true)
+    }
+
+    /// Assign or remove a meeting from a folder.
+    /// Pass `None` for `folder_id` to move the meeting back to "unfiled" (root).
+    pub async fn update_meeting_folder(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        folder_id: Option<&str>,
+    ) -> Result<bool, SqlxError> {
+        if meeting_id.trim().is_empty() {
+            return Err(SqlxError::Protocol(
+                "meeting_id cannot be empty".to_string(),
+            ));
+        }
+
+        let now = Utc::now().naive_utc();
+        let rows = sqlx::query(
+            "UPDATE meetings SET folder_id = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(folder_id)
+        .bind(now)
+        .bind(meeting_id)
+        .execute(pool)
+        .await?;
+
+        Ok(rows.rows_affected() > 0)
     }
 
     pub async fn update_meeting_name(

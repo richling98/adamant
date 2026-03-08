@@ -219,14 +219,6 @@ fn get_transcription_status() -> TranscriptionStatus {
 }
 
 #[tauri::command]
-fn read_audio_file(file_path: String) -> Result<Vec<u8>, String> {
-    match std::fs::read(&file_path) {
-        Ok(data) => Ok(data),
-        Err(e) => Err(format!("Failed to read audio file: {}", e)),
-    }
-}
-
-#[tauri::command]
 async fn save_transcript(file_path: String, content: String) -> Result<(), String> {
     log_info!("Saving transcript to: {}", file_path);
 
@@ -511,7 +503,6 @@ pub fn run() {
             stop_recording,
             is_recording,
             get_transcription_status,
-            read_audio_file,
             save_transcript,
             analytics::commands::init_analytics,
             analytics::commands::disable_analytics,
@@ -599,10 +590,6 @@ pub fn run() {
             audio::recording_commands::attempt_device_reconnect,
             // Playback device detection (Bluetooth warning)
             audio::recording_commands::get_active_audio_output,
-            // Audio recovery commands (for transcript recovery feature)
-            audio::incremental_saver::recover_audio_from_checkpoints,
-            audio::incremental_saver::cleanup_checkpoints,
-            audio::incremental_saver::has_audio_checkpoints,
             console_utils::show_console,
             console_utils::hide_console,
             console_utils::toggle_console,
@@ -640,6 +627,12 @@ pub fn run() {
             api::api_save_custom_openai_config,
             api::api_get_custom_openai_config,
             api::api_test_custom_openai_connection,
+            // Folder commands
+            api::api_get_folders,
+            api::api_create_folder,
+            api::api_rename_folder,
+            api::api_delete_folder,
+            api::api_move_meeting_to_folder,
             // Summary commands
             summary::api_process_transcript,
             summary::api_get_summary,

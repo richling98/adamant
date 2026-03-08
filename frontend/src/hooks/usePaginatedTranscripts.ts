@@ -23,6 +23,7 @@ interface UsePaginatedTranscriptsReturn {
 
     // Actions
     loadMore: () => Promise<void>;
+    refetch: () => Promise<void>;
     reset: () => void;
 }
 
@@ -151,6 +152,25 @@ export function usePaginatedTranscripts({
         }
     }, [hasMore, meetingId, loadTranscriptsAtOffset, isLoading]);
 
+    // Force refetch for current meeting ID (used when transcripts are appended after save)
+    const refetch = useCallback(async () => {
+        if (!meetingId) return;
+
+        setError(null);
+        setIsLoadingMore(false);
+        setHasMore(false);
+        offsetRef.current = 0;
+        isLoadingRef.current = false;
+
+        setIsLoading(true);
+        try {
+            await loadMetadata();
+            await loadTranscriptsAtOffset(0, false);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [meetingId, loadMetadata, loadTranscriptsAtOffset]);
+
     // Initial load
     useEffect(() => {
         if (!meetingId) {
@@ -194,6 +214,7 @@ export function usePaginatedTranscripts({
         loadedCount: transcripts.length,
         error,
         loadMore,
+        refetch,
         reset,
     };
 }

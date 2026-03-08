@@ -1,3 +1,5 @@
+const colors = require("tailwindcss/colors");
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
     darkMode: ['class'],
@@ -40,14 +42,15 @@ module.exports = {
   				DEFAULT: 'hsl(var(--muted))',
   				foreground: 'hsl(var(--muted-foreground))'
   			},
-  			accent: {
-  				DEFAULT: 'hsl(var(--accent))',
-  				foreground: 'hsl(var(--accent-foreground))'
-  			},
-  			destructive: {
-  				DEFAULT: 'hsl(var(--destructive))',
-  				foreground: 'hsl(var(--destructive-foreground))'
-  			},
+ 			accent: {
+ 				DEFAULT: 'hsl(var(--accent))',
+ 				foreground: 'hsl(var(--accent-foreground))'
+ 			},
+ 			destructive: {
+ 				DEFAULT: 'hsl(var(--destructive))',
+ 				foreground: 'hsl(var(--destructive-foreground))'
+ 			},
+			red: colors.emerald,
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',
@@ -86,4 +89,4 @@ module.exports = {
   	}
   },
   plugins: [require("tailwindcss-animate")],
-}
+};

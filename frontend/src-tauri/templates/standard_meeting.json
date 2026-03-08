@@ -14,9 +14,8 @@
     },
     {
       "title": "Action Items",
-      "instruction": "List all assigned tasks with their owners and due date. Always add reference transcript segment and timestamp in the table.",
-      "format": "list",
-      "item_format": "| **Owner** | Task | Due | Reference Transcript Segment | Segment Time stamp |\n| --- | --- | --- | --- | --- |"
+      "instruction": "List all assigned tasks with their owners and due date. Add reference transcript segment and timestamp using bullets.",
+      "format": "list"
     },
     {
       "title": "Discussion Highlights",

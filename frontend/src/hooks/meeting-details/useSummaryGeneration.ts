@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
 import { isOllamaNotInstalledError } from '@/lib/utils';
 import { BuiltInModelInfo } from '@/lib/builtin-ai';
+import { detectMarkdownShape } from '@/lib/summaryMarkdown';
 
 type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
 
@@ -17,6 +18,7 @@ interface UseSummaryGenerationProps {
   isModelConfigLoading: boolean;
   selectedTemplate: string;
   onMeetingUpdated?: () => Promise<void>;
+  onSummaryUpdated?: () => Promise<void>;
   updateMeetingTitle: (title: string) => void;
   setAiSummary: (summary: Summary | null) => void;
   onOpenModelSettings?: () => void;
@@ -29,6 +31,7 @@ export function useSummaryGeneration({
   isModelConfigLoading,
   selectedTemplate,
   onMeetingUpdated,
+  onSummaryUpdated,
   updateMeetingTitle,
   setAiSummary,
   onOpenModelSettings,
@@ -38,6 +41,29 @@ export function useSummaryGeneration({
   const [originalTranscript, setOriginalTranscript] = useState<string>('');
 
   const { startSummaryPolling, stopSummaryPolling } = useSidebar();
+
+  // Fetch summary payload from database, with small retries to handle async write timing.
+  const fetchSummaryFromDatabase = useCallback(async (meetingId: string, retries = 3, delayMs = 500) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await invokeTauri('api_get_summary', {
+          meetingId,
+        }) as any;
+
+        if (response?.data) {
+          return response.data;
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch summary data (attempt ${attempt}/${retries}):`, error);
+      }
+
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
+    return null;
+  }, []);
 
   // Helper to get status message
   const getSummaryStatusMessage = useCallback((status: SummaryStatus) => {
@@ -80,6 +106,15 @@ export function useSummaryGeneration({
       }
 
       console.log('Processing transcript with template:', selectedTemplate);
+      console.log('[summary-generation-diagnostics]', {
+        stage: 'start',
+        meetingId: meeting.id,
+        templateId: selectedTemplate,
+        transcriptLength: transcriptText.length,
+        modelProvider: modelConfig.provider,
+        modelName: modelConfig.model,
+        isRegeneration,
+      });
 
       // Calculate time since recording
       const timeSinceRecording = (Date.now() - new Date(meeting.created_at).getTime()) / 60000; // minutes
@@ -218,30 +253,48 @@ export function useSummaryGeneration({
         }
 
         // Handle successful completion
-        if (pollingResult.status === 'completed' && pollingResult.data) {
-          console.log('Summary generation completed:', pollingResult.data);
+        if (pollingResult.status === 'completed') {
+          let summaryData = pollingResult.data;
 
-          // Update meeting title if available
-          const meetingName = pollingResult.data.MeetingName || pollingResult.meetingName;
-          if (meetingName) {
-            updateMeetingTitle(meetingName);
+          // Sometimes polling reaches "completed" before the result payload is visible on the same tick.
+          // Refetch directly from DB to ensure UI hydration without requiring page navigation.
+          if (!summaryData) {
+            summaryData = await fetchSummaryFromDatabase(meeting.id);
           }
 
+          if (!summaryData) {
+            setSummaryError('Summary completed but result is not available yet. Please try again.');
+            setSummaryStatus('error');
+            toast.error('Failed to load completed summary', {
+              description: 'Please try generating again.',
+            });
+            return;
+          }
+
+          console.log('Summary generation completed:', summaryData);
+
           // Check if backend returned markdown format (new flow)
-          if (pollingResult.data.markdown) {
+          if (summaryData.markdown) {
+            const markdownShape = detectMarkdownShape(summaryData.markdown);
+            console.log('[summary-generation-diagnostics]', {
+              stage: 'completed',
+              meetingId: meeting.id,
+              summaryStatus: pollingResult.status,
+              parseOutcomeHint: 'markdown',
+              ...markdownShape,
+            });
             console.log('Received markdown format from backend');
-            setAiSummary({ markdown: pollingResult.data.markdown } as any);
+            setAiSummary({ markdown: summaryData.markdown } as any);
             setSummaryStatus('completed');
+            if (onSummaryUpdated) {
+              await onSummaryUpdated();
+            }
 
             // Show success toast
             toast.success('Summary generated successfully!', {
               description: 'Your meeting summary is ready',
               duration: 4000,
             });
-
-            if (meetingName && onMeetingUpdated) {
-              await onMeetingUpdated();
-            }
 
             await Analytics.trackSummaryGenerationCompleted(
               modelConfig.provider,
@@ -252,7 +305,7 @@ export function useSummaryGeneration({
           }
 
           // Legacy format handling
-          const summarySections = Object.entries(pollingResult.data).filter(([key]) => key !== 'MeetingName');
+          const summarySections = Object.entries(summaryData).filter(([key]) => key !== 'MeetingName');
           const allEmpty = summarySections.every(([, section]) => !(section as any).blocks || (section as any).blocks.length === 0);
 
           if (allEmpty) {
@@ -271,15 +324,15 @@ export function useSummaryGeneration({
           }
 
           // Remove MeetingName from data before formatting
-          const { MeetingName, ...summaryData } = pollingResult.data;
+          const { MeetingName, ...legacySummaryData } = summaryData;
 
           // Format legacy summary data
           const formattedSummary: Summary = {};
-          const sectionKeys = pollingResult.data._section_order || Object.keys(summaryData);
+          const sectionKeys = summaryData._section_order || Object.keys(legacySummaryData);
 
           for (const key of sectionKeys) {
             try {
-              const section = summaryData[key];
+              const section = legacySummaryData[key];
               if (section && typeof section === 'object' && 'title' in section && 'blocks' in section) {
                 const typedSection = section as { title?: string; blocks?: any[] };
 
@@ -306,6 +359,16 @@ export function useSummaryGeneration({
 
           setAiSummary(formattedSummary);
           setSummaryStatus('completed');
+          console.log('[summary-generation-diagnostics]', {
+            stage: 'completed',
+            meetingId: meeting.id,
+            summaryStatus: pollingResult.status,
+            parseOutcomeHint: 'legacy-json',
+            sectionCount: Object.keys(formattedSummary).length,
+          });
+          if (onSummaryUpdated) {
+            await onSummaryUpdated();
+          }
 
           // Show success toast
           toast.success('Summary generated successfully!', {
@@ -319,9 +382,6 @@ export function useSummaryGeneration({
             true
           );
 
-          if (meetingName && onMeetingUpdated) {
-            await onMeetingUpdated();
-          }
         }
       });
     } catch (error) {
@@ -349,8 +409,10 @@ export function useSummaryGeneration({
     modelConfig,
     selectedTemplate,
     startSummaryPolling,
+    fetchSummaryFromDatabase,
     setAiSummary,
     updateMeetingTitle,
+    onSummaryUpdated,
     onMeetingUpdated,
   ]);
 

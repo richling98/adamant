@@ -30,20 +30,17 @@
         {
           "title": "Plan (P)",
           "instruction": "Interventions, medication changes, referrals, therapy tasks and follow-up",
-          "format": "list",
-          "item_format": "| **Intervention** | **Owner** | **Frequency** | **Follow-up Date** |\n| --- | --- | --- | --- |"
+          "format": "list"
         },
         {
           "title": "Medications",
           "instruction": "Current medications, doses, changes, and rationale",
-          "format": "list",
-          "item_format": "| **Medication** | **Dose** | **Route** | **Start/Change Date** |\n| --- | --- | --- | --- |"
+          "format": "list"
         },
         {
           "title": "Diagnoses (DSM/ICD)",
           "instruction": "List diagnostic codes and working diagnosis",
-          "format": "list",
-          "item_format": "| **Code** | **System** | **Diagnosis** |\n| --- | --- | --- |"
+          "format": "list"
         },
         {
           "title": "Safety & Risk Management",

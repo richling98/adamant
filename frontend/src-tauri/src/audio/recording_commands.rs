@@ -111,17 +111,17 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     // Create new recording manager
     let mut manager = RecordingManager::new();
 
-    // Load recording preferences to get auto_save AND device preferences
-    let (auto_save, preferred_mic_name, preferred_system_name) =
+    // Load recording preferences to get device preferences
+    let (preferred_mic_name, preferred_system_name) =
         match super::recording_preferences::load_recording_preferences(&app).await {
             Ok(prefs) => {
-                info!("📋 Loaded recording preferences: auto_save={}, preferred_mic={:?}, preferred_system={:?}",
-                      prefs.auto_save, prefs.preferred_mic_device, prefs.preferred_system_device);
-                (prefs.auto_save, prefs.preferred_mic_device, prefs.preferred_system_device)
+                info!("📋 Loaded recording preferences: preferred_mic={:?}, preferred_system={:?}",
+                      prefs.preferred_mic_device, prefs.preferred_system_device);
+                (prefs.preferred_mic_device, prefs.preferred_system_device)
             }
             Err(e) => {
                 warn!("Failed to load recording preferences, using defaults: {}", e);
-                (true, None, None)
+                (None, None)
             }
         };
 
@@ -214,9 +214,8 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         }
     };
 
-    // Always ensure a meeting name is set so incremental saver initializes
+    // Always ensure a meeting name is set so the meeting folder is created for transcripts
     let effective_meeting_name = meeting_name.clone().unwrap_or_else(|| {
-        // Example: Meeting 2025-10-03_08-25-23
         let now = chrono::Local::now();
         format!(
             "Meeting {}",
@@ -237,9 +236,9 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         let _ = app_for_error.emit("recording-error", error.user_message());
     });
 
-    // Start recording with resolved devices (replaces start_recording_with_defaults_and_auto_save call)
+    // Start recording with resolved devices
     let transcription_receiver = manager
-        .start_recording(microphone_device, system_device, auto_save)
+        .start_recording(microphone_device, system_device)
         .await
         .map_err(|e| format!("Failed to start recording: {}", e))?;
 
@@ -378,19 +377,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     // Create new recording manager
     let mut manager = RecordingManager::new();
 
-    // Load recording preferences to check auto_save setting
-    let auto_save = match super::recording_preferences::load_recording_preferences(&app).await {
-        Ok(prefs) => {
-            info!("📋 Loaded recording preferences: auto_save={}", prefs.auto_save);
-            prefs.auto_save
-        }
-        Err(e) => {
-            warn!("Failed to load recording preferences, defaulting to auto_save=true: {}", e);
-            true // Default to saving if preferences can't be loaded
-        }
-    };
-
-    // Always ensure a meeting name is set so incremental saver initializes
+    // Always ensure a meeting name is set so the meeting folder is created for transcripts
     let effective_meeting_name = meeting_name.clone().unwrap_or_else(|| {
         let now = chrono::Local::now();
         format!(
@@ -412,9 +399,9 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         let _ = app_for_error.emit("recording-error", error.user_message());
     });
 
-    // Start recording with specified devices and auto_save setting
+    // Start recording with specified devices
     let transcription_receiver = manager
-        .start_recording(mic_device, system_device, auto_save)
+        .start_recording(mic_device, system_device)
         .await
         .map_err(|e| format!("Failed to start recording: {}", e))?;
 

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
+import { appDataDir } from '@tauri-apps/api/path';
 import { toast } from 'sonner';
 import { useTranscripts } from '@/contexts/TranscriptContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
@@ -10,9 +12,28 @@ import { transcriptService } from '@/services/transcriptService';
 import Analytics from '@/lib/analytics';
 
 type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
+type StopRecordingSource = 'ui' | 'backend_event';
+
+interface StopRecordingOptions {
+  source?: StopRecordingSource;
+  callApi?: boolean;
+}
+
+function normalizeStopOptions(
+  options: boolean | StopRecordingOptions | undefined
+): Required<StopRecordingOptions> {
+  if (typeof options === 'boolean') {
+    return { source: 'ui', callApi: options };
+  }
+
+  return {
+    source: options?.source ?? 'ui',
+    callApi: options?.callApi ?? true,
+  };
+}
 
 interface UseRecordingStopReturn {
-  handleRecordingStop: (callApi: boolean) => Promise<void>;
+  handleRecordingStop: (options?: boolean | StopRecordingOptions) => Promise<void>;
   isStopping: boolean;
   isProcessingTranscript: boolean;
   isSavingTranscript: boolean;
@@ -53,6 +74,8 @@ export function useRecordingStop(
     clearTranscripts,
     meetingTitle,
     markMeetingAsSaved,
+    pendingMeetingId,
+    setPendingMeetingId,
   } = useTranscripts();
 
   const {
@@ -61,6 +84,8 @@ export function useRecordingStop(
     setMeetings,
     meetings,
     setIsMeetingActive,
+    pendingFolderId,
+    setPendingFolderId,
   } = useSidebar();
 
   const router = useRouter();
@@ -114,32 +139,83 @@ export function useRecordingStop(
   }, [router]);
 
   // Main recording stop handler
-  const handleRecordingStop = useCallback(async (isCallApi: boolean) => {
-    if (recordingStoppedDataRef.current) {
-      await recordingStoppedDataRef.current;
-    }
-
+  const handleRecordingStop = useCallback(async (options?: boolean | StopRecordingOptions) => {
+    const { source, callApi } = normalizeStopOptions(options);
     // Guard: prevent duplicate/concurrent stop calls
     if (stopInProgressRef.current) {
+      console.log('Ignoring duplicate stop request while stop is already in progress');
       return;
     }
     stopInProgressRef.current = true;
 
     // Set status to STOPPING immediately
-    setStatus(RecordingStatus.STOPPING);
-    setIsRecording(false);
+    setStatus(RecordingStatus.STOPPING, source === 'ui' ? 'Stopping recording...' : 'Processing stopped recording...');
     setIsRecordingDisabled(true);
     const stopStartTime = Date.now();
 
     try {
-      console.log('Post-stop processing (new implementation)...', {
+      console.log('Stop flow initiated', {
+        source,
+        callApi,
         stop_initiated_at: new Date(stopStartTime).toISOString(),
         current_transcript_count: transcriptsRef.current.length
       });
 
-      // Note: stop_recording is already called by RecordingControls.stopRecordingAction
-      // This function only handles post-stop processing (transcription wait, API call, navigation)
-      console.log('Recording already stopped by RecordingControls, processing transcription...');
+      if (source === 'ui') {
+        // Reset previous metadata promise so we only use data from this stop request.
+        recordingStoppedDataRef.current = null;
+
+        const dataDir = await appDataDir();
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const savePath = `${dataDir}/recording-${timestamp}.wav`;
+
+        let stopError: unknown = null;
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          try {
+            console.log(`Calling backend stop_recording (attempt ${attempt}/2)...`, { savePath });
+            await invoke('stop_recording', {
+              args: {
+                save_path: savePath,
+              },
+            });
+            console.log('Backend stop_recording succeeded');
+            stopError = null;
+            break;
+          } catch (error) {
+            stopError = error;
+            console.error(`Backend stop_recording failed (attempt ${attempt}/2):`, error);
+
+            if (attempt < 2) {
+              console.log('Retrying backend stop_recording once...');
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+          }
+        }
+
+        if (stopError) {
+          const message = stopError instanceof Error ? stopError.message : 'Failed to stop recording';
+          setStatus(RecordingStatus.ERROR, message);
+          toast.error('Failed to stop recording', { description: message });
+          return;
+        }
+
+        // Wait briefly for "recording-stopped" metadata emitted by backend stop.
+        let waitedMs = 0;
+        const waitStepMs = 100;
+        const waitLimitMs = 3000;
+        while (!recordingStoppedDataRef.current && waitedMs < waitLimitMs) {
+          await new Promise(resolve => setTimeout(resolve, waitStepMs));
+          waitedMs += waitStepMs;
+        }
+
+        if (recordingStoppedDataRef.current) {
+          await recordingStoppedDataRef.current;
+        } else {
+          console.warn('Timed out waiting for recording-stopped metadata; proceeding without folder metadata');
+        }
+      } else if (recordingStoppedDataRef.current) {
+        await recordingStoppedDataRef.current;
+      }
 
       // Wait for transcription to complete
       setStatus(RecordingStatus.PROCESSING_TRANSCRIPTS, 'Waiting for transcription...');
@@ -229,7 +305,7 @@ export function useRecordingStop(
       // Save to SQLite
       // NOTE: enabled to save COMPLETE transcripts after frontend receives all updates
       // This ensures user sees all transcripts streaming in before database save
-      if (isCallApi && transcriptionComplete == true) {
+      if (callApi && transcriptionComplete == true) {
 
         setStatus(RecordingStatus.SAVING, 'Saving meeting to database...');
 
@@ -248,11 +324,16 @@ export function useRecordingStop(
           last_transcript: freshTranscripts.length > 0 ? freshTranscripts[freshTranscripts.length - 1].text.substring(0, 30) + '...' : 'none',
         });
 
+        // Capture pendingMeetingId at save time — this is the existing meeting ID
+        // set by the notes-page "Start Recording" button (unified notes + recording flow).
+        const existingMeetingId = pendingMeetingId ?? undefined;
+
         try {
           const responseData = await storageService.saveMeeting(
             savedMeetingName || meetingTitle || 'New Meeting',  // PREFER savedMeetingName (backend source)
             freshTranscripts,
-            folderPath
+            folderPath,
+            existingMeetingId
           );
 
           const meetingId = responseData.meeting_id;
@@ -261,9 +342,26 @@ export function useRecordingStop(
             throw new Error('No meeting ID received from save operation');
           }
 
-          console.log('✅ Successfully saved COMPLETE meeting with ID:', meetingId);
+          console.log('✅ Successfully saved COMPLETE meeting with ID:', meetingId, existingMeetingId ? '(attached to existing meeting)' : '(new meeting)');
           console.log('   Transcripts:', freshTranscripts.length);
           console.log('   folder_path:', folderPath);
+
+          // Assign meeting to pending folder if one was set (user clicked "+" on a folder before recording)
+          if (pendingFolderId) {
+            try {
+              await invoke('api_move_meeting_to_folder', { meetingId, folderId: pendingFolderId });
+              console.log('✅ Assigned new meeting to folder:', pendingFolderId);
+            } catch (folderError) {
+              console.warn('Could not assign meeting to folder:', folderError);
+            } finally {
+              setPendingFolderId(null);
+            }
+          }
+
+          console.log('Dispatching meeting-transcripts-updated event for meeting:', meetingId);
+          window.dispatchEvent(new CustomEvent('meeting-transcripts-updated', {
+            detail: { meetingId },
+          }));
 
           // Mark meeting as saved in IndexedDB (for recovery system)
           await markMeetingAsSaved();
@@ -273,6 +371,9 @@ export function useRecordingStop(
           sessionStorage.removeItem('last_recording_meeting_name');
           // Clean up IndexedDB meeting ID (redundant with markMeetingAsSaved cleanup, but ensures cleanup)
           sessionStorage.removeItem('indexeddb_current_meeting_id');
+
+          // Clear the pending meeting ID now that save is complete
+          setPendingMeetingId(null);
 
           // Refetch meetings and set current meeting
           await refetchMeetings();
@@ -294,28 +395,39 @@ export function useRecordingStop(
           // Mark as completed
           setStatus(RecordingStatus.COMPLETED);
 
-          // Show success toast with navigation option
-          toast.success('Recording saved successfully!', {
-            description: `${freshTranscripts.length} transcript segments saved.`,
-            action: {
-              label: 'View Meeting',
-              onClick: () => {
-                router.push(`/meeting-details?id=${meetingId}`);
-                Analytics.trackButtonClick('view_meeting_from_toast', 'recording_complete');
-              }
-            },
-            duration: 10000,
-          });
-
-          // Auto-navigate after a short delay with source parameter
-          setTimeout(() => {
-            router.push(`/meeting-details?id=${meetingId}&source=recording`);
-            clearTranscripts()
-            Analytics.trackPageView('meeting_details');
-
-            // Reset to IDLE after navigation
+          if (existingMeetingId) {
+            // Already on the meeting-details page — just show a toast and stay in place.
+            toast.success('Recording saved!', {
+              description: `${freshTranscripts.length} transcript segments added to this meeting.`,
+              duration: 5000,
+            });
+            clearTranscripts();
             setStatus(RecordingStatus.IDLE);
-          }, 2000);
+          } else {
+            // Classic home-page recording flow: navigate to the new meeting.
+            // Show success toast with navigation option
+            toast.success('Recording saved successfully!', {
+              description: `${freshTranscripts.length} transcript segments saved.`,
+              action: {
+                label: 'View Meeting',
+                onClick: () => {
+                  router.push(`/meeting-details?id=${meetingId}`);
+                  Analytics.trackButtonClick('view_meeting_from_toast', 'recording_complete');
+                }
+              },
+              duration: 10000,
+            });
+
+            // Auto-navigate after a short delay with source parameter
+            setTimeout(() => {
+              router.push(`/meeting-details?id=${meetingId}&source=recording`);
+              clearTranscripts();
+              Analytics.trackPageView('meeting_details');
+
+              // Reset to IDLE after navigation
+              setStatus(RecordingStatus.IDLE);
+            }, 2000);
+          }
           // Track meeting completion analytics
           try {
             // Calculate meeting duration from transcript timestamps
@@ -369,6 +481,10 @@ export function useRecordingStop(
 
         } catch (saveError) {
           console.error('Failed to save meeting to database:', saveError);
+          // Clear pending folder assignment — don't leave stale state on failure
+          if (pendingFolderId) {
+            setPendingFolderId(null);
+          }
           setStatus(RecordingStatus.ERROR, saveError instanceof Error ? saveError.message : 'Unknown error');
           toast.error('Failed to save meeting', {
             description: saveError instanceof Error ? saveError.message : 'Unknown error'
@@ -381,15 +497,13 @@ export function useRecordingStop(
       }
 
       setIsMeetingActive(false);
-      // isRecording already set to false at function start
-      setIsRecordingDisabled(false);
+      setIsRecording(false);
     } catch (error) {
       console.error('Error in handleRecordingStop:', error);
       setStatus(RecordingStatus.ERROR, error instanceof Error ? error.message : 'Unknown error');
-      // isRecording already set to false at function start
-      setIsRecordingDisabled(false);
     } finally {
       // Always reset the guard flag when done
+      setIsRecordingDisabled(false);
       stopInProgressRef.current = false;
     }
   }, [
@@ -401,6 +515,10 @@ export function useRecordingStop(
     clearTranscripts,
     meetingTitle,
     markMeetingAsSaved,
+    pendingMeetingId,
+    setPendingMeetingId,
+    pendingFolderId,
+    setPendingFolderId,
     refetchMeetings,
     setCurrentMeeting,
     setMeetings,
@@ -416,8 +534,8 @@ export function useRecordingStop(
   });
 
   useEffect(() => {
-    (window as any).handleRecordingStop = (callApi: boolean = true) => {
-      handleRecordingStopRef.current(callApi);
+    (window as any).handleRecordingStop = (options: boolean | StopRecordingOptions = { source: 'ui', callApi: true }) => {
+      handleRecordingStopRef.current(options);
     };
 
     // Cleanup on unmount

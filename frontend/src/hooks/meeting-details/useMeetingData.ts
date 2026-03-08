@@ -22,6 +22,7 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMe
   const [isSaving, setIsSaving] = useState(false);
   const [, setIsSummaryDirty] = useState(false);
   const [, setError] = useState<string>('');
+  const previousMeetingIdRef = useRef(meeting.id);
 
   // Ref for BlockNoteSummaryView
   const blockNoteSummaryRef = useRef<BlockNoteSummaryViewRef>(null);
@@ -29,11 +30,26 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMe
   // Sidebar context
   const { setCurrentMeeting, setMeetings, meetings: sidebarMeetings } = useSidebar();
 
-  // Sync aiSummary state when summaryData prop changes (fixes display of fetched summaries)
+  // Sync aiSummary state when summaryData prop changes.
+  // Avoid wiping non-null local summary with transient null during parent refreshes.
+  // Always reset on meeting change.
   useEffect(() => {
-    console.log('[useMeetingData] Syncing summary data from prop:', summaryData ? 'present' : 'null');
-    setAiSummary(summaryData);
-  }, [summaryData]); // Only trigger when parent prop changes, not when aiSummary changes
+    const meetingChanged = previousMeetingIdRef.current !== meeting.id;
+
+    if (meetingChanged) {
+      previousMeetingIdRef.current = meeting.id;
+      console.log('[useMeetingData] Meeting changed, syncing summary from prop:', summaryData ? 'present' : 'null');
+      setAiSummary(summaryData);
+      return;
+    }
+
+    if (summaryData) {
+      console.log('[useMeetingData] Syncing non-null summary data from prop');
+      setAiSummary(summaryData);
+    } else {
+      console.log('[useMeetingData] Ignoring transient null summary prop for same meeting');
+    }
+  }, [meeting.id, summaryData]); // meeting-aware sync
 
   // Handlers
   const handleTitleChange = useCallback((newTitle: string) => {

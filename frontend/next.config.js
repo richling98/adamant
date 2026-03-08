@@ -23,8 +23,11 @@ const nextConfig = {
   },
 
   // Turbopack configuration (Next.js 16+)
-  // Empty config allows build to proceed with webpack fallbacks
-  turbopack: {},
+  // root: pin to the frontend directory so Turbopack doesn't get confused by
+  // the package-lock.json at ~/package-lock.json and panic during hot-reload.
+  turbopack: {
+    root: __dirname,
+  },
 }
 
 module.exports = nextConfig

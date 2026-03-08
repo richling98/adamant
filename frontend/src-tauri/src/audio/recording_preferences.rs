@@ -14,8 +14,6 @@ use crate::audio::capture::AudioCaptureBackend;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RecordingPreferences {
     pub save_folder: PathBuf,
-    pub auto_save: bool,
-    pub file_format: String,
     #[serde(default)]
     pub preferred_mic_device: Option<String>,
     #[serde(default)]
@@ -29,8 +27,6 @@ impl Default for RecordingPreferences {
     fn default() -> Self {
         Self {
             save_folder: get_default_recordings_folder(),
-            auto_save: true,
-            file_format: "mp4".to_string(),
             preferred_mic_device: None,
             preferred_system_device: None,
             #[cfg(target_os = "macos")]
@@ -43,36 +39,36 @@ impl Default for RecordingPreferences {
 pub fn get_default_recordings_folder() -> PathBuf {
     #[cfg(target_os = "windows")]
     {
-        // Windows: %USERPROFILE%\Music\meetily-recordings
+        // Windows: %USERPROFILE%\Music\adamant-recordings
         if let Some(music_dir) = dirs::audio_dir() {
-            music_dir.join("meetily-recordings")
+            music_dir.join("adamant-recordings")
         } else {
             // Fallback to Documents if Music folder is not available
             dirs::document_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
-                .join("meetily-recordings")
+                .join("adamant-recordings")
         }
     }
 
     #[cfg(target_os = "macos")]
     {
-        // macOS: ~/Movies/meetily-recordings
+        // macOS: ~/Movies/adamant-recordings
         if let Some(movies_dir) = dirs::video_dir() {
-            movies_dir.join("meetily-recordings")
+            movies_dir.join("adamant-recordings")
         } else {
             // Fallback to Documents if Movies folder is not available
             dirs::document_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
-                .join("meetily-recordings")
+                .join("adamant-recordings")
         }
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
-        // Linux/Others: ~/Documents/meetily-recordings
+        // Linux/Others: ~/Documents/adamant-recordings
         dirs::document_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("meetily-recordings")
+            .join("adamant-recordings")
     }
 }
 
@@ -128,9 +124,8 @@ pub async fn load_recording_preferences<R: Runtime>(
         RecordingPreferences::default()
     };
 
-    info!("Loaded recording preferences: save_folder={:?}, auto_save={}, format={}, mic={:?}, system={:?}",
-          prefs.save_folder, prefs.auto_save, prefs.file_format,
-          prefs.preferred_mic_device, prefs.preferred_system_device);
+    info!("Loaded recording preferences: save_folder={:?}, mic={:?}, system={:?}",
+          prefs.save_folder, prefs.preferred_mic_device, prefs.preferred_system_device);
     Ok(prefs)
 }
 
@@ -139,9 +134,8 @@ pub async fn save_recording_preferences<R: Runtime>(
     app: &AppHandle<R>,
     preferences: &RecordingPreferences,
 ) -> Result<()> {
-    info!("Saving recording preferences: save_folder={:?}, auto_save={}, format={}, mic={:?}, system={:?}",
-          preferences.save_folder, preferences.auto_save, preferences.file_format,
-          preferences.preferred_mic_device, preferences.preferred_system_device);
+    info!("Saving recording preferences: save_folder={:?}, mic={:?}, system={:?}",
+          preferences.save_folder, preferences.preferred_mic_device, preferences.preferred_system_device);
 
     // Get or create store
     let store = app
@@ -384,4 +378,3 @@ pub async fn get_audio_backend_info() -> Result<Vec<BackendInfo>, String> {
         }])
     }
 }
-
