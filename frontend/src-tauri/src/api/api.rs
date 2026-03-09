@@ -1660,3 +1660,38 @@ pub async fn api_save_note<R: Runtime>(
         "updated_at": now.to_rfc3339(),
     }))
 }
+
+// ===== CHAT WITH MEETINGS =====
+
+/// Send a message to the AI and receive a response that has full context of
+/// the user's stored meeting transcripts.
+///
+/// The LLM used is the same one the user already configured for summaries —
+/// no additional setup is required.
+///
+/// # Parameters
+/// * `message`         — The user's current message
+/// * `history`         — Previous turns in this chat session
+/// * `date_range_days` — Optional: only include meetings from the past N days
+#[tauri::command]
+pub async fn api_chat_with_meetings<R: Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    message: String,
+    history: Vec<crate::chat::handler::ChatMessage>,
+    date_range_days: Option<i64>,
+) -> Result<String, String> {
+    log_info!("api_chat_with_meetings called: message_len={}", message.len());
+
+    // Resolve the app data directory (needed for BuiltInAI provider)
+    let app_data_dir = app.path().app_data_dir().ok();
+
+    crate::chat::handler::chat_with_meetings(
+        &state,
+        app_data_dir,
+        &message,
+        &history,
+        date_range_days,
+    )
+    .await
+}

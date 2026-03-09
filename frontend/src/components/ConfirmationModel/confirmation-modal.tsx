@@ -12,13 +12,13 @@ export function ConfirmationModal({ onConfirm, onCancel, text, isOpen }: Confirm
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h2 className="text-xl font-semibold mb-4">Confirm Delete</h2>
-        <p className="text-gray-600 mb-6">{text}</p>
+      <div className="bg-zinc-900 border border-white/10 rounded-lg p-6 max-w-md w-full mx-4">
+        <h2 className="text-xl font-semibold mb-4 text-foreground">Confirm Delete</h2>
+        <p className="text-foreground/70 mb-6">{text}</p>
         <div className="flex justify-end space-x-4">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+            className="px-4 py-2 text-foreground/70 hover:bg-white/10 rounded-md transition-colors"
           >
             Cancel
           </button>

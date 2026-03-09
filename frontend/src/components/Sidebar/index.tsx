@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, Play, FolderPlus } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, Play, FolderPlus, Square, CheckSquare } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
@@ -137,6 +137,36 @@ const Sidebar: React.FC = () => {
 
 
   const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean; itemId: string | null }>({ isOpen: false, itemId: null });
+
+  // ── Multi-select deletion state ──────────────────────────────────────────
+  // Tracks the set of meeting IDs the user has check-selected for bulk delete.
+  const [selectedMeetingIds, setSelectedMeetingIds] = useState<Set<string>>(new Set());
+  // Controls the bulk-delete confirmation modal
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+
+  // Toggle a single meeting in/out of the selection set
+  const toggleMeetingSelection = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // prevent row click from navigating
+    setSelectedMeetingIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // Clear all selections
+  const clearSelection = useCallback(() => setSelectedMeetingIds(new Set()), []);
+
+  // Clear selection on Escape key press
+  useEffect(() => {
+    if (selectedMeetingIds.size === 0) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') clearSelection();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [selectedMeetingIds.size, clearSelection]);
 
   useEffect(() => {
     // Note: Don't set hardcoded defaults - let DB be the source of truth
@@ -392,6 +422,38 @@ const Sidebar: React.FC = () => {
       handleDelete(deleteModalState.itemId);
     }
     setDeleteModalState({ isOpen: false, itemId: null });
+  };
+
+  // Delete all currently-selected meetings sequentially, then clean up state
+  const handleBulkDelete = async () => {
+    const idsToDelete = Array.from(selectedMeetingIds);
+    let successCount = 0;
+
+    for (const id of idsToDelete) {
+      try {
+        await invoke('api_delete_meeting', { meetingId: id });
+        Analytics.trackMeetingDeleted(id);
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to delete meeting ${id}:`, error);
+      }
+    }
+
+    // Remove deleted meetings from local state
+    setMeetings(meetings.filter((m: CurrentMeeting) => !idsToDelete.includes(m.id)));
+
+    // If the currently-open meeting was deleted, navigate home
+    if (currentMeeting?.id && idsToDelete.includes(currentMeeting.id)) {
+      setCurrentMeeting({ id: 'intro-call', title: '+ New Call' });
+      router.push('/');
+    }
+
+    clearSelection();
+    setBulkDeleteModalOpen(false);
+
+    toast.success(`${successCount} meeting${successCount !== 1 ? 's' : ''} deleted`, {
+      description: 'All associated data has been removed',
+    });
   };
 
   // Handle modal editing of meeting names
@@ -815,6 +877,8 @@ const Sidebar: React.FC = () => {
                             item={item}
                             isActive={currentMeeting?.id === item.id}
                             indent={insideFolder}
+                            isSelected={selectedMeetingIds.has(item.id)}
+                            onToggleSelect={(e) => toggleMeetingSelection(item.id, e)}
                             onNavigate={() => {
                               setCurrentMeeting({ id: item.id, title: item.title });
                               router.push(`/meeting-details?id=${item.id}`);
@@ -845,6 +909,8 @@ const Sidebar: React.FC = () => {
                           item={item}
                           isActive={currentMeeting?.id === item.id}
                           indent={false}
+                          isSelected={selectedMeetingIds.has(item.id)}
+                          onToggleSelect={(e) => toggleMeetingSelection(item.id, e)}
                           onNavigate={() => {
                             setCurrentMeeting({ id: item.id, title: item.title });
                             router.push(`/meeting-details?id=${item.id}`);
@@ -860,6 +926,28 @@ const Sidebar: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Bulk-delete selection bar — slides in when 1+ meetings are checked */}
+        {!isCollapsed && selectedMeetingIds.size > 0 && (
+          <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-zinc-900 border-t border-white/10">
+            <button
+              onClick={clearSelection}
+              className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+              aria-label="Clear selection"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+            <span className="flex-1 text-xs text-zinc-300">
+              {selectedMeetingIds.size} meeting{selectedMeetingIds.size !== 1 ? 's' : ''} selected
+            </span>
+            <button
+              onClick={() => setBulkDeleteModalOpen(true)}
+              className="px-2.5 py-1 text-xs font-medium text-white bg-red-600/80 hover:bg-red-600 rounded-md transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        )}
 
         {/* Footer */}
         {!isCollapsed && (
@@ -890,12 +978,20 @@ const Sidebar: React.FC = () => {
         )}
       </div>
 
-      {/* Confirmation Modal for Delete */}
+      {/* Confirmation Modal for single-meeting delete */}
       <ConfirmationModal
         isOpen={deleteModalState.isOpen}
         text="Are you sure you want to delete this meeting? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteModalState({ isOpen: false, itemId: null })}
+      />
+
+      {/* Confirmation Modal for bulk delete */}
+      <ConfirmationModal
+        isOpen={bulkDeleteModalOpen}
+        text={`Delete ${selectedMeetingIds.size} meeting${selectedMeetingIds.size !== 1 ? 's' : ''}? This action cannot be undone.`}
+        onConfirm={handleBulkDelete}
+        onCancel={() => setBulkDeleteModalOpen(false)}
       />
 
       {/* Edit Meeting Title Modal */}
@@ -960,12 +1056,14 @@ interface DraggableMeetingRowProps {
   item: SidebarItem;
   isActive: boolean;
   indent?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (e: React.MouseEvent) => void;
   onNavigate: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-function DraggableMeetingRow({ item, isActive, indent, onNavigate, onEdit, onDelete }: DraggableMeetingRowProps) {
+function DraggableMeetingRow({ item, isActive, indent, isSelected, onToggleSelect, onNavigate, onEdit, onDelete }: DraggableMeetingRowProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.id });
 
   const style = transform
@@ -979,12 +1077,28 @@ function DraggableMeetingRow({ item, isActive, indent, onNavigate, onEdit, onDel
       {...attributes}
       {...listeners}
       className={`flex items-center px-2 py-1.5 my-0.5 rounded-md text-sm cursor-pointer group transition-colors ${
-        isActive
+        isSelected
+          ? 'bg-emerald-500/10 text-emerald-100'
+          : isActive
           ? 'bg-emerald-500/20 text-emerald-100 font-medium'
           : 'hover:bg-white/5 text-foreground/85'
       } ${indent ? 'pl-3' : ''}`}
       onClick={onNavigate}
     >
+      {/* Checkbox — visible on hover or when already selected */}
+      <div
+        className="flex-shrink-0 mr-1.5"
+        // Prevent drag initiation when interacting with the checkbox
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onToggleSelect}
+      >
+        {isSelected ? (
+          <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
+        ) : (
+          <Square className="w-3.5 h-3.5 text-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
+      </div>
+
       <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full mr-2 bg-white/10">
         <File className="w-3 h-3 text-foreground/65" />
       </div>

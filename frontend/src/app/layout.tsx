@@ -21,6 +21,7 @@ import { OnboardingFlow } from '@/components/onboarding'
 import { DownloadProgressToastProvider } from '@/components/shared/DownloadProgressToast'
 import { UpdateCheckProvider } from '@/components/UpdateCheckProvider'
 import { RecordingPostProcessingProvider } from '@/contexts/RecordingPostProcessingProvider'
+import { FloatingChatBubble } from '@/components/ChatBubble/FloatingChatBubble'
 
 const sourceSans3 = Source_Sans_3({
   subsets: ['latin'],
@@ -112,6 +113,9 @@ export default function RootLayout({
                           <RecordingPostProcessingProvider>
                             {/* Download progress toast provider - listens for background downloads */}
                             <DownloadProgressToastProvider />
+
+                            {/* Persistent chat bubble — always visible, on top of all content */}
+                            <FloatingChatBubble />
 
                             {/* Show onboarding or main app */}
                             {showOnboarding ? (

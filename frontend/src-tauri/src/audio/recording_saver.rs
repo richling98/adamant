@@ -354,3 +354,71 @@ impl Default for RecordingSaver {
         Self::new()
     }
 }
+
+/// One-time cleanup: deletes legacy `.mp4` and `.m4a` files left over from
+/// before audio saving was removed.  A sentinel file `.audio_cleanup_done`
+/// is written to `recordings_folder` after the first run so subsequent
+/// launches skip the scan entirely.
+pub async fn cleanup_legacy_audio_files(recordings_folder: &std::path::Path) {
+    let sentinel = recordings_folder.join(".audio_cleanup_done");
+
+    // Already ran — nothing to do.
+    if sentinel.exists() {
+        return;
+    }
+
+    if !recordings_folder.exists() {
+        // Folder doesn't exist yet; nothing to clean up. Write sentinel anyway
+        // so we never try again.
+        let _ = std::fs::write(&sentinel, "");
+        return;
+    }
+
+    info!("Running one-time legacy audio file cleanup in {:?}", recordings_folder);
+
+    let mut deleted = 0usize;
+    let mut failed = 0usize;
+
+    // Walk the recordings folder recursively.
+    fn walk_and_delete(dir: &std::path::Path, deleted: &mut usize, failed: &mut usize) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(e) => {
+                warn!("cleanup: failed to read directory {:?}: {}", dir, e);
+                return;
+            }
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk_and_delete(&path, deleted, failed);
+            } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                if ext.eq_ignore_ascii_case("mp4") || ext.eq_ignore_ascii_case("m4a") {
+                    match std::fs::remove_file(&path) {
+                        Ok(()) => {
+                            info!("cleanup: deleted {:?}", path);
+                            *deleted += 1;
+                        }
+                        Err(e) => {
+                            warn!("cleanup: failed to delete {:?}: {}", path, e);
+                            *failed += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    walk_and_delete(recordings_folder, &mut deleted, &mut failed);
+
+    info!(
+        "Legacy audio cleanup complete: {} file(s) deleted, {} failure(s)",
+        deleted, failed
+    );
+
+    // Write sentinel so this never runs again.
+    if let Err(e) = std::fs::write(&sentinel, "") {
+        warn!("cleanup: failed to write sentinel file: {}", e);
+    }
+}

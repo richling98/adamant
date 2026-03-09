@@ -38,6 +38,7 @@ pub(crate) use perf_trace;
 pub mod analytics;
 pub mod api;
 pub mod audio;
+pub mod chat;
 pub mod console_utils;
 pub mod database;
 pub mod notifications;
@@ -486,6 +487,13 @@ pub fn run() {
             })
             .expect("Failed to initialize database");
 
+            // One-time cleanup: remove legacy .mp4/.m4a audio files left over from
+            // before audio saving was removed.  Runs in background so startup is instant.
+            tauri::async_runtime::spawn(async {
+                let folder = audio::recording_preferences::get_default_recordings_folder();
+                audio::recording_saver::cleanup_legacy_audio_files(&folder).await;
+            });
+
             // Initialize bundled templates directory for dynamic template discovery
             log::info!("Initializing bundled templates directory...");
             if let Ok(resource_path) = _app.handle().path().resource_dir() {
@@ -633,6 +641,8 @@ pub fn run() {
             api::api_rename_folder,
             api::api_delete_folder,
             api::api_move_meeting_to_folder,
+            // Chat with meetings command (ADA-8)
+            api::api_chat_with_meetings,
             // Summary commands
             summary::api_process_transcript,
             summary::api_get_summary,
