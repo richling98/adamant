@@ -1,4 +1,4 @@
-# Meetily API Documentation
+# Adamant API Documentation
 
 ## Prerequisites
 

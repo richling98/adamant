@@ -1,8 +1,8 @@
-# How to Start the Meetily App
+# How to Start the Adamant App
 
 **Last Updated:** 2026-02-07
 
-This guide provides step-by-step instructions to launch the Meetily desktop application in development mode.
+This guide provides step-by-step instructions to launch the Adamant desktop application in development mode.
 
 ---
 
@@ -63,7 +63,7 @@ pnpm run tauri:dev
      Running DevCommand (`cargo run --features coreml...`)
 ...
      Finished `dev` profile [unoptimized + debuginfo] target(s) in X.XXs
-     Running `/Users/rling/Personal projects/meeting-minutes/target/debug/meetily`
+     Running `/Users/rling/Personal projects/meeting-minutes/target/debug/adamant`
 ```
 
 **Wait time:** 30-60 seconds for compilation and startup
@@ -109,8 +109,8 @@ You'll see several stages:
 **Total time:** 30-90 seconds
 
 ### 6. App Opens Successfully When You See:
-- ✅ A Meetily window appears on your screen
-- ✅ Terminal shows: `Running /Users/rling/.../meetily`
+- ✅ A Adamant window appears on your screen
+- ✅ Terminal shows: `Running /Users/rling/.../adamant`
 - ✅ No error messages in terminal
 
 ---
@@ -122,16 +122,16 @@ After launching, verify everything is working:
 ### Terminal Checks
 - [ ] No error messages (warnings are OK)
 - [ ] You see: `Finished 'dev' profile`
-- [ ] You see: `Running /Users/rling/.../meetily`
+- [ ] You see: `Running /Users/rling/.../adamant`
 
 ### App Checks
-- [ ] Meetily window is visible on screen
+- [ ] Adamant window is visible on screen
 - [ ] You can see the sidebar
 - [ ] You can click the home icon
 - [ ] No error popups appear
 
 ### Developer Console Checks (Optional)
-1. In the Meetily app, press **Cmd + Shift + I**
+1. In the Adamant app, press **Cmd + Shift + I**
 2. Check Console tab - should see normal logs, no red errors
 
 ---
@@ -181,18 +181,18 @@ pnpm run tauri:dev
 ### Issue 3: App window doesn't appear
 
 **Symptoms:**
-- Terminal shows "Running /Users/.../meetily"
+- Terminal shows "Running /Users/.../adamant"
 - But no window appears on screen
 
 **Solution:**
 1. Check if app is running:
    ```bash
-   ps aux | grep meetily | grep -v grep
+   ps aux | grep adamant | grep -v grep
    ```
 2. If process exists, look for the window in Mission Control (swipe up with 3 fingers)
 3. If still not visible, quit and restart:
    ```bash
-   pkill -9 meetily
+   pkill -9 adamant
    pnpm run tauri:dev
    ```
 
@@ -240,7 +240,7 @@ pnpm run tauri:dev
 
 ### Method 3: Force Kill (if app is frozen)
 ```bash
-pkill -9 meetily
+pkill -9 adamant
 pkill -9 -f "tauri dev"
 pkill -9 -f "next dev.*3118"
 ```
@@ -290,7 +290,7 @@ The built app will be in: `src-tauri/target/release/bundle/`
 
 ### Is the app running?
 ```bash
-ps aux | grep meetily | grep -v grep
+ps aux | grep adamant | grep -v grep
 ```
 
 **Expected output if running:**
@@ -312,7 +312,7 @@ node    12346 rling  17u  IPv6 ... TCP *:pkagent (LISTEN)
 ### View app logs
 ```bash
 # If you started with output redirection
-tail -f /tmp/meetily.log
+tail -f /tmp/adamant.log
 
 # Or check system logs (if configured)
 ```
@@ -337,7 +337,7 @@ If you encounter issues not covered here:
    lsof -i:3118
 
    # Check process status
-   ps aux | grep -E "meetily|tauri|next" | grep -v grep
+   ps aux | grep -E "adamant|tauri|next" | grep -v grep
    ```
 
 ---
@@ -358,13 +358,13 @@ pnpm run tauri:dev
 Ctrl + C
 
 # Force kill all processes
-pkill -9 meetily && pkill -9 -f "tauri dev" && pkill -9 -f "next dev.*3118"
+pkill -9 adamant && pkill -9 -f "tauri dev" && pkill -9 -f "next dev.*3118"
 
 # Clean restart
 ./clean_run.sh
 
 # Check if running
-ps aux | grep meetily | grep -v grep
+ps aux | grep adamant | grep -v grep
 ```
 
 ---

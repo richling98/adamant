@@ -6,7 +6,7 @@
 
 ## TLDR
 
-Add manual note-taking capability to Meetily, allowing users to create notes-only meetings or attach recordings to existing notes. Users can type thoughts, questions, and observations in a BlockNote editor (Notion-like experience) alongside AI transcriptions. Notes are displayed in a **third panel (NotesPanel)** alongside the existing TranscriptPanel and SummaryPanel in a three-column layout. Notes are stored separately, autosaved every 2 seconds using lodash.debounce, and persist across sessions.
+Add manual note-taking capability to Adamant, allowing users to create notes-only meetings or attach recordings to existing notes. Users can type thoughts, questions, and observations in a BlockNote editor (Notion-like experience) alongside AI transcriptions. Notes are displayed in a **third panel (NotesPanel)** alongside the existing TranscriptPanel and SummaryPanel in a three-column layout. Notes are stored separately, autosaved every 2 seconds using lodash.debounce, and persist across sessions.
 
 ## Critical Decisions
 

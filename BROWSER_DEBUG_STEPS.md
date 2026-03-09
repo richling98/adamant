@@ -2,7 +2,7 @@
 
 ## Step 1: Open Browser DevTools
 
-**In the Meetily app:**
+**In the Adamant app:**
 - Press **Cmd + Shift + I** (or Cmd + Option + I)
 - Or click the console toggle button if visible in the UI
 
