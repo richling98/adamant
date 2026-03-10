@@ -318,16 +318,16 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         </div>
                     )}
 
-                    {/* Listening indicator when recording */}
-                    {!isStopping && isRecording && !isPaused && !isProcessing && segments.length > 0 && (
+                    {/* Listening / Paused indicator when recording */}
+                    {!isStopping && isRecording && !isProcessing && segments.length > 0 && (
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             className="flex items-center gap-2 mt-4 text-foreground/60"
                         >
-                            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                            <span className="text-sm">Listening...</span>
+                            <div className={`w-2 h-2 rounded-full ${isPaused ? 'bg-yellow-400' : 'bg-emerald-400 animate-pulse'}`}></div>
+                            <span className="text-sm">{isPaused ? 'Paused...' : 'Listening...'}</span>
                         </motion.div>
                     )}
                 </>
@@ -374,16 +374,16 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         </div>
                     )}
 
-                    {/* Listening indicator when recording */}
-                    {!isStopping && isRecording && !isPaused && !isProcessing && segments.length > 0 && (
+                    {/* Listening / Paused indicator when recording */}
+                    {!isStopping && isRecording && !isProcessing && segments.length > 0 && (
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             className="flex items-center gap-2 mt-4 text-foreground/60"
                         >
-                            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                            <span className="text-sm">Listening...</span>
+                            <div className={`w-2 h-2 rounded-full ${isPaused ? 'bg-yellow-400' : 'bg-emerald-400 animate-pulse'}`}></div>
+                            <span className="text-sm">{isPaused ? 'Paused...' : 'Listening...'}</span>
                         </motion.div>
                     )}
                 </>

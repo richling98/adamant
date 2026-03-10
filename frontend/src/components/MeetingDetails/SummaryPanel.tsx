@@ -8,7 +8,7 @@ import { ModelConfig } from '@/components/ModelSettingsModal';
 import { Button } from '@/components/ui/button';
 import { Copy } from 'lucide-react';
 import Analytics from '@/lib/analytics';
-import { RefObject, useEffect, useRef, useState } from 'react';
+import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import {
   MEETING_PANE_CONTAINER_CLASS,
   MEETING_PANE_HEADER_CLASS,
@@ -92,6 +92,24 @@ export function SummaryPanel({
       setDisplaySummary(null);
     }
   }, [aiSummary, meeting.id, summaryStatus]);
+
+  const handleParseStateChange = useCallback((
+    state: 'idle' | 'parsing' | 'parsed' | 'failed',
+    diagnostics: any
+  ) => {
+    setSummaryRenderState(state);
+    if (state === 'failed') {
+      console.warn('[summary-panel] Structured render failed; showing compatibility mode', {
+        meetingId: meeting.id,
+        ...diagnostics,
+      });
+    }
+  }, [meeting.id]);
+
+  const handleRegenerateSummary = useCallback(() => {
+    Analytics.trackButtonClick('regenerate_summary', 'meeting_details');
+    onRegenerateSummary();
+  }, [onRegenerateSummary]);
 
   return (
     <div className={MEETING_PANE_CONTAINER_CLASS}>
@@ -212,21 +230,10 @@ export function SummaryPanel({
               onSave={onSaveSummary}
               onSummaryChange={onSummaryChange}
               onDirtyChange={onDirtyChange}
-              onParseStateChange={(state, diagnostics) => {
-                setSummaryRenderState(state);
-                if (state === 'failed') {
-                  console.warn('[summary-panel] Structured render failed; showing compatibility mode', {
-                    meetingId: meeting.id,
-                    ...diagnostics,
-                  });
-                }
-              }}
+              onParseStateChange={handleParseStateChange}
               status={summaryStatus}
               error={summaryError}
-              onRegenerateSummary={() => {
-                Analytics.trackButtonClick('regenerate_summary', 'meeting_details');
-                onRegenerateSummary();
-              }}
+              onRegenerateSummary={handleRegenerateSummary}
               meeting={{
                 id: meeting.id,
                 title: meetingTitle,

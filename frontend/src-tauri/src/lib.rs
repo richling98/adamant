@@ -84,8 +84,11 @@ async fn start_recording<R: Runtime>(
     system_device_name: Option<String>,
     meeting_name: Option<String>,
     meeting_id: Option<String>,
+    // Silence auto-stop threshold in seconds. None disables the feature.
+    silence_timeout_secs: Option<u64>,
 ) -> Result<(), String> {
-    log_info!("🔥 CALLED start_recording with meeting: {:?}, meeting_id: {:?}", meeting_name, meeting_id);
+    log_info!("🔥 CALLED start_recording with meeting: {:?}, meeting_id: {:?}, silence_timeout: {:?}",
+              meeting_name, meeting_id, silence_timeout_secs);
     log_info!(
         "📋 Backend received parameters - mic: {:?}, system: {:?}, meeting: {:?}, meeting_id: {:?}",
         mic_device_name,
@@ -105,6 +108,7 @@ async fn start_recording<R: Runtime>(
         system_device_name,
         meeting_name.clone(),
         meeting_id.clone(),
+        silence_timeout_secs,
     )
     .await
     {
@@ -292,7 +296,7 @@ async fn start_recording_with_devices<R: Runtime>(
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
 ) -> Result<(), String> {
-    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None).await
+    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None, None).await
 }
 
 #[tauri::command]
@@ -301,9 +305,10 @@ async fn start_recording_with_devices_and_meeting<R: Runtime>(
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
     meeting_name: Option<String>,
+    silence_timeout_secs: Option<u64>,
 ) -> Result<(), String> {
-    log_info!("🚀 CALLED start_recording_with_devices_and_meeting - Mic: {:?}, System: {:?}, Meeting: {:?}",
-             mic_device_name, system_device_name, meeting_name);
+    log_info!("🚀 CALLED start_recording_with_devices_and_meeting - Mic: {:?}, System: {:?}, Meeting: {:?}, SilenceTimeout: {:?}",
+             mic_device_name, system_device_name, meeting_name, silence_timeout_secs);
 
     // Clone meeting_name for notification use later
     let meeting_name_for_notification = meeting_name.clone();
@@ -315,7 +320,7 @@ async fn start_recording_with_devices_and_meeting<R: Runtime>(
                 "No devices specified, starting with defaults and meeting: {:?}",
                 meeting_name
             );
-            audio::recording_commands::start_recording_with_meeting_name(app.clone(), meeting_name, None)
+            audio::recording_commands::start_recording_with_meeting_name(app.clone(), meeting_name, None, silence_timeout_secs)
                 .await
         }
         _ => {
@@ -331,6 +336,7 @@ async fn start_recording_with_devices_and_meeting<R: Runtime>(
                 system_device_name,
                 meeting_name,
                 None,
+                silence_timeout_secs,
             )
             .await
         }

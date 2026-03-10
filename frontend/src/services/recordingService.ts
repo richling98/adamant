@@ -60,21 +60,26 @@ export class RecordingService {
   }
 
   /**
-   * Start recording with device configuration and meeting name
-   * @param micDeviceName - Microphone device name (null for default)
-   * @param systemDeviceName - System audio device name (null for none)
-   * @param meetingName - Meeting name/title
-   * @returns Promise<void>
+   * Start recording with device configuration and meeting name.
+   *
+   * @param micDeviceName       - Microphone device name (null for default)
+   * @param systemDeviceName    - System audio device name (null for none)
+   * @param meetingName         - Meeting name/title
+   * @param silenceTimeoutSecs  - Auto-stop after this many seconds of vocal
+   *                              silence (undefined / null disables the feature)
    */
   async startRecordingWithDevices(
     micDeviceName: string | null,
     systemDeviceName: string | null,
-    meetingName: string
+    meetingName: string,
+    silenceTimeoutSecs?: number | null,
   ): Promise<void> {
     return invoke('start_recording_with_devices_and_meeting', {
       mic_device_name: micDeviceName,
       system_device_name: systemDeviceName,
-      meeting_name: meetingName
+      meeting_name: meetingName,
+      // Pass null explicitly when disabled so Rust receives Option::None
+      silence_timeout_secs: silenceTimeoutSecs ?? null,
     });
   }
 

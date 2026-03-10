@@ -28,6 +28,49 @@ use super::transcription::{
     reset_speech_detected_flag,
 };
 
+// =============================================================================
+// SILENCE PREFERENCE READER
+// =============================================================================
+
+/// Read the silence auto-stop timeout directly from the Tauri plugin-store
+/// (`preferences.json`).  Called when the frontend passes `None` for
+/// `silence_timeout_secs` — which happens when the frontend's async store read
+/// fails or when older call-sites don't forward the value.
+///
+/// Returns `Some(secs)` when the feature is enabled (default 60 s), or `None`
+/// when the user has explicitly disabled it.
+fn load_silence_timeout_from_store<R: Runtime>(app: &AppHandle<R>) -> Option<u64> {
+    use tauri_plugin_store::StoreExt;
+
+    let store = match app.store("preferences.json") {
+        Ok(s) => s,
+        Err(e) => {
+            warn!("🔇 Could not open preferences.json to read silence timeout ({}), defaulting to 60s", e);
+            return Some(60); // safe default: enabled, 60 seconds
+        }
+    };
+
+    // Key written by RecordingSettings.tsx via plugin-store.
+    // Defaults to `true` when the key has never been written.
+    let enabled: bool = store
+        .get("silence_auto_stop_enabled")
+        .and_then(|v| serde_json::from_value::<bool>(v).ok())
+        .unwrap_or(true);
+
+    if !enabled {
+        info!("🔇 Silence auto-stop disabled in preferences — skipping monitor");
+        return None;
+    }
+
+    let secs: u64 = store
+        .get("silence_auto_stop_duration_secs")
+        .and_then(|v| serde_json::from_value::<u64>(v).ok())
+        .unwrap_or(60); // default 60 seconds
+
+    info!("🔇 Loaded silence timeout from preferences.json: {}s", secs);
+    Some(secs)
+}
+
 // Re-export TranscriptUpdate for backward compatibility
 pub use super::transcription::TranscriptUpdate;
 
@@ -44,6 +87,10 @@ static TRANSCRIPTION_TASK: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
 
 // Listener ID for proper cleanup - prevents microphone from staying active after recording stops
 static TRANSCRIPT_LISTENER_ID: Mutex<Option<tauri::EventId>> = Mutex::new(None);
+
+// Background task that monitors silence and triggers auto-stop when threshold is reached.
+// Aborted and cleared in stop_recording() to avoid double-stopping.
+static SILENCE_MONITOR_TASK: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
 
 // ============================================================================
 // PUBLIC TYPES
@@ -67,14 +114,20 @@ pub struct TranscriptionStatus {
 
 /// Start recording with default devices
 pub async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
-    start_recording_with_meeting_name(app, None, None).await
+    start_recording_with_meeting_name(app, None, None, None).await
 }
 
-/// Start recording with default devices, optional meeting name, and optional meeting ID
+/// Start recording with default devices, optional meeting name, optional meeting ID,
+/// and optional silence auto-stop timeout.
+///
+/// `silence_timeout_secs` — when `Some(n)`, recording auto-stops after `n` consecutive
+/// seconds of no VAD-detected speech (starting only after the first speech segment).
+/// `None` disables the feature entirely.
 pub async fn start_recording_with_meeting_name<R: Runtime>(
     app: AppHandle<R>,
     meeting_name: Option<String>,
     meeting_id: Option<String>,
+    silence_timeout_secs: Option<u64>,
 ) -> Result<(), String> {
     info!(
         "Starting recording with default devices, meeting: {:?}, meeting_id: {:?}",
@@ -242,6 +295,10 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         .await
         .map_err(|e| format!("Failed to start recording: {}", e))?;
 
+    // Grab a reference to the RecordingState for the silence monitor before
+    // moving the manager into the global lock.
+    let recording_state_for_monitor = manager.get_state().clone();
+
     // Store the manager globally to keep it alive
     {
         let mut global_manager = RECORDING_MANAGER.lock().unwrap();
@@ -252,6 +309,33 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     info!("🔍 Setting IS_RECORDING to true and resetting SPEECH_DETECTED_EMITTED");
     IS_RECORDING.store(true, Ordering::SeqCst);
     reset_speech_detected_flag(); // Reset for new recording session
+
+    // Spawn silence auto-stop monitor (if enabled).
+    // If the frontend passed None (async store read failed, or old call-site),
+    // fall back to reading the preference directly from the Tauri store in Rust.
+    let effective_silence_timeout = match silence_timeout_secs {
+        Some(t) => {
+            info!("🔇 silence_timeout_secs from frontend: {}s", t);
+            Some(t)
+        }
+        None => {
+            info!("🔇 silence_timeout_secs not provided by frontend — reading from preferences.json");
+            load_silence_timeout_from_store(&app)
+        }
+    };
+
+    if let Some(timeout_secs) = effective_silence_timeout {
+        let monitor_handle = spawn_silence_monitor(
+            app.clone(),
+            recording_state_for_monitor,
+            timeout_secs,
+        );
+        let mut global_monitor = SILENCE_MONITOR_TASK.lock().unwrap();
+        *global_monitor = Some(monitor_handle);
+        info!("🔇 Silence monitor started (timeout: {}s)", timeout_secs);
+    } else {
+        info!("🔇 Silence auto-stop disabled — monitor not started");
+    }
 
     // Start optimized parallel transcription task and store handle
     let task_handle = transcription::start_transcription_task(app.clone(), transcription_receiver);
@@ -314,16 +398,21 @@ pub async fn start_recording_with_devices<R: Runtime>(
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
 ) -> Result<(), String> {
-    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None, None).await
+    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None, None, None).await
 }
 
-/// Start recording with specific devices, optional meeting name, and optional meeting ID
+/// Start recording with specific devices, optional meeting name, optional meeting ID,
+/// and optional silence auto-stop timeout.
+///
+/// `silence_timeout_secs` — when `Some(n)`, recording auto-stops after `n` consecutive
+/// seconds of no VAD-detected speech.  `None` disables the feature.
 pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     app: AppHandle<R>,
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
     meeting_name: Option<String>,
     meeting_id: Option<String>,
+    silence_timeout_secs: Option<u64>,
 ) -> Result<(), String> {
     info!(
         "Starting recording with specific devices: mic={:?}, system={:?}, meeting={:?}, meeting_id={:?}",
@@ -405,6 +494,9 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         .await
         .map_err(|e| format!("Failed to start recording: {}", e))?;
 
+    // Grab RecordingState reference before moving manager into global lock
+    let recording_state_for_monitor = manager.get_state().clone();
+
     // Store the manager globally to keep it alive
     {
         let mut global_manager = RECORDING_MANAGER.lock().unwrap();
@@ -415,6 +507,33 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     info!("🔍 Setting IS_RECORDING to true and resetting SPEECH_DETECTED_EMITTED");
     IS_RECORDING.store(true, Ordering::SeqCst);
     reset_speech_detected_flag(); // Reset for new recording session
+
+    // Spawn silence auto-stop monitor (if enabled).
+    // If the frontend passed None (async store read failed, or old call-site),
+    // fall back to reading the preference directly from the Tauri store in Rust.
+    let effective_silence_timeout = match silence_timeout_secs {
+        Some(t) => {
+            info!("🔇 silence_timeout_secs from frontend: {}s", t);
+            Some(t)
+        }
+        None => {
+            info!("🔇 silence_timeout_secs not provided by frontend — reading from preferences.json");
+            load_silence_timeout_from_store(&app)
+        }
+    };
+
+    if let Some(timeout_secs) = effective_silence_timeout {
+        let monitor_handle = spawn_silence_monitor(
+            app.clone(),
+            recording_state_for_monitor,
+            timeout_secs,
+        );
+        let mut global_monitor = SILENCE_MONITOR_TASK.lock().unwrap();
+        *global_monitor = Some(monitor_handle);
+        info!("🔇 Silence monitor started (timeout: {}s)", timeout_secs);
+    } else {
+        info!("🔇 Silence auto-stop disabled — monitor not started");
+    }
 
     // Start optimized parallel transcription task and store handle
     let task_handle = transcription::start_transcription_task(app.clone(), transcription_receiver);
@@ -474,6 +593,124 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     Ok(())
 }
 
+// =============================================================================
+// SILENCE AUTO-STOP MONITOR
+// =============================================================================
+
+/// Spawns a background task that watches for prolonged vocal silence and
+/// automatically stops the recording when the threshold is reached.
+///
+/// The monitor:
+/// - Does nothing until VAD has confirmed at least one speech segment (voice_ever_detected).
+/// - Pauses counting while the recording is paused (silence timer is frozen).
+/// - Emits `recording-silence-warning` with `{ secondsRemaining: 10 }` when
+///   10 seconds remain before the auto-stop.
+/// - Emits `recording-auto-stopped` just before calling stop_recording(), so
+///   the frontend can update its UI immediately.
+fn spawn_silence_monitor<R: Runtime>(
+    app: AppHandle<R>,
+    state: std::sync::Arc<super::RecordingState>,
+    timeout_secs: u64,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        // How many seconds of accumulated silence before auto-stop.
+        // We count in 1-second ticks, skipping ticks while paused.
+        let mut silence_ticks: u64 = 0;
+        let warning_at = timeout_secs.saturating_sub(10);
+        let mut warning_sent = false;
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+            // Exit if recording was stopped externally (manual stop, error, etc.)
+            if !IS_RECORDING.load(Ordering::SeqCst) {
+                break;
+            }
+
+            // Freeze the counter while the user has manually paused the recording.
+            if state.is_paused() {
+                continue;
+            }
+
+            // Wait until VAD has confirmed at least one speech segment.
+            // This prevents the timer from triggering on a quiet room immediately
+            // after recording starts — the user must speak at least once before
+            // the silence counter begins decrementing.
+            if !state.voice_ever_detected() {
+                continue;
+            }
+
+            // Determine whether voice is currently "recent" by comparing the last
+            // VAD timestamp against the current wall-clock time.
+            // We use a 2-second recency window to account for VAD redemption
+            // time (~800 ms) and avoid false positives on natural speech pauses.
+            let now_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+
+            let last_activity_ms = state.last_voice_activity_ms();
+            let ms_since_voice = now_ms.saturating_sub(last_activity_ms);
+
+            // Diagnostic: log every 5 ticks so we can trace the monitor's progress
+            if silence_ticks % 5 == 0 {
+                log::info!("🔇 [DIAG] Silence monitor tick: ticks={}, ms_since_voice={}ms, threshold={}s",
+                    silence_ticks, ms_since_voice, timeout_secs);
+            }
+
+            if ms_since_voice < 2000 {
+                // Voice was recent — reset counter and clear warning flag
+                silence_ticks = 0;
+                warning_sent = false;
+                continue;
+            }
+
+            // Accumulate silence
+            silence_ticks += 1;
+
+            // Emit warning toast when 10 seconds remain
+            if silence_ticks >= warning_at && !warning_sent {
+                let _ = app.emit(
+                    "recording-silence-warning",
+                    serde_json::json!({ "secondsRemaining": timeout_secs - silence_ticks }),
+                );
+                warning_sent = true;
+                log::info!("🔇 Silence warning emitted ({} ticks accumulated, threshold {}s)", silence_ticks, timeout_secs);
+            }
+
+            // Auto-stop when threshold reached
+            if silence_ticks >= timeout_secs {
+                log::info!("🔇 Silence threshold reached ({}s) — auto-stopping recording", timeout_secs);
+
+                // Notify frontend first so it can update UI state immediately
+                let _ = app.emit("recording-auto-stopped", serde_json::json!({
+                    "reason": "silence",
+                    "silenceDurationSecs": silence_ticks
+                }));
+
+                // Spawn a separate task to run stop_recording so the monitor task
+                // can exit cleanly via `break`. Calling stop_recording() directly
+                // would cause a self-abort: stop_recording() calls abort() on the
+                // silence monitor's own JoinHandle, cancelling this very task at its
+                // first await point and leaving the recording in a half-stopped state.
+                let app_for_stop = app.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = stop_recording(
+                        app_for_stop,
+                        RecordingArgs { save_path: String::new() },
+                    ).await {
+                        log::error!("❌ Silence auto-stop failed: {}", e);
+                    }
+                });
+
+                break;
+            }
+        }
+    })
+}
+
 /// Stop recording with optimized graceful shutdown ensuring NO transcript chunks are lost
 pub async fn stop_recording<R: Runtime>(
     app: AppHandle<R>,
@@ -487,6 +724,15 @@ pub async fn stop_recording<R: Runtime>(
     if !IS_RECORDING.load(Ordering::SeqCst) {
         info!("Recording was not active");
         return Ok(());
+    }
+
+    // Abort the silence monitor immediately so it cannot race with this shutdown
+    // and attempt a double-stop.
+    {
+        let mut global_monitor = SILENCE_MONITOR_TASK.lock().unwrap();
+        if let Some(handle) = global_monitor.take() {
+            handle.abort();
+        }
     }
 
     // Emit shutdown progress to frontend

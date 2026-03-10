@@ -29,7 +29,7 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(({ isCollapsed }, re
               color: 'rgba(255,255,255,0.92)',
               background: 'linear-gradient(120deg, #1a1a1f 0%, #2a2a32 20%, #3a3a44 35%, #4a4a55 50%, #3a3a44 65%, #2a2a32 80%, #1a1a1f 100%)',
               backgroundSize: '200% 100%',
-              animation: 'shimmer 4s ease-in-out infinite',
+              animation: 'shimmer 10s ease-in-out infinite',
               boxShadow: '0 1px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
             }}
           >

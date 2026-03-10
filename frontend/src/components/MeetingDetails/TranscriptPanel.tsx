@@ -19,6 +19,12 @@ interface TranscriptPanelProps {
   isRecording: boolean;
   /** True while the stop sequence is in flight; disables the button */
   isStopping: boolean;
+  /** Whether the recording is currently paused */
+  isPaused?: boolean;
+  /** Called when the user clicks Pause */
+  onPauseRecording?: () => void;
+  /** Called when the user clicks Resume */
+  onResumeRecording?: () => void;
   disableAutoScroll?: boolean;
 
   // Optional pagination props (when using virtualization)
@@ -38,6 +44,9 @@ export function TranscriptPanel({
   onStopRecording,
   isRecording,
   isStopping,
+  isPaused = false,
+  onPauseRecording,
+  onResumeRecording,
   disableAutoScroll = false,
   usePagination = false,
   segments,
@@ -78,8 +87,11 @@ export function TranscriptPanel({
             onCopyTranscript={onCopyTranscript}
             isRecording={isRecording}
             isStopping={isStopping}
+            isPaused={isPaused}
             onStartRecording={onStartRecording}
             onStopRecording={onStopRecording}
+            onPauseRecording={onPauseRecording}
+            onResumeRecording={onResumeRecording}
           />
         </div>
       </div>
@@ -89,7 +101,7 @@ export function TranscriptPanel({
         <VirtualizedTranscriptView
           segments={convertedSegments}
           isRecording={isRecording}
-          isPaused={false}
+          isPaused={isPaused}
           isProcessing={false}
           isStopping={false}
           enableStreaming={false}

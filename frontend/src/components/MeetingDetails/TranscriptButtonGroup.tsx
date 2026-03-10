@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
-import { Copy, Mic, Square } from 'lucide-react';
+import { Copy, Mic, Pause, Play, Square } from 'lucide-react';
 import Analytics from '@/lib/analytics';
 
 
@@ -15,6 +15,12 @@ interface TranscriptButtonGroupProps {
   isStopping: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
+  /** Whether the recording is currently paused */
+  isPaused?: boolean;
+  /** Called when the user clicks Pause */
+  onPauseRecording?: () => void;
+  /** Called when the user clicks Resume */
+  onResumeRecording?: () => void;
   className?: string;
 }
 
@@ -26,6 +32,9 @@ export function TranscriptButtonGroup({
   isStopping,
   onStartRecording,
   onStopRecording,
+  isPaused = false,
+  onPauseRecording,
+  onResumeRecording,
   className = '',
 }: TranscriptButtonGroupProps) {
   return (
@@ -46,6 +55,31 @@ export function TranscriptButtonGroup({
           <span className="hidden lg:inline">Copy</span>
         </Button>
 
+        {/* Pause / Resume — only visible while recording is active */}
+        {isRecording && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              if (isPaused) {
+                Analytics.trackButtonClick('resume_recording', 'meeting_details_transcript_header');
+                onResumeRecording?.();
+              } else {
+                Analytics.trackButtonClick('pause_recording', 'meeting_details_transcript_header');
+                onPauseRecording?.();
+              }
+            }}
+            disabled={isStopping}
+            title={isPaused ? 'Resume recording' : 'Pause recording'}
+          >
+            {isPaused ? (
+              <Play size={16} />
+            ) : (
+              <Pause size={16} />
+            )}
+          </Button>
+        )}
+
         {/* Record / End Recording — visible when no transcript exists yet, or while
             recording is active (live transcripts must not hide the stop button). */}
         {(transcriptCount === 0 || isRecording) && (
@@ -54,7 +88,7 @@ export function TranscriptButtonGroup({
             variant="outline"
             className={
               isRecording
-                ? 'bg-red-500 hover:bg-red-600 border-red-400/40 text-white font-semibold'
+                ? 'bg-green-500 hover:bg-green-600 border-green-400/40 text-white font-semibold'
                 : ''
             }
             onClick={() => {

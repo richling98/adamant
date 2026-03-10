@@ -13,9 +13,11 @@ import { TranscriptRecovery } from '@/components/TranscriptRecovery';
 import { indexedDBService } from '@/services/indexedDBService';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 export default function Home() {
   const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
+  const [hoverStartBtn, setHoverStartBtn] = useState(false);
 
   const { transcriptModelConfig } = useConfig();
   const recordingState = useRecordingState();
@@ -147,8 +149,11 @@ export default function Home() {
 
       <div className="flex flex-1 flex-col items-center justify-center gap-6">
         <div className="text-center space-y-2">
+          <div className="flex justify-center mb-3">
+            <Image src="/logo.png" alt="Adamant" width={72} height={72} className="object-contain" />
+          </div>
           <h1 className="text-2xl font-semibold text-foreground">Welcome to Adamant</h1>
-          <p className="text-sm text-zinc-400">The most private and secure AI meeting notetaker</p>
+          <p className="text-sm text-zinc-400">The private and secure AI meeting notetaker.</p>
         </div>
         <button
           onClick={() => {
@@ -156,7 +161,20 @@ export default function Home() {
             Analytics.trackButtonClick('start_new_meeting', 'home_page');
             router.push('/meeting-details?id=new');
           }}
-          className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium text-base hover:bg-primary/90 transition-colors shadow-sm"
+          onMouseEnter={() => setHoverStartBtn(true)}
+          onMouseLeave={() => setHoverStartBtn(false)}
+          className="px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
+          style={{
+            background: hoverStartBtn ? 'rgba(34, 197, 94, 0.15)' : 'rgba(34, 197, 94, 0.07)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: `1px solid ${hoverStartBtn ? 'rgba(34, 197, 94, 0.75)' : 'rgba(34, 197, 94, 0.5)'}`,
+            color: hoverStartBtn ? '#86efac' : '#4ade80',
+            boxShadow: hoverStartBtn
+              ? '0 0 40px rgba(34, 197, 94, 0.22), 0 8px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
+              : '0 0 28px rgba(34, 197, 94, 0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
+            transform: hoverStartBtn ? 'translateY(-2px) scale(1.03)' : 'translateY(0) scale(1)',
+          }}
         >
           Start New Meeting
         </button>

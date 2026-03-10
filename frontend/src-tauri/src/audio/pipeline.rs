@@ -834,6 +834,12 @@ impl AudioPipeline {
                             // STEP 3: Send mixed audio for transcription (VAD + Whisper)
                             match self.vad_processor.process_audio(&mixed_with_gain) {
                                 Ok(speech_segments) => {
+                                    // Notify silence-monitor that voice was just detected.
+                                    // Done once per batch (not per segment) to avoid redundant stores.
+                                    if !speech_segments.is_empty() {
+                                        self.state.update_voice_activity();
+                                    }
+
                                     for segment in speech_segments {
                                         let duration_ms = segment.end_timestamp_ms - segment.start_timestamp_ms;
 

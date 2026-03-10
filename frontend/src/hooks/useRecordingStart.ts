@@ -9,6 +9,21 @@ import Analytics from '@/lib/analytics';
 import { showRecordingNotification } from '@/lib/recordingNotification';
 import { toast } from 'sonner';
 
+/** Read the current silence auto-stop preference from the Tauri plugin-store.
+ *  Returns the timeout in seconds, or null when the feature is disabled. */
+async function loadSilenceTimeout(): Promise<number | null> {
+  try {
+    const { Store } = await import('@tauri-apps/plugin-store');
+    const store = await Store.load('preferences.json');
+    const enabled = await store.get<boolean>('silence_auto_stop_enabled') ?? true;
+    if (!enabled) return null;
+    return await store.get<number>('silence_auto_stop_duration_secs') ?? 60;
+  } catch {
+    // Fall back to default (60 s) if the store is unavailable
+    return 60;
+  }
+}
+
 interface UseRecordingStartReturn {
   handleRecordingStart: () => Promise<void>;
   isAutoStarting: boolean;
@@ -114,12 +129,14 @@ export function useRecordingStart(
       // Set STARTING status before initiating backend recording
       setStatus(RecordingStatus.STARTING, 'Initializing recording...');
 
-      // Start the actual backend recording
+      // Start the actual backend recording (pass silence timeout from settings)
       console.log('Starting backend recording with meeting:', randomTitle);
+      const silenceTimeout = await loadSilenceTimeout();
       await recordingService.startRecordingWithDevices(
         selectedDevices?.micDevice || null,
         selectedDevices?.systemDevice || null,
-        randomTitle
+        randomTitle,
+        silenceTimeout,
       );
       console.log('Backend recording started successfully');
 
@@ -185,10 +202,12 @@ export function useRecordingStart(
             setStatus(RecordingStatus.STARTING, 'Initializing recording...');
 
             console.log('Auto-starting backend recording with meeting:', generatedMeetingTitle);
+            const silenceTimeout = await loadSilenceTimeout();
             const result = await recordingService.startRecordingWithDevices(
               selectedDevices?.micDevice || null,
               selectedDevices?.systemDevice || null,
-              generatedMeetingTitle
+              generatedMeetingTitle,
+              silenceTimeout,
             );
             console.log('Auto-start backend recording result:', result);
 
@@ -272,10 +291,12 @@ export function useRecordingStart(
         setStatus(RecordingStatus.STARTING, 'Initializing recording...');
 
         console.log('Starting backend recording with meeting:', generatedMeetingTitle);
+        const silenceTimeout = await loadSilenceTimeout();
         const result = await recordingService.startRecordingWithDevices(
           selectedDevices?.micDevice || null,
           selectedDevices?.systemDevice || null,
-          generatedMeetingTitle
+          generatedMeetingTitle,
+          silenceTimeout,
         );
         console.log('Backend recording result:', result);
 

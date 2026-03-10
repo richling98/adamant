@@ -83,6 +83,12 @@ const Sidebar: React.FC = () => {
   });
   const [editingTitle, setEditingTitle] = useState<string>('');
 
+  // Button hover states for glass effect animations
+  const [hoverCollapsedSettings, setHoverCollapsedSettings] = useState(false);
+  const [hoverCollapsedStart, setHoverCollapsedStart] = useState(false);
+  const [hoverExpandedSettings, setHoverExpandedSettings] = useState(false);
+  const [hoverExpandedStart, setHoverExpandedStart] = useState(false);
+
   // New folder creation inline state
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -588,8 +594,19 @@ const Sidebar: React.FC = () => {
             <TooltipTrigger asChild>
               <button
                 onClick={() => router.push('/settings')}
-                className={`p-2 rounded-lg transition-colors duration-150 ${isSettingsPage ? 'bg-white/10' : 'hover:bg-white/10'
-                  }`}
+                onMouseEnter={() => setHoverCollapsedSettings(true)}
+                onMouseLeave={() => setHoverCollapsedSettings(false)}
+                className="p-2 rounded-xl transition-all duration-300"
+                style={{
+                  background: isSettingsPage || hoverCollapsedSettings ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                  border: `1px solid ${hoverCollapsedSettings ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.12)'}`,
+                  boxShadow: hoverCollapsedSettings
+                    ? '0 0 16px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.12)'
+                    : 'inset 0 1px 0 rgba(255,255,255,0.06)',
+                  transform: hoverCollapsedSettings ? 'scale(1.06)' : 'scale(1)',
+                }}
               >
                 <Settings className="w-5 h-5 text-foreground/75" />
               </button>
@@ -607,9 +624,21 @@ const Sidebar: React.FC = () => {
                   Analytics.trackButtonClick('start_new_meeting', 'sidebar');
                   router.push('/meeting-details?id=new');
                 }}
-                className="p-2 rounded-lg transition-colors duration-150 hover:bg-green-500/10"
+                onMouseEnter={() => setHoverCollapsedStart(true)}
+                onMouseLeave={() => setHoverCollapsedStart(false)}
+                className="p-2 rounded-xl transition-all duration-300"
+                style={{
+                  background: hoverCollapsedStart ? 'rgba(34, 197, 94, 0.18)' : 'rgba(34, 197, 94, 0.07)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                  border: `1px solid ${hoverCollapsedStart ? 'rgba(34, 197, 94, 0.65)' : 'rgba(34, 197, 94, 0.25)'}`,
+                  boxShadow: hoverCollapsedStart
+                    ? '0 0 20px rgba(34, 197, 94, 0.2), inset 0 1px 0 rgba(255,255,255,0.1)'
+                    : 'inset 0 1px 0 rgba(255,255,255,0.06)',
+                  transform: hoverCollapsedStart ? 'scale(1.06)' : 'scale(1)',
+                }}
               >
-                <Play className="w-5 h-5 text-green-500" />
+                <Play className="w-5 h-5 text-green-400" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
@@ -955,7 +984,20 @@ const Sidebar: React.FC = () => {
           <div className="flex-shrink-0 p-2 border-t border-white/10">
             <button
               onClick={() => router.push('/settings')}
-              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-foreground/85 bg-white/10 hover:bg-white/15 rounded-lg transition-colors shadow-sm border border-white/10"
+              onMouseEnter={() => setHoverExpandedSettings(true)}
+              onMouseLeave={() => setHoverExpandedSettings(false)}
+              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium rounded-xl transition-all duration-300"
+              style={{
+                background: hoverExpandedSettings ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
+                border: `1px solid ${hoverExpandedSettings ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.1)'}`,
+                color: hoverExpandedSettings ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.75)',
+                boxShadow: hoverExpandedSettings
+                  ? '0 4px 20px rgba(0,0,0,0.16), 0 0 14px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.14)'
+                  : '0 2px 16px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08)',
+                transform: hoverExpandedSettings ? 'translateY(-1px)' : 'translateY(0)',
+              }}
             >
               <Settings className="w-4 h-4 mr-2" />
               <span>Settings</span>
@@ -966,7 +1008,20 @@ const Sidebar: React.FC = () => {
                 Analytics.trackButtonClick('start_new_meeting', 'sidebar');
                 router.push('/meeting-details?id=new');
               }}
-              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-white bg-green-600 hover:bg-green-500 rounded-lg transition-colors shadow-sm border border-green-500/30"
+              onMouseEnter={() => setHoverExpandedStart(true)}
+              onMouseLeave={() => setHoverExpandedStart(false)}
+              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium rounded-xl transition-all duration-300"
+              style={{
+                background: hoverExpandedStart ? 'rgba(34, 197, 94, 0.18)' : 'rgba(34, 197, 94, 0.08)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
+                border: `1px solid ${hoverExpandedStart ? 'rgba(34, 197, 94, 0.7)' : 'rgba(34, 197, 94, 0.35)'}`,
+                color: hoverExpandedStart ? 'rgba(134, 239, 172, 1)' : 'rgba(134, 239, 172, 0.95)',
+                boxShadow: hoverExpandedStart
+                  ? '0 4px 20px rgba(0,0,0,0.16), 0 0 20px rgba(34, 197, 94, 0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
+                  : '0 2px 16px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08)',
+                transform: hoverExpandedStart ? 'translateY(-1px)' : 'translateY(0)',
+              }}
             >
               <Play className="w-4 h-4 mr-2" />
               <span>Start Meeting</span>

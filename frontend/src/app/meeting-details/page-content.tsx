@@ -8,6 +8,7 @@ import { TranscriptPanel } from '@/components/MeetingDetails/TranscriptPanel';
 import { SummaryPanel } from '@/components/MeetingDetails/SummaryPanel';
 import { NotesPanel } from '@/components/NotesPanel';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 // Custom hooks
 import { useMeetingData } from '@/hooks/meeting-details/useMeetingData';
@@ -177,6 +178,23 @@ export default function PageContent({
     Analytics.trackButtonClick('stop_recording', 'meeting_details_transcript_header');
   }, [handleRecordingStop, meetingData.transcripts, liveTranscripts]);
 
+  // Pause / Resume — delegates directly to Tauri commands (backend already supports these)
+  const handlePauseRecordingOnPage = useCallback(async () => {
+    try {
+      await invoke('pause_recording');
+    } catch (error) {
+      console.error('Failed to pause recording:', error);
+    }
+  }, []);
+
+  const handleResumeRecordingOnPage = useCallback(async () => {
+    try {
+      await invoke('resume_recording');
+    } catch (error) {
+      console.error('Failed to resume recording:', error);
+    }
+  }, []);
+
   // Clear the post-recording snapshot once the API refetch has populated transcripts.
   useEffect(() => {
     if (meetingData.transcripts.length > 0 && postRecordingSnapshot.length > 0) {
@@ -194,6 +212,49 @@ export default function PageContent({
   // Track page view
   useEffect(() => {
     Analytics.trackPageView('meeting_details');
+  }, []);
+
+  // Silence auto-stop event handlers
+  // These mirror the Rust `spawn_silence_monitor` events so the UI stays in sync.
+  useEffect(() => {
+    let unlistenWarning: (() => void) | null = null;
+    let unlistenStopped: (() => void) | null = null;
+
+    const setup = async () => {
+      // 10-second pre-stop warning toast
+      unlistenWarning = await listen<{ secondsRemaining: number }>(
+        'recording-silence-warning',
+        (event) => {
+          const secs = event.payload.secondsRemaining;
+          toast.warning(
+            `No voice detected — recording will auto-stop in ${secs} second${secs !== 1 ? 's' : ''}`,
+            {
+              id: 'silence-warning',
+              duration: 12000, // stays visible until auto-stop fires
+            }
+          );
+        }
+      );
+
+      // Recording was stopped by the silence monitor — trigger the same
+      // frontend teardown as a manual "End Recording" press.
+      unlistenStopped = await listen('recording-auto-stopped', () => {
+        toast.dismiss('silence-warning');
+        toast.info('Recording automatically stopped after silence', {
+          duration: 5000,
+        });
+        // Trigger the normal stop UI flow (snapshot, transcript save toast, etc.)
+        handleStopRecordingOnPage();
+      });
+    };
+
+    setup();
+
+    return () => {
+      unlistenWarning?.();
+      unlistenStopped?.();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Resolve a valid summary template ID at runtime.
@@ -300,6 +361,9 @@ export default function PageContent({
           onStopRecording={handleStopRecordingOnPage}
           isRecording={isRecording}
           isStopping={recordingState.isStopping}
+          isPaused={recordingState.isPaused}
+          onPauseRecording={handlePauseRecordingOnPage}
+          onResumeRecording={handleResumeRecordingOnPage}
           disableAutoScroll={!isRecording}
           // During recording or snapshot: bypass pagination and render directly.
           // After recording and API refetch: switch back to paginated data.

@@ -1,6 +1,6 @@
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use anyhow::Result;
 
@@ -124,6 +124,14 @@ pub struct RecordingState {
     // Pause time tracking
     pause_start: Mutex<Option<Instant>>,
     total_pause_duration: Mutex<std::time::Duration>,
+
+    // Silence auto-stop tracking
+    // Set to current UNIX millis whenever the VAD detects a speech segment.
+    // The value 0 means no voice has been heard yet in this session.
+    last_voice_activity_ms: AtomicU64,
+    // Becomes true after the first VAD speech segment in this recording session.
+    // The silence monitor does NOT start counting until this is true.
+    voice_ever_detected: AtomicBool,
 }
 
 impl RecordingState {
@@ -145,6 +153,8 @@ impl RecordingState {
             recording_start: Mutex::new(None),
             pause_start: Mutex::new(None),
             total_pause_duration: Mutex::new(std::time::Duration::ZERO),
+            last_voice_activity_ms: AtomicU64::new(0),
+            voice_ever_detected: AtomicBool::new(false),
         })
     }
 
@@ -155,6 +165,9 @@ impl RecordingState {
         self.error_count.store(0, Ordering::SeqCst);
         self.recoverable_error_count.store(0, Ordering::SeqCst);
         *self.last_error.lock().unwrap() = None;
+        // Reset silence-detection state for new session
+        self.last_voice_activity_ms.store(0, Ordering::SeqCst);
+        self.voice_ever_detected.store(false, Ordering::SeqCst);
         Ok(())
     }
 
@@ -217,6 +230,39 @@ impl RecordingState {
 
     pub fn is_active(&self) -> bool {
         self.is_recording() && !self.is_paused()
+    }
+
+    // -------------------------------------------------------------------------
+    // Silence auto-stop tracking
+    // -------------------------------------------------------------------------
+
+    /// Called by the audio pipeline whenever the VAD confirms a speech segment.
+    /// Records the current wall-clock time (UNIX millis) and marks that voice
+    /// has been heard at least once this session.
+    pub fn update_voice_activity(&self) {
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        self.last_voice_activity_ms.store(now_ms, Ordering::SeqCst);
+        let was_first = !self.voice_ever_detected.swap(true, Ordering::SeqCst);
+        if was_first {
+            log::info!("🔇 [DIAG] First voice activity detected — silence timer will now start counting");
+        } else {
+            log::debug!("🔇 [DIAG] Voice activity update at {}ms", now_ms);
+        }
+    }
+
+    /// Returns the UNIX timestamp (ms) of the last VAD-confirmed speech event.
+    /// Returns 0 if no voice has been detected yet this session.
+    pub fn last_voice_activity_ms(&self) -> u64 {
+        self.last_voice_activity_ms.load(Ordering::SeqCst)
+    }
+
+    /// Returns true once the VAD has confirmed at least one speech segment
+    /// in the current recording session.
+    pub fn voice_ever_detected(&self) -> bool {
+        self.voice_ever_detected.load(Ordering::SeqCst)
     }
 
     // Reconnection state management
@@ -433,6 +479,8 @@ impl Default for RecordingState {
             recording_start: Mutex::new(None),
             pause_start: Mutex::new(None),
             total_pause_duration: Mutex::new(std::time::Duration::ZERO),
+            last_voice_activity_ms: AtomicU64::new(0),
+            voice_ever_detected: AtomicBool::new(false),
         }
     }
 }
