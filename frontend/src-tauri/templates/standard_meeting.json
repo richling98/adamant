@@ -1,26 +1,26 @@
 {
   "name": "Standard Meeting Notes",
-  "description": "A standard template for general meetings, focusing on key outcomes and actions.",
+  "description": "A comprehensive meeting summary covering attendees, all topics discussed, and action items.",
   "sections": [
     {
-      "title": "Summary",
-      "instruction": "Provide a brief, one-paragraph executive summary of the entire meeting.",
-      "format": "paragraph"
-    },
-    {
-      "title": "Key Decisions",
-      "instruction": "List the most important decisions made during the meeting.",
+      "title": "TLDR",
+      "instruction": "Summarize the entire meeting in no more than 5 bullet points. Each bullet must capture a distinct key takeaway, outcome, or decision. Be specific — no generic filler.",
       "format": "list"
     },
     {
-      "title": "Action Items",
-      "instruction": "List all assigned tasks with their owners and due date. Add reference transcript segment and timestamp using bullets.",
+      "title": "Key Attendees",
+      "instruction": "List every person identified as a participant or mentioned by name in the meeting. For each person, provide their name and the company or organization they represent. If company is not mentioned, omit it. Format each entry as: **Name** — Company.",
       "format": "list"
     },
     {
-      "title": "Discussion Highlights",
-      "instruction": "Summarize the main topics of discussion, key arguments, and important insights.",
-      "format": "paragraph"
+      "title": "Topics Covered",
+      "instruction": "For EACH distinct topic that received meaningful discussion, create a sub-heading with the topic name, followed by comprehensive bullet points capturing everything said about that topic — all points raised, opinions shared, context given, and details mentioned. Do NOT collapse or omit detail for brevity. Cover every topic discussed.",
+      "format": "list"
+    },
+    {
+      "title": "Next Steps & Action Items",
+      "instruction": "List every next step and action item identified in the meeting. For each, include who is responsible (if stated) and any deadline or timeline mentioned. Format as: **[Owner]** — Action item description (due: deadline if mentioned). If no owner was stated, omit the owner field.",
+      "format": "list"
     }
   ]
 }

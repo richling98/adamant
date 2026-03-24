@@ -319,7 +319,7 @@ pub async fn generate_meeting_summary(
 
         let mut chunk_summaries = Vec::new();
         let system_prompt_chunk = "You are an expert meeting summarizer.";
-        let user_prompt_template_chunk = "Provide a concise but comprehensive summary of the following transcript chunk. Capture all key points, decisions, action items, and mentioned individuals.\n\n<transcript_chunk>\n{}\n</transcript_chunk>";
+        let user_prompt_template_chunk = "Provide a thorough and comprehensive summary of the following transcript chunk. Capture all key points, decisions, action items, mentioned individuals, and important details — do not omit detail for the sake of brevity.\n\n<transcript_chunk>\n{}\n</transcript_chunk>";
 
         for (i, chunk) in chunks.iter().enumerate() {
             // Check for cancellation before processing each chunk
@@ -385,7 +385,7 @@ pub async fn generate_meeting_summary(
             );
             let combined_text = chunk_summaries.join("\n---\n");
             let system_prompt_combine = "You are an expert at synthesizing meeting summaries.";
-            let user_prompt_combine_template = "The following are consecutive summaries of a meeting. Combine them into a single, coherent, and detailed narrative summary that retains all important details, organized logically.\n\n<summaries>\n{}\n</summaries>";
+            let user_prompt_combine_template = "The following are consecutive summaries of a meeting. Combine them into a single, coherent, and highly detailed narrative summary. Retain every important detail, nuance, and point from all chunks — do not condense or lose information for the sake of brevity.\n\n<summaries>\n{}\n</summaries>";
 
             let user_prompt_combine = user_prompt_combine_template.replace("{}", &combined_text);
             generate_summary(
@@ -430,6 +430,7 @@ pub async fn generate_meeting_summary(
 5. Output **only** the completed Markdown report.
 6. If unsure about something, omit it.
 7. Never output markdown tables. Use bullet points with bold labels instead.
+8. Be thorough and comprehensive. Do not sacrifice detail or nuance for brevity — a longer, complete summary is always preferred over a short, incomplete one.
 
 **SECTION-SPECIFIC INSTRUCTIONS:**
 {}
