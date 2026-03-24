@@ -218,11 +218,13 @@ pub async fn generate_summary(
 
     // Build request body based on provider
     let request_body = if provider != &LLMProvider::Claude {
-        // For CustomOpenAI, apply optional parameters if provided
+        // Apply optional parameters; CustomOpenAI exposes all three, other
+        // OpenAI-compatible providers honour max_tokens to prevent runaway
+        // repetition (especially with local Ollama models on long contexts).
         let (max_tokens_val, temperature_val, top_p_val) = if provider == &LLMProvider::CustomOpenAI {
             (max_tokens, temperature, top_p)
         } else {
-            (None, None, None)
+            (max_tokens, None, None)
         };
 
         serde_json::json!(ChatRequest {

@@ -182,6 +182,15 @@ pub async fn chat_with_meetings(
     // ── 6. Call LLM ──────────────────────────────────────────────────────────
     let client = Client::new();
 
+    // For chat responses a concise answer is expected; cap generation to avoid
+    // runaway repetition, especially with local Ollama models on long context.
+    // Custom config can override this; Claude uses its own hardcoded limit.
+    const CHAT_MAX_TOKENS: u32 = 1024;
+    let chat_max_tokens = custom_config
+        .as_ref()
+        .and_then(|c| c.max_tokens.map(|v| v as u32))
+        .unwrap_or(CHAT_MAX_TOKENS);
+
     let response = generate_summary(
         &client,
         &provider,
@@ -193,9 +202,7 @@ pub async fn chat_with_meetings(
         custom_config
             .as_ref()
             .map(|c| c.endpoint.as_str()),
-        custom_config.as_ref().and_then(|c| {
-            c.max_tokens.map(|v| v as u32)
-        }),
+        Some(chat_max_tokens),
         custom_config.as_ref().and_then(|c| c.temperature),
         custom_config.as_ref().and_then(|c| c.top_p),
         app_data_dir.as_ref(),
