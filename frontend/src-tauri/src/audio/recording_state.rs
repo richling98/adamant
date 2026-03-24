@@ -129,9 +129,11 @@ pub struct RecordingState {
     // Set to current UNIX millis whenever the VAD detects a speech segment.
     // The value 0 means no voice has been heard yet in this session.
     last_voice_activity_ms: AtomicU64,
-    // Becomes true after the first VAD speech segment in this recording session.
+    // Becomes true after 3 VAD speech segments in this recording session.
     // The silence monitor does NOT start counting until this is true.
+    // Requiring 3 detections prevents audio init artifacts from opening the gate.
     voice_ever_detected: AtomicBool,
+    voice_detection_count: AtomicU32,
 }
 
 impl RecordingState {
@@ -155,6 +157,7 @@ impl RecordingState {
             total_pause_duration: Mutex::new(std::time::Duration::ZERO),
             last_voice_activity_ms: AtomicU64::new(0),
             voice_ever_detected: AtomicBool::new(false),
+            voice_detection_count: AtomicU32::new(0),
         })
     }
 
@@ -168,6 +171,7 @@ impl RecordingState {
         // Reset silence-detection state for new session
         self.last_voice_activity_ms.store(0, Ordering::SeqCst);
         self.voice_ever_detected.store(false, Ordering::SeqCst);
+        self.voice_detection_count.store(0, Ordering::SeqCst);
         Ok(())
     }
 
@@ -245,11 +249,17 @@ impl RecordingState {
             .unwrap_or_default()
             .as_millis() as u64;
         self.last_voice_activity_ms.store(now_ms, Ordering::SeqCst);
-        let was_first = !self.voice_ever_detected.swap(true, Ordering::SeqCst);
-        if was_first {
-            log::info!("🔇 [DIAG] First voice activity detected — silence timer will now start counting");
-        } else {
-            log::debug!("🔇 [DIAG] Voice activity update at {}ms", now_ms);
+
+        // Require 3 detections before opening the silence gate, to prevent
+        // audio init artifacts (e.g. ScreenCaptureKit startup noise on first run)
+        // from prematurely starting the silence counter.
+        let prev = self.voice_detection_count.fetch_add(1, Ordering::SeqCst);
+        if prev == 2 {
+            // 3rd detection — open the gate
+            self.voice_ever_detected.store(true, Ordering::SeqCst);
+            log::info!("🔇 [DIAG] Voice confirmed (3 detections) — silence timer will now start counting");
+        } else if prev < 2 {
+            log::info!("🔇 [DIAG] Voice detection {}/3 — silence gate not yet open", prev + 1);
         }
     }
 
@@ -481,6 +491,7 @@ impl Default for RecordingState {
             total_pause_duration: Mutex::new(std::time::Duration::ZERO),
             last_voice_activity_ms: AtomicU64::new(0),
             voice_ever_detected: AtomicBool::new(false),
+            voice_detection_count: AtomicU32::new(0),
         }
     }
 }

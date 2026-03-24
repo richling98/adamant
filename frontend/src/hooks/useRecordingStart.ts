@@ -17,7 +17,7 @@ async function loadSilenceTimeout(): Promise<number | null> {
     const store = await Store.load('preferences.json');
     const enabled = await store.get<boolean>('silence_auto_stop_enabled') ?? true;
     if (!enabled) return null;
-    return await store.get<number>('silence_auto_stop_duration_secs') ?? 60;
+    return await store.get<number>('silence_auto_stop_duration_secs') ?? 120;
   } catch {
     // Fall back to default (60 s) if the store is unavailable
     return 60;

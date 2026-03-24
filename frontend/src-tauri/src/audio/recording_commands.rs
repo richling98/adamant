@@ -65,7 +65,7 @@ fn load_silence_timeout_from_store<R: Runtime>(app: &AppHandle<R>) -> Option<u64
     let secs: u64 = store
         .get("silence_auto_stop_duration_secs")
         .and_then(|v| serde_json::from_value::<u64>(v).ok())
-        .unwrap_or(60); // default 60 seconds
+        .unwrap_or(120); // default 2 minutes
 
     info!("🔇 Loaded silence timeout from preferences.json: {}s", secs);
     Some(secs)
@@ -660,7 +660,7 @@ fn spawn_silence_monitor<R: Runtime>(
                     silence_ticks, ms_since_voice, timeout_secs);
             }
 
-            if ms_since_voice < 2000 {
+            if ms_since_voice < 8000 {
                 // Voice was recent — reset counter and clear warning flag
                 silence_ticks = 0;
                 warning_sent = false;
