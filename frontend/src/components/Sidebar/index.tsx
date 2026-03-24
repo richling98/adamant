@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, Play, FolderPlus, Square, CheckSquare } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, FolderPlus, Square, CheckSquare } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
@@ -53,10 +53,10 @@ const Sidebar: React.FC = () => {
     meetings,
     setMeetings,
     serverAddress,
-    setIsMeetingActive,
     folders,
     createFolder,
     moveMeetingToFolder,
+    refetchMeetings,
   } = useSidebar();
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings']));
@@ -85,9 +85,11 @@ const Sidebar: React.FC = () => {
 
   // Button hover states for glass effect animations
   const [hoverCollapsedSettings, setHoverCollapsedSettings] = useState(false);
-  const [hoverCollapsedStart, setHoverCollapsedStart] = useState(false);
   const [hoverExpandedSettings, setHoverExpandedSettings] = useState(false);
-  const [hoverExpandedStart, setHoverExpandedStart] = useState(false);
+  // Controls visibility of the "+" button on the "Meeting Notes" section header
+  const [isMeetingNotesHeaderHovered, setIsMeetingNotesHeaderHovered] = useState(false);
+  // Loading guard for unfiled note creation — prevents double-creation on rapid clicks
+  const [isCreatingUnfiled, setIsCreatingUnfiled] = useState(false);
 
   // New folder creation inline state
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -616,35 +618,6 @@ const Sidebar: React.FC = () => {
             </TooltipContent>
           </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => {
-                  setIsMeetingActive(true);
-                  Analytics.trackButtonClick('start_new_meeting', 'sidebar');
-                  router.push('/meeting-details?id=new');
-                }}
-                onMouseEnter={() => setHoverCollapsedStart(true)}
-                onMouseLeave={() => setHoverCollapsedStart(false)}
-                className="p-2 rounded-xl transition-all duration-300"
-                style={{
-                  background: hoverCollapsedStart ? 'rgba(34, 197, 94, 0.18)' : 'rgba(34, 197, 94, 0.07)',
-                  backdropFilter: 'blur(20px)',
-                  WebkitBackdropFilter: 'blur(20px)',
-                  border: `1px solid ${hoverCollapsedStart ? 'rgba(34, 197, 94, 0.65)' : 'rgba(34, 197, 94, 0.25)'}`,
-                  boxShadow: hoverCollapsedStart
-                    ? '0 0 20px rgba(34, 197, 94, 0.2), inset 0 1px 0 rgba(255,255,255,0.1)'
-                    : 'inset 0 1px 0 rgba(255,255,255,0.06)',
-                  transform: hoverCollapsedStart ? 'scale(1.06)' : 'scale(1)',
-                }}
-              >
-                <Play className="w-5 h-5 text-green-400" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Start Meeting</p>
-            </TooltipContent>
-          </Tooltip>
         </div>
       </TooltipProvider>
     );
@@ -921,10 +894,43 @@ const Sidebar: React.FC = () => {
                   })}
 
                   {/* ── Meeting Notes (unfiled) section ── */}
-                  <div className="flex items-center h-8 mt-4 mb-1">
-                    <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Meeting Notes</span>
-                    {searchQuery && isSearching && (
-                      <span className="ml-2 text-xs text-emerald-300 animate-pulse">Searching…</span>
+                  <div
+                    className="flex items-center justify-between h-8 mt-4 mb-1"
+                    onMouseEnter={() => setIsMeetingNotesHeaderHovered(true)}
+                    onMouseLeave={() => setIsMeetingNotesHeaderHovered(false)}
+                  >
+                    <div className="flex items-center">
+                      <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Meeting Notes</span>
+                      {searchQuery && isSearching && (
+                        <span className="ml-2 text-xs text-emerald-300 animate-pulse">Searching…</span>
+                      )}
+                    </div>
+                    {/* New unfiled note — eagerly created in DB, then navigate to real ID */}
+                    {isMeetingNotesHeaderHovered && (
+                      <button
+                        className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="New meeting note"
+                        disabled={isCreatingUnfiled}
+                        onClick={async () => {
+                          if (isCreatingUnfiled) return;
+                          setIsCreatingUnfiled(true);
+                          try {
+                            const now = new Date();
+                            const title = `${now.getMonth() + 1}-${now.getDate()}-${String(now.getFullYear()).slice(-2)} new note`;
+                            const meeting = await invoke<{ id: string }>('api_create_meeting', { title });
+                            // Refresh sidebar so the new note appears immediately
+                            await refetchMeetings();
+                            Analytics.trackButtonClick('start_new_meeting', 'meeting_notes_section');
+                            router.push(`/meeting-details?id=${meeting.id}`);
+                          } catch (err) {
+                            console.error('Failed to create unfiled meeting note:', err);
+                          } finally {
+                            setIsCreatingUnfiled(false);
+                          }
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
                     )}
                   </div>
 
@@ -1001,30 +1007,6 @@ const Sidebar: React.FC = () => {
             >
               <Settings className="w-4 h-4 mr-2" />
               <span>Settings</span>
-            </button>
-            <button
-              onClick={() => {
-                setIsMeetingActive(true);
-                Analytics.trackButtonClick('start_new_meeting', 'sidebar');
-                router.push('/meeting-details?id=new');
-              }}
-              onMouseEnter={() => setHoverExpandedStart(true)}
-              onMouseLeave={() => setHoverExpandedStart(false)}
-              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium rounded-xl transition-all duration-300"
-              style={{
-                background: hoverExpandedStart ? 'rgba(34, 197, 94, 0.18)' : 'rgba(34, 197, 94, 0.08)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
-                border: `1px solid ${hoverExpandedStart ? 'rgba(34, 197, 94, 0.7)' : 'rgba(34, 197, 94, 0.35)'}`,
-                color: hoverExpandedStart ? 'rgba(134, 239, 172, 1)' : 'rgba(134, 239, 172, 0.95)',
-                boxShadow: hoverExpandedStart
-                  ? '0 4px 20px rgba(0,0,0,0.16), 0 0 20px rgba(34, 197, 94, 0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
-                  : '0 2px 16px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08)',
-                transform: hoverExpandedStart ? 'translateY(-1px)' : 'translateY(0)',
-              }}
-            >
-              <Play className="w-4 h-4 mr-2" />
-              <span>Start Meeting</span>
             </button>
             <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-foreground/45">
               v0.2.0

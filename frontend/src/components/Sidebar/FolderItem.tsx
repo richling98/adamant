@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronRight, FolderOpen, Folder as FolderIcon, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDroppable } from '@dnd-kit/core';
+import { invoke } from '@tauri-apps/api/core';
 import type { Folder } from './SidebarProvider';
 import { useSidebar } from './SidebarProvider';
 
@@ -34,7 +35,7 @@ export function FolderItem({
   activeMeetingId,
 }: FolderItemProps) {
   const router = useRouter();
-  const { renameFolder, deleteFolder, setPendingFolderId } = useSidebar();
+  const { renameFolder, deleteFolder, moveMeetingToFolder } = useSidebar();
 
   // Expand/collapse state (local — doesn't need to survive remounts)
   const [isExpanded, setIsExpanded] = useState(true);
@@ -46,6 +47,9 @@ export function FolderItem({
 
   // Hover state for showing action buttons
   const [isHovered, setIsHovered] = useState(false);
+
+  // Loading guard — prevents double-creation if the user clicks "+" rapidly
+  const [isCreating, setIsCreating] = useState(false);
 
   // Make this folder a droppable target so meetings can be dragged into it
   const { setNodeRef, isOver } = useDroppable({ id: folder.id });
@@ -93,10 +97,33 @@ export function FolderItem({
 
   // --- New meeting in folder ---
 
-  const handleNewMeeting = (e: React.MouseEvent) => {
+  // Builds the default note title: e.g. "3-23-26 new note"
+  const newNoteTitle = () => {
+    const now = new Date();
+    const m = now.getMonth() + 1;
+    const d = now.getDate();
+    const yy = String(now.getFullYear()).slice(-2);
+    return `${m}-${d}-${yy} new note`;
+  };
+
+  // Eagerly creates a note in the DB, assigns it to this folder, and navigates
+  // directly to its real URL — no lazy ?id=new draft flow required.
+  const handleNewMeeting = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    setPendingFolderId(folder.id);
-    router.push('/meeting-details?id=new');
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      const meeting = await invoke<{ id: string }>('api_create_meeting', {
+        title: newNoteTitle(),
+      });
+      // moveMeetingToFolder assigns to folder AND refreshes folders + meetings list
+      await moveMeetingToFolder(meeting.id, folder.id);
+      router.push(`/meeting-details?id=${meeting.id}`);
+    } catch (err) {
+      console.error('Failed to create meeting in folder:', err);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   // --- Collapsed sidebar: icon-only rendering ---
@@ -177,10 +204,11 @@ export function FolderItem({
         {/* Action buttons — visible on hover */}
         {isHovered && !isRenaming && (
           <div className="flex items-center gap-0.5 ml-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-            {/* New meeting in this folder */}
+            {/* New meeting in this folder — disabled while creation is in flight */}
             <button
-              className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors"
+              className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               title="New meeting in folder"
+              disabled={isCreating}
               onClick={handleNewMeeting}
             >
               <Plus className="h-3 w-3" />
