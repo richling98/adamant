@@ -1,3 +1,7 @@
+# Plans: silence auto-stop (consolidated)
+
+## Part A — Feature specification (auto-stop on silence)
+
 # Feature Implementation Plan: Auto-Stop Recording on Silence
 
 **Overall Progress:** `50%`
@@ -92,6 +96,62 @@ After this feature ships:
   - [ ] 🟥 Pass all four new props (`isPaused`, `onPauseRecording`, `onResumeRecording`, and the existing wiring) to the `<TranscriptButtonGroup>` render site
 
 ---
+
+**Status Tracking:**
+* 🟩 Done
+* 🟨 In Progress
+* 🟥 To Do
+
+
+---
+
+## Part B — Fix: silence monitor self-abort (implementation)
+
+# Feature Implementation Plan: Fix Silence Auto-Stop
+
+**Overall Progress:** `100%`
+
+## TLDR
+
+The silence auto-stop feature was broken due to one critical bug in `recording_commands.rs`. The monitor task called `stop_recording()` directly with `.await`, which caused the task to abort itself before the recording ever stopped. The self-abort fix has been applied; doc-comment cleanup and a compile check remain.
+
+## Root Cause
+
+**Self-abort (critical):** The silence monitor called `stop_recording()` directly with `.await` from within the monitor task. `stop_recording()` immediately calls `abort()` on the silence monitor's own `JoinHandle`. Since the monitor was suspended at `.await` inside `stop_recording()`, the abort cancelled the monitor task at its first async yield point (`manager.stop_streams_and_force_flush().await`) — before `IS_RECORDING` was ever set to `false`. The recording never stopped.
+
+## End Result
+
+After the fix, when a user starts a recording and has the silence auto-stop enabled:
+- The silence timer begins counting only after the user speaks for the first time in the session
+- Any subsequent detected speech resets the counter back to zero
+- After the configured duration (e.g. 1 minute) of continuous silence following first speech, the user sees a 10-second warning toast, then the recording stops automatically and saves normally
+- Pausing the recording freezes the silence counter; resuming resumes counting
+- If no speech is ever detected, the recording continues indefinitely (user must stop manually)
+- Manual "End Recording" still works exactly as before
+
+## Critical Decisions
+
+* **Keep voice-gate guard** — The `if !state.voice_ever_detected() { continue; }` guard is preserved. The timer only starts after the first VAD-confirmed speech segment. This prevents false triggers on quiet rooms or sessions where the mic never picks up speech.
+* **Spawn separate task for stop_recording in monitor** — The monitor spawns `tokio::spawn(stop_recording(...))` and immediately `break`s from its loop, so the monitor task exits cleanly before `stop_recording` runs its `abort()` call on the (now-finished) monitor handle. No self-cancellation.
+* **Keep `voice_ever_detected` field in `RecordingState`** — It is set by the pipeline on each `SpeechEnd` event and read by the silence monitor to gate the timer. Both the field and the guard remain in place.
+
+## Tasks
+
+- [x] 🟩 **Step 1: Fix self-abort bug in silence monitor**
+  - [x] 🟩 Replace direct `stop_recording(...).await` call inside the monitor loop with `tokio::spawn(async move { stop_recording(...).await })` followed by `break`
+  - [x] 🟩 Add explanatory comment describing why the separate spawn is necessary
+
+- [x] 🟩 **Step 2: Restore voice-gate guard**
+  - [x] 🟩 Re-add `if !state.voice_ever_detected() { continue; }` to the monitor loop (after pause check)
+  - [x] 🟩 Update comment to clarify timer starts only after first speech, not from recording start
+
+- [x] 🟩 **Step 3: Update stale doc comments**
+  - [x] 🟩 `start_recording_with_meeting_name` docstring (line 81) already correctly says "starting only after the first speech segment" — no change needed
+  - [x] 🟩 `spawn_silence_monitor` docstring (line 531) already correctly says "Does nothing until VAD has confirmed at least one speech segment" — no change needed
+  - [x] 🟩 Removed inline comment that incorrectly stated silence counting starts from recording start
+
+- [x] 🟩 **Step 4: Verify clean compilation**
+  - [x] 🟩 `cargo check` passes with zero errors (8 pre-existing warnings only)
 
 **Status Tracking:**
 * 🟩 Done
