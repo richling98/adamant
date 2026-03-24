@@ -248,6 +248,42 @@ pub async fn select_recording_folder<R: Runtime>(
     Ok(None)
 }
 
+/// Recursively sums the size of every file in the recordings directory.
+/// Returns total bytes, or 0 if the directory does not exist yet.
+/// Uses the native filesystem directly, bypassing JS plugin scope restrictions.
+#[tauri::command]
+pub async fn get_recordings_folder_size<R: Runtime>(app: AppHandle<R>) -> Result<u64, String> {
+    let preferences = load_recording_preferences(&app)
+        .await
+        .map_err(|e| format!("Failed to load preferences: {}", e))?;
+
+    let dir = &preferences.save_folder;
+    if !dir.exists() {
+        return Ok(0);
+    }
+
+    let mut total: u64 = 0;
+    let mut stack = vec![dir.clone()];
+    while let Some(current) = stack.pop() {
+        match std::fs::read_dir(&current) {
+            Ok(entries) => {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else if let Ok(meta) = std::fs::metadata(&path) {
+                        total += meta.len();
+                    }
+                }
+            }
+            Err(e) => info!("Could not read directory {:?}: {}", current, e),
+        }
+    }
+
+    info!("Recordings folder size: {} bytes", total);
+    Ok(total)
+}
+
 // Backend selection commands
 
 /// Get available audio capture backends for the current platform

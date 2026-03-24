@@ -21,6 +21,7 @@ export function PreferenceSettings() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [previousNotificationsEnabled, setPreviousNotificationsEnabled] = useState<boolean | null>(null);
   const hasTrackedViewRef = useRef(false);
+  const [recordingsFolderSize, setRecordingsFolderSize] = useState<string | null>(null);
 
   // Lazy load preferences on mount (only loads if not already cached)
   useEffect(() => {
@@ -28,6 +29,20 @@ export function PreferenceSettings() {
     // Reset tracking ref on mount (every tab visit)
     hasTrackedViewRef.current = false;
   }, [loadPreferences]);
+
+  // Fetch recordings folder size via Rust command (bypasses JS fs scope restrictions)
+  useEffect(() => {
+    const fetchSize = async () => {
+      try {
+        const bytes = await invoke<number>('get_recordings_folder_size');
+        setRecordingsFolderSize(formatBytes(bytes));
+      } catch (err) {
+        console.warn('Could not get recordings folder size:', err);
+        setRecordingsFolderSize(null);
+      }
+    };
+    fetchSize();
+  }, []);
 
   // Track preferences viewed analytics on every tab visit (once per mount)
   useEffect(() => {
@@ -110,6 +125,13 @@ export function PreferenceSettings() {
     handleUpdateNotificationSettings();
   }, [notificationsEnabled, notificationSettings, isInitialLoad, previousNotificationsEnabled, updateNotificationSettings])
 
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  };
+
   const handleOpenFolder = async (folderType: 'database' | 'models' | 'recordings') => {
     try {
       switch (folderType) {
@@ -169,7 +191,14 @@ export function PreferenceSettings() {
         <div className="space-y-4">
           {/* Recordings Location */}
           <div className="p-4 border border-white/10 rounded-lg bg-white/5">
-            <div className="font-medium mb-2 text-white">Meeting Recordings</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-medium text-white">Meeting Recordings</div>
+              {recordingsFolderSize !== null && (
+                <div className="text-xs text-zinc-400 bg-white/5 px-2 py-0.5 rounded-full">
+                  {recordingsFolderSize} used
+                </div>
+              )}
+            </div>
             <div className="text-sm text-zinc-400 mb-3 break-all font-mono text-xs">
               {storageLocations?.recordings || 'Loading...'}
             </div>
