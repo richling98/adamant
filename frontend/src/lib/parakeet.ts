@@ -38,18 +38,18 @@ export interface ModelDisplayInfo {
 }
 
 export const MODEL_DISPLAY_CONFIG: Record<string, ModelDisplayInfo> = {
-  'parakeet-tdt-0.6b-v3-int8': {
-    friendlyName: 'Lightning',
-    icon: '⚡',
-    tagline: 'Real time • Best for speed, great accuracy',
-    recommended: true,
-    tier: 'fastest'
-  },
   'parakeet-tdt-0.6b-v2-int8': {
-    friendlyName: 'Compact',
-    icon: '📦',
-    tagline: 'Real time • Smaller size',
+    friendlyName: 'Accurate',
+    icon: '🎯',
+    tagline: 'Best English accuracy • Real time — parakeet-tdt-0.6b-v2-int8',
+    recommended: true,
     tier: 'balanced'
+  },
+  'parakeet-tdt-0.6b-v3-int8': {
+    friendlyName: 'Multilingual',
+    icon: '⚡',
+    tagline: 'Real time • 25 languages — parakeet-tdt-0.6b-v3-int8',
+    tier: 'fastest'
   },
   'parakeet-tdt-0.6b-v3-fp32': {
     friendlyName: 'Precise',
@@ -140,12 +140,9 @@ export function getModelPerformanceBadge(quantization: QuantizationType): { labe
 }
 
 export function getRecommendedModel(systemSpecs?: { ram: number; cores: number }): string {
-  // Default to Int8 quantized model (fastest)
-  if (!systemSpecs) return 'parakeet-tdt-0.6b-v3-int8';
-
-  // For any system, prefer Int8 for speed
-  // FP32 can be used if user explicitly wants higher precision
-  return 'parakeet-tdt-0.6b-v3-int8';
+  // Default to v2 — best English accuracy
+  if (!systemSpecs) return 'parakeet-tdt-0.6b-v2-int8';
+  return 'parakeet-tdt-0.6b-v2-int8';
 }
 
 // Tauri command wrappers for Parakeet backend

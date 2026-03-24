@@ -433,8 +433,8 @@ export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInMod
                     </>
                   )}
 
-                  {/* Available - Show small trash icon (only if not currently selected) */}
-                  {isAvailable && !modelIsDownloading && selectedModel !== model.name && (
+                  {/* Available - Show small trash icon for all downloaded models */}
+                  {isAvailable && !modelIsDownloading && (
                     <button
                       className="p-2 rounded hover:bg-white/10 transition-colors text-zinc-500 hover:text-red-400"
                       onClick={(e) => {
