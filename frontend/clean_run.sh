@@ -39,7 +39,7 @@ pnpm run build
 # Set environment variables for the build
 echo "Setting up build environment..."
 
-echo "Building Tauri app..."
-pnpm run tauri dev
+echo "Building Tauri app (dev mode — uses isolated app data: com.adamant.ai.dev)..."
+pnpm tauri dev --config '{"identifier": "com.adamant.ai.dev"}'
 sleep
 
