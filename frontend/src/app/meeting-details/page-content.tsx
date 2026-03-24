@@ -172,7 +172,7 @@ export default function PageContent({
   const handleStopRecordingOnPage = useCallback(() => {
     // Capture snapshot before clearTranscripts() runs internally, so the panel
     // stays populated during the ~1s gap while the API refetches.
-    setPostRecordingSnapshot([...meetingData.transcripts, ...liveTranscripts]);
+    setPostRecordingSnapshot([...liveTranscripts]);
     toast.loading('Saving transcript...', { id: 'transcript-save' });
     handleRecordingStop({ source: 'ui', callApi: true });
     Analytics.trackButtonClick('stop_recording', 'meeting_details_transcript_header');
@@ -351,7 +351,7 @@ export default function PageContent({
         <TranscriptPanel
           transcripts={
             isRecording
-              ? [...meetingData.transcripts, ...liveTranscripts]
+              ? liveTranscripts
               : postRecordingSnapshot.length > 0
                 ? postRecordingSnapshot
                 : meetingData.transcripts

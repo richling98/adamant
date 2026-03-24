@@ -323,8 +323,12 @@ function MeetingDetailsContent() {
 
   // Reset states when meetingId changes (prevent race conditions)
   useEffect(() => {
-    // Skip reset for new note mode - it's already initialized
+    // For new note mode: clear any stale summary/state from the previous meeting,
+    // but don't touch meetingDetails (already re-initialized by the detect effect).
     if (meetingId === 'new') {
+      setMeetingSummary(null);
+      setShouldAutoGenerate(false);
+      setHasCheckedAutoGen(false);
       return;
     }
     // Skip reset when URL changes from ?id=new to ?id=<uuid> due to autosave

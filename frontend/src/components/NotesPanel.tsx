@@ -324,7 +324,17 @@ export function NotesPanel({
 
     const loadNote = async () => {
       if (isNewNote || !meetingId || meetingId === 'new') {
-        console.log('🔍 DEBUG Skipping load (new note mode or invalid ID)');
+        console.log('🔍 DEBUG Skipping load (new note mode or invalid ID) — clearing editor');
+        // Clear any content from the previous meeting so the editor starts blank.
+        // useCreateBlockNote() only uses initialContent at creation time; subsequent
+        // prop changes do NOT reset the editor, so we must call replaceBlocks() here.
+        if (editor) {
+          isRestoringContent.current = true;
+          editor.replaceBlocks(editor.document, [{ type: 'paragraph', content: '' } as any]);
+          setTimeout(() => { isRestoringContent.current = false; }, 0);
+        }
+        setNoteContent(null);
+        editorContentRef.current = null;
         setIsEditorReady(true);
         return;
       }
