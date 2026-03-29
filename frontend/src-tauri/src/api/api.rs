@@ -32,6 +32,8 @@ pub struct ApiResponse<T> {
 pub struct Meeting {
     pub id: String,
     pub title: String,
+    /// ISO 8601 creation timestamp — used by the frontend "By Date" grouping view.
+    pub created_at: String,
     /// FK into the folders table; None if the meeting is unfiled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folder_id: Option<String>,
@@ -69,13 +71,32 @@ pub struct SearchRequest {
     pub query: String,
 }
 
+/// A unified search result returned to the frontend.
+///
+/// Shape is a superset of the old transcript-only result so that existing
+/// frontend code that reads `id`, `title`, `matchContext`, `timestamp`
+/// continues to work while the new `matchSource` / `matchType` fields
+/// power the source badge and semantic indicator.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TranscriptSearchResult {
     pub id: String,
     pub title: String,
+    /// HTML snippet for keyword hits (FTS5 `<b>…</b>` markup) or plain
+    /// text excerpt for semantic hits.
     #[serde(rename = "matchContext")]
     pub match_context: String,
+    /// ISO 8601 timestamp of the meeting (empty string for semantic-only hits
+    /// where no specific segment is targeted — the frontend ignores it).
     pub timestamp: String,
+    /// Which content field matched: "transcript" | "notes" | "summary" | "title"
+    /// Used by the frontend to render a source badge.
+    #[serde(rename = "matchSource")]
+    pub match_source: Option<String>,
+    /// "keyword" (FTS5) or "semantic" (cosine similarity).
+    #[serde(rename = "matchType")]
+    pub match_type: Option<String>,
+    /// Normalised relevance score in [0.0, 1.0] (higher = better).
+    pub score: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -373,6 +394,8 @@ pub async fn api_get_meetings<R: Runtime>(
                 .map(|m| Meeting {
                     id: m.id,
                     title: m.title,
+                    // Serialize as RFC3339 string; frontend parses with new Date()
+                    created_at: m.created_at.0.to_rfc3339(),
                     folder_id: m.folder_id,
                 })
                 .collect();
@@ -385,6 +408,13 @@ pub async fn api_get_meetings<R: Runtime>(
     }
 }
 
+/// Keyword search across all meeting content: title, transcript, notes, and AI summary.
+///
+/// Uses FTS5 with OR logic — each space-separated word is a separate search term.
+/// A meeting appears in results if it contains ANY of the typed words.
+/// BM25 scoring naturally ranks meetings that match more words higher.
+///
+/// Returns up to 20 results sorted by relevance score descending.
 #[tauri::command]
 pub async fn api_search_transcripts<R: Runtime>(
     _app: AppHandle<R>,
@@ -400,19 +430,39 @@ pub async fn api_search_transcripts<R: Runtime>(
 
     let pool = state.db_manager.pool();
 
-    match TranscriptsRepository::search_transcripts(pool, &query).await {
-        Ok(results) => {
-            log_info!(
-                "Search completed successfully with {} results.",
-                results.len()
-            );
-            Ok(results)
-        }
+    // search_fts() handles the empty/short-query guard internally.
+    let fts_results = match crate::search::fts::search_fts(pool, &query).await {
+        Ok(r) => r,
         Err(e) => {
-            log_error!("Error searching transcripts for query '{}': {}", query, e);
-            Err(format!("Failed to search transcripts: {}", e))
+            log_error!("FTS search error for query '{}': {}", query, e);
+            vec![]
         }
-    }
+    };
+
+    // Map FTS hits directly to the result type — no merging needed (single source).
+    let mut results: Vec<TranscriptSearchResult> = fts_results
+        .into_iter()
+        .map(|hit| TranscriptSearchResult {
+            id: hit.meeting_id,
+            title: hit.title,
+            match_context: hit.context,
+            timestamp: String::new(),
+            match_source: Some(hit.match_source),
+            match_type: Some("keyword".to_string()),
+            score: Some(hit.score),
+        })
+        .collect();
+
+    // Sort by score descending (higher = better match).
+    results.sort_by(|a, b| {
+        b.score
+            .unwrap_or(0.0)
+            .partial_cmp(&a.score.unwrap_or(0.0))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    log_info!("Search completed: {} results for query '{}'", results.len(), query);
+    Ok(results)
 }
 
 #[tauri::command]
@@ -1024,6 +1074,15 @@ pub async fn api_save_transcript<R: Runtime>(
                 "Successfully saved transcript and created meeting with id: {}",
                 meeting_id
             );
+
+            // Refresh FTS index once the full recording session is finalized.
+            // Called here (not per-chunk) to avoid O(n²) GROUP_CONCAT cost on
+            // long recordings.  A non-fatal error is logged but does not fail
+            // the transcript save.
+            if let Err(e) = crate::search::fts::refresh_meeting_fts(pool, &meeting_id).await {
+                log_warn!("FTS refresh failed for meeting {} (search may be stale): {}", meeting_id, e);
+            }
+
             Ok(serde_json::json!({
                 "status": "success",
                 "message": "Transcript saved successfully",
@@ -1655,6 +1714,11 @@ pub async fn api_save_note<R: Runtime>(
 
     log_info!("✅ Saved note for meeting: {}", meeting_id);
 
+    // Refresh FTS so notes content is immediately searchable.
+    if let Err(e) = crate::search::fts::refresh_meeting_fts(pool, &meeting_id).await {
+        log_warn!("FTS refresh failed after note save for meeting {}: {}", meeting_id, e);
+    }
+
     Ok(serde_json::json!({
         "version": 1,
         "updated_at": now.to_rfc3339(),
@@ -1695,3 +1759,4 @@ pub async fn api_chat_with_meetings<R: Runtime>(
     )
     .await
 }
+

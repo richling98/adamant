@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal';
-import { Switch } from './ui/switch';
 import { useConfig } from '@/contexts/ConfigContext';
 
 interface SummaryModelSettingsProps {
@@ -20,7 +19,6 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
     ollamaEndpoint: null
   });
 
-  const { isAutoSummary, toggleIsAutoSummary } = useConfig();
 
   // Reusable fetch function
   const fetchModelConfig = useCallback(async () => {
@@ -123,16 +121,6 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
 
   return (
     <div className='flex flex-col gap-4'>
-      <div className="bg-white/5 rounded-lg border border-white/10 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-2">Auto Summary</h3>
-            <p className="text-sm text-zinc-400">Auto Generating summary after meeting completion(Stopping)</p>
-          </div>
-          <Switch checked={isAutoSummary} onCheckedChange={toggleIsAutoSummary} />
-        </div>
-      </div>
-
       <div className="bg-white/5 rounded-lg border border-white/10 p-6">
         <h3 className="text-lg font-semibold mb-4 text-white">Summary Model Configuration</h3>
         <p className="text-sm text-zinc-400 mb-6">

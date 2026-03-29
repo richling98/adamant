@@ -8,28 +8,23 @@
       "format": "string"
     },
     {
-      "title": "Attendees",
-      "instruction": "List of participants present",
-      "format": "list"
-    },
-    {
       "title": "Yesterday",
-      "instruction": "What I completed yesterday (short bullets)",
+      "instruction": "Everything completed or worked on yesterday — capture all items mentioned, do not condense.",
       "format": "list"
     },
     {
       "title": "Today",
-      "instruction": "Planned work for today (short bullets)",
+      "instruction": "Everything planned for today — capture all items mentioned, do not condense.",
       "format": "list"
     },
     {
       "title": "Blockers",
-      "instruction": "Any impediments and owner if known",
+      "instruction": "Any impediments, blockers, or concerns raised. Describe each one fully.",
       "format": "list"
     },
     {
       "title": "Notes",
-      "instruction": "Optional quick notes or announcements",
+      "instruction": "Any other topics, announcements, or discussions that came up. Capture everything mentioned.",
       "format": "paragraph"
     }
   ]

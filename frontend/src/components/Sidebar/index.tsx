@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, FolderPlus, Square, CheckSquare } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
 import { FolderItem } from './FolderItem';
@@ -86,8 +87,71 @@ const Sidebar: React.FC = () => {
   // Button hover states for glass effect animations
   const [hoverCollapsedSettings, setHoverCollapsedSettings] = useState(false);
   const [hoverExpandedSettings, setHoverExpandedSettings] = useState(false);
-  // Controls visibility of the "+" button on the "Meeting Notes" section header
-  const [isMeetingNotesHeaderHovered, setIsMeetingNotesHeaderHovered] = useState(false);
+  // Collapse state for the "Meeting Notes" unfiled section — persisted across restarts
+  const [isMeetingNotesExpanded, setIsMeetingNotesExpanded] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('sidebar-meeting-notes-collapsed');
+      return stored === null ? true : stored !== 'true' ? false : true;
+    } catch {
+      return true;
+    }
+  });
+  const toggleMeetingNotes = () => {
+    setIsMeetingNotesExpanded((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('sidebar-meeting-notes-collapsed', String(next)); } catch {}
+      return next;
+    });
+  };
+  // Collapse state for the "Folders" section — persisted across restarts
+  const [isFoldersExpanded, setIsFoldersExpanded] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('sidebar-folders-collapsed');
+      return stored === null ? true : stored !== 'true' ? false : true;
+    } catch {
+      return true;
+    }
+  });
+  const toggleFolders = () => {
+    setIsFoldersExpanded((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('sidebar-folders-collapsed', String(next)); } catch {}
+      return next;
+    });
+  };
+  // Collapse state for the "By Date" section — persisted across restarts
+  const [isByDateExpanded, setIsByDateExpanded] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('sidebar-by-date-collapsed');
+      return stored === null ? true : stored !== 'true' ? false : true;
+    } catch {
+      return true;
+    }
+  });
+  const toggleByDate = () => {
+    setIsByDateExpanded((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('sidebar-by-date-collapsed', String(next)); } catch {}
+      return next;
+    });
+  };
+  // Per-date-group collapse state — keyed by date label, stored in localStorage.
+  // Date groups default to collapsed so the list stays compact on first load.
+  const getDateGroupExpanded = (dateLabel: string): boolean => {
+    try {
+      return localStorage.getItem(`sidebar-by-date-group-${dateLabel}`) === 'true';
+    } catch {
+      return false;
+    }
+  };
+  // Dummy counter used only to trigger re-renders when a date group is toggled
+  const [dateGroupToggle, setDateGroupToggle] = useState(0);
+  const toggleDateGroup = (dateLabel: string) => {
+    const next = !getDateGroupExpanded(dateLabel);
+    try { localStorage.setItem(`sidebar-by-date-group-${dateLabel}`, String(next)); } catch {}
+    setDateGroupToggle((n) => n + 1); // force re-render
+  };
+
   // Loading guard for unfiled note creation — prevents double-creation on rapid clicks
   const [isCreatingUnfiled, setIsCreatingUnfiled] = useState(false);
 
@@ -720,10 +784,18 @@ const Sidebar: React.FC = () => {
                 )}
               </div>
 
-              {/* Show transcript match snippet if available */}
+              {/* Show match snippet with source badge (transcript / notes / summary / title) */}
               {hasTranscriptMatch && (
                 <div className="mt-1 ml-8 text-xs text-emerald-200/90 bg-emerald-500/10 p-1.5 rounded border border-emerald-400/20 line-clamp-2">
-                  <span className="font-medium text-emerald-300">Match:</span> {matchingResult.matchContext}
+                  {matchingResult.matchSource && (
+                    <span className="inline-block mr-1.5 px-1 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                      {matchingResult.matchSource}
+                    </span>
+                  )}
+                  {matchingResult.matchContext
+                    ? <span dangerouslySetInnerHTML={{ __html: matchingResult.matchContext }} />
+                    : null
+                  }
                 </div>
               )}
             </div>
@@ -791,6 +863,12 @@ const Sidebar: React.FC = () => {
                     }
                   </InputGroup>
                 </div>
+
+                {/* Searching indicator */}
+                {searchQuery && isSearching && (
+                  <p className="text-xs text-zinc-400 px-1 mb-1 animate-pulse">Searching…</p>
+                )}
+
               </div>
             )}
           </div>
@@ -820,12 +898,25 @@ const Sidebar: React.FC = () => {
                 <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 px-3 pb-4">
 
                   {/* ── Folders section ── */}
-                  <div className="flex items-center justify-between h-8 mt-3 mb-1">
-                    <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Folders</span>
+                  <div
+                    className="flex items-center justify-between h-8 mt-3 mb-1 cursor-pointer select-none"
+                    onClick={toggleFolders}
+                  >
+                    <div className="flex items-center gap-1">
+                      {/* Collapse chevron — matches Meeting Notes chevron style */}
+                      <span className="text-zinc-500 flex-shrink-0">
+                        {isFoldersExpanded
+                          ? <ChevronDown className="h-3 w-3" />
+                          : <ChevronRight className="h-3 w-3" />}
+                      </span>
+                      <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Folders</span>
+                    </div>
+                    {/* New folder button — stop propagation so it doesn't also toggle collapse */}
                     <button
                       className="p-1 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors"
                       title="New folder"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setIsCreatingFolder(true);
                         setNewFolderName('');
                         setTimeout(() => newFolderInputRef.current?.focus(), 0);
@@ -835,6 +926,11 @@ const Sidebar: React.FC = () => {
                     </button>
                   </div>
 
+                  {/* Folder list + inline creation — hidden when collapsed */}
+                  <div className={cn(
+                    'overflow-hidden transition-all duration-200',
+                    isFoldersExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
+                  )}>
                   {/* Inline new-folder input */}
                   {isCreatingFolder && (
                     <div className="flex items-center gap-1 mb-1 px-2 py-1 bg-white/5 rounded-md">
@@ -892,69 +988,179 @@ const Sidebar: React.FC = () => {
                       />
                     );
                   })}
+                  </div>{/* end collapsible folders wrapper */}
 
                   {/* ── Meeting Notes (unfiled) section ── */}
                   <div
-                    className="flex items-center justify-between h-8 mt-4 mb-1"
-                    onMouseEnter={() => setIsMeetingNotesHeaderHovered(true)}
-                    onMouseLeave={() => setIsMeetingNotesHeaderHovered(false)}
+                    className="flex items-center justify-between h-8 mt-4 mb-1 cursor-pointer select-none"
+                    onClick={toggleMeetingNotes}
                   >
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-1">
+                      {/* Collapse chevron — matches folder chevron style */}
+                      <span className="text-zinc-500 flex-shrink-0">
+                        {isMeetingNotesExpanded
+                          ? <ChevronDown className="h-3 w-3" />
+                          : <ChevronRight className="h-3 w-3" />}
+                      </span>
                       <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Meeting Notes</span>
                       {searchQuery && isSearching && (
                         <span className="ml-2 text-xs text-emerald-300 animate-pulse">Searching…</span>
                       )}
                     </div>
-                    {/* New unfiled note — eagerly created in DB, then navigate to real ID */}
-                    {isMeetingNotesHeaderHovered && (
-                      <button
-                        className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                        title="New meeting note"
-                        disabled={isCreatingUnfiled}
-                        onClick={async () => {
-                          if (isCreatingUnfiled) return;
-                          setIsCreatingUnfiled(true);
-                          try {
-                            const now = new Date();
-                            const title = `${now.getMonth() + 1}-${now.getDate()}-${String(now.getFullYear()).slice(-2)} new note`;
-                            const meeting = await invoke<{ id: string }>('api_create_meeting', { title });
-                            // Refresh sidebar so the new note appears immediately
-                            await refetchMeetings();
-                            Analytics.trackButtonClick('start_new_meeting', 'meeting_notes_section');
-                            router.push(`/meeting-details?id=${meeting.id}`);
-                          } catch (err) {
-                            console.error('Failed to create unfiled meeting note:', err);
-                          } finally {
-                            setIsCreatingUnfiled(false);
-                          }
-                        }}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </button>
-                    )}
+                    {/* New unfiled note — always visible, matches Folders "+" pattern */}
+                    <button
+                      className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="New meeting note"
+                      disabled={isCreatingUnfiled}
+                      onClick={async (e) => {
+                        e.stopPropagation(); // don't collapse the section when clicking "+"
+                        if (isCreatingUnfiled) return;
+                        setIsCreatingUnfiled(true);
+                        try {
+                          const now = new Date();
+                          const title = `${now.getMonth() + 1}-${now.getDate()}-${String(now.getFullYear()).slice(-2)} new note`;
+                          const meeting = await invoke<{ id: string }>('api_create_meeting', { title });
+                          await refetchMeetings();
+                          Analytics.trackButtonClick('start_new_meeting', 'meeting_notes_section');
+                          router.push(`/meeting-details?id=${meeting.id}`);
+                        } catch (err) {
+                          console.error('Failed to create unfiled meeting note:', err);
+                        } finally {
+                          setIsCreatingUnfiled(false);
+                        }
+                      }}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
                   </div>
 
-                  {/* Unfiled droppable root zone */}
-                  <UnfiledDropZone>
-                    {filteredSidebarItems
-                      .filter((item) => item.type === 'file' && !meetings.find((m) => m.id === item.id)?.folder_id)
-                      .map((item) => (
-                        <DraggableMeetingRow
-                          key={item.id}
-                          item={item}
-                          isActive={currentMeeting?.id === item.id}
-                          indent={false}
-                          isSelected={selectedMeetingIds.has(item.id)}
-                          onToggleSelect={(e) => toggleMeetingSelection(item.id, e)}
-                          onNavigate={() => {
-                            setCurrentMeeting({ id: item.id, title: item.title });
-                            router.push(`/meeting-details?id=${item.id}`);
-                          }}
-                          onEdit={() => handleEditStart(item.id, item.title)}
-                          onDelete={() => setDeleteModalState({ isOpen: true, itemId: item.id })}
-                        />
-                      ))}
-                  </UnfiledDropZone>
+                  {/* Unfiled droppable root zone — hidden when section is collapsed */}
+                  <div className={cn(
+                    'overflow-hidden transition-all duration-200',
+                    isMeetingNotesExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
+                  )}>
+                    <UnfiledDropZone>
+                      {filteredSidebarItems
+                        .filter((item) => item.type === 'file' && !meetings.find((m) => m.id === item.id)?.folder_id)
+                        .map((item) => (
+                          <DraggableMeetingRow
+                            key={item.id}
+                            item={item}
+                            isActive={currentMeeting?.id === item.id}
+                            indent={false}
+                            isSelected={selectedMeetingIds.has(item.id)}
+                            onToggleSelect={(e) => toggleMeetingSelection(item.id, e)}
+                            onNavigate={() => {
+                              setCurrentMeeting({ id: item.id, title: item.title });
+                              router.push(`/meeting-details?id=${item.id}`);
+                            }}
+                            onEdit={() => handleEditStart(item.id, item.title)}
+                            onDelete={() => setDeleteModalState({ isOpen: true, itemId: item.id })}
+                          />
+                        ))}
+                    </UnfiledDropZone>
+                  </div>
+
+                  {/* ── By Date virtual section ── */}
+                  {(() => {
+                    // Group ALL meetings (regardless of folder) by creation date M/D/YYYY,
+                    // sorted descending so most-recent dates appear first.
+                    // `dateGroupToggle` is listed in the closure so React re-evaluates
+                    // when a date group is toggled (localStorage reads are not reactive).
+                    void dateGroupToggle;
+
+                    const groupsByDate: Map<string, typeof meetings> = new Map();
+                    for (const m of meetings) {
+                      if (!m.created_at) continue;
+                      const d = new Date(m.created_at);
+                      // Format as M/D/YYYY in local time (matches what the user sees)
+                      const label = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+                      if (!groupsByDate.has(label)) groupsByDate.set(label, []);
+                      groupsByDate.get(label)!.push(m);
+                    }
+
+                    // Sort date keys descending (newest first)
+                    const sortedDates = Array.from(groupsByDate.keys()).sort((a, b) => {
+                      return new Date(b).getTime() - new Date(a).getTime();
+                    });
+
+                    if (sortedDates.length === 0) return null;
+
+                    return (
+                      <>
+                        {/* Section header */}
+                        <div
+                          className="flex items-center justify-between h-8 mt-4 mb-1 cursor-pointer select-none"
+                          onClick={toggleByDate}
+                        >
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-500 flex-shrink-0">
+                              {isByDateExpanded
+                                ? <ChevronDown className="h-3 w-3" />
+                                : <ChevronRight className="h-3 w-3" />}
+                            </span>
+                            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">By Date</span>
+                          </div>
+                        </div>
+
+                        {/* Date group rows — hidden when section collapsed */}
+                        <div className={cn(
+                          'overflow-hidden transition-all duration-200',
+                          isByDateExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
+                        )}>
+                          {sortedDates.map((dateLabel) => {
+                            const dateMeetings = groupsByDate.get(dateLabel)!;
+                            const isGroupExpanded = getDateGroupExpanded(dateLabel);
+                            return (
+                              <div key={dateLabel} className="rounded-md">
+                                {/* Date header row */}
+                                <div
+                                  className="flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none hover:bg-white/5 transition-colors"
+                                  onClick={() => toggleDateGroup(dateLabel)}
+                                >
+                                  <span className="text-zinc-500 flex-shrink-0">
+                                    {isGroupExpanded
+                                      ? <ChevronDown className="h-3 w-3" />
+                                      : <ChevronRight className="h-3 w-3" />}
+                                  </span>
+                                  <span className="flex-1 text-sm font-medium text-zinc-300 truncate">{dateLabel}</span>
+                                  {/* Meeting count badge */}
+                                  <span className="text-xs text-zinc-500 flex-shrink-0 ml-1">{dateMeetings.length}</span>
+                                </div>
+
+                                {/* Meeting rows inside the date group */}
+                                <div className={cn(
+                                  'overflow-hidden transition-all duration-200',
+                                  isGroupExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
+                                )}>
+                                  <div className="ml-4 border-l border-white/5">
+                                    {dateMeetings.map((m) => (
+                                      // Read-only navigation row — no drag, no edit/delete shown
+                                      <DraggableMeetingRow
+                                        key={m.id}
+                                        item={{ id: m.id, title: m.title, type: 'file' }}
+                                        isActive={currentMeeting?.id === m.id}
+                                        indent={true}
+                                        isSelected={false}
+                                        onToggleSelect={() => {}}
+                                        onNavigate={() => {
+                                          setCurrentMeeting({ id: m.id, title: m.title });
+                                          router.push(`/meeting-details?id=${m.id}`);
+                                        }}
+                                        onEdit={() => {}}
+                                        onDelete={() => {}}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    );
+                  })()}
+
 
                 </div>
               </DndContext>
@@ -1008,9 +1214,6 @@ const Sidebar: React.FC = () => {
               <Settings className="w-4 h-4 mr-2" />
               <span>Settings</span>
             </button>
-            <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-foreground/45">
-              v0.2.0
-            </div>
           </div>
         )}
       </div>

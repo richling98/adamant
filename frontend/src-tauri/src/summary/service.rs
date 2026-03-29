@@ -319,6 +319,11 @@ impl SummaryService {
                         "Summary saved successfully for meeting_id: {}",
                         meeting_id
                     );
+
+                    // Refresh FTS so the AI summary is immediately searchable.
+                    if let Err(e) = crate::search::fts::refresh_meeting_fts(&pool, &meeting_id).await {
+                        warn!("FTS refresh failed after summary save for meeting {}: {}", meeting_id, e);
+                    }
                 }
             }
             Err(e) => {

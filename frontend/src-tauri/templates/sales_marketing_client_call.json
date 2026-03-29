@@ -1,41 +1,36 @@
 {
-      "name": "Client / Sales Meeting",
-      "description": "Capture client goals, deliverables, and next steps.",
-      "sections": [
-        {
-          "title": "Meeting Metadata",
-          "instruction": "Date, time, location/modality, account manager",
-          "format": "string"
-        },
-        {
-          "title": "Attendees",
-          "instruction": "Client and vendor attendees with roles",
-          "format": "list"
-        },
-        {
-          "title": "Client Goals & Success Criteria",
-          "instruction": "What the client wants to achieve and how success will be measured",
-          "format": "paragraph"
-        },
-        {
-          "title": "Agreed Deliverables",
-          "instruction": "Deliverables, owners, and due dates",
-          "format": "list"
-        },
-        {
-          "title": "Commercial Terms Discussed",
-          "instruction": "Pricing, SLAs, payment terms or contract items discussed",
-          "format": "paragraph"
-        },
-        {
-          "title": "Risks & Concerns",
-          "instruction": "Client concerns, blockers, or escalation items",
-          "format": "list"
-        },
-        {
-          "title": "Next Steps",
-          "instruction": "Actions, owners, and due dates",
-          "format": "list"
-        }
-      ]
+  "name": "Client / Sales Meeting",
+  "description": "Capture client goals, deliverables, and next steps.",
+  "sections": [
+    {
+      "title": "Meeting Metadata",
+      "instruction": "Date, time, location/modality, account manager",
+      "format": "string"
+    },
+    {
+      "title": "Client Goals & Success Criteria",
+      "instruction": "Everything the client said about what they want to achieve and how success will be measured. Capture all details given — do not condense.",
+      "format": "paragraph"
+    },
+    {
+      "title": "Agreed Deliverables",
+      "instruction": "Every deliverable discussed or agreed upon, with any timelines or specifications mentioned.",
+      "format": "list"
+    },
+    {
+      "title": "Commercial Terms Discussed",
+      "instruction": "Every pricing, SLA, payment term, or contract item discussed. Capture all specifics mentioned.",
+      "format": "paragraph"
+    },
+    {
+      "title": "Risks & Concerns",
+      "instruction": "Every concern, risk, blocker, or escalation item raised — by either party. Describe each fully.",
+      "format": "list"
+    },
+    {
+      "title": "Next Steps",
+      "instruction": "Every next step and action item identified. Describe each action clearly and specifically, including any deadlines mentioned. Do NOT assign owners — focus on what needs to be done.",
+      "format": "list"
     }
+  ]
+}

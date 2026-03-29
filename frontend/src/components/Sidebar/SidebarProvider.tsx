@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
@@ -16,6 +16,8 @@ interface SidebarItem {
 export interface CurrentMeeting {
   id: string;
   title: string;
+  /** ISO 8601 creation timestamp — used by the "By Date" sidebar grouping. */
+  created_at?: string;
   /** FK into the folders table. Undefined / null means the meeting is unfiled. */
   folder_id?: string | null;
 }
@@ -28,13 +30,17 @@ export interface Folder {
   updated_at: string;
 }
 
-// Search result type for transcript search
+// Keyword search result — FTS5 across title, transcript, notes, and AI summary.
+// matchSource: "transcript" | "notes" | "summary" | "title"
 interface TranscriptSearchResult {
   id: string;
   title: string;
   matchContext: string;
   timestamp: string;
-};
+  matchSource?: string;
+  matchType?: string;
+  score?: number;
+}
 
 interface SidebarContextType {
   currentMeeting: CurrentMeeting | null;
@@ -93,8 +99,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
   const [isMeetingActive, setIsMeetingActive] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<TranscriptSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  // Refs for debounce and stale-result guard
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestQueryRef = useRef<string>('');
   const [serverAddress, setServerAddress] = useState('');
   const [transcriptServerAddress, setTranscriptServerAddress] = useState('');
   const [activeSummaryPolls, setActiveSummaryPolls] = useState<Map<string, NodeJS.Timeout>>(new Map());
@@ -124,10 +133,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const fetchMeetings = React.useCallback(async () => {
     if (serverAddress) {
       try {
-        const data = await invoke('api_get_meetings') as Array<{ id: string; title: string; folder_id?: string | null }>;
+        const data = await invoke('api_get_meetings') as Array<{ id: string; title: string; created_at?: string; folder_id?: string | null }>;
         const transformed: CurrentMeeting[] = data.map((m) => ({
           id: m.id,
           title: m.title,
+          created_at: m.created_at,
           folder_id: m.folder_id ?? null,
         }));
         setMeetings(transformed);
@@ -224,26 +234,54 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     Analytics.trackButtonClick('start_recording', 'sidebar');
   };
 
-  // Function to search through meeting transcripts
-  const searchTranscripts = async (query: string) => {
+
+  // Unified meeting search with 300ms debounce and stale-result guard.
+  //
+  // Debounce prevents firing on every keystroke.
+  // Stale-result guard: the Tauri invoke is async; if the user types quickly
+  // the responses can arrive out-of-order.  We only apply a response if the
+  // query that triggered it is still the latest one.
+  const searchTranscripts = useCallback((query: string) => {
+    // Clear any pending debounce timer
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
     if (!query.trim()) {
+      latestQueryRef.current = '';
       setSearchResults([]);
-      return;
-    }
-
-    try {
-      setIsSearching(true);
-
-
-      const results = await invoke('api_search_transcripts', { query }) as TranscriptSearchResult[];
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Error searching transcripts:', error);
-      setSearchResults([]);
-    } finally {
       setIsSearching(false);
+      return Promise.resolve();
     }
-  };
+
+    setIsSearching(true);
+
+    return new Promise<void>((resolve) => {
+      searchDebounceRef.current = setTimeout(async () => {
+        const thisQuery = query;
+        latestQueryRef.current = thisQuery;
+
+        try {
+          const results = await invoke('api_search_transcripts', { query: thisQuery }) as TranscriptSearchResult[];
+
+          // Stale-result guard: discard if a newer query was issued while we awaited
+          if (latestQueryRef.current === thisQuery) {
+            setSearchResults(results);
+          }
+        } catch (error) {
+          console.error('Error searching transcripts:', error);
+          if (latestQueryRef.current === thisQuery) {
+            setSearchResults([]);
+          }
+        } finally {
+          if (latestQueryRef.current === thisQuery) {
+            setIsSearching(false);
+          }
+        }
+        resolve();
+      }, 300);
+    });
+  }, []);
 
   // Summary polling management
   const startSummaryPolling = React.useCallback((

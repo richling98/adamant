@@ -39,6 +39,34 @@ pnpm run build
 # Set environment variables for the build
 echo "Setting up build environment..."
 
+# Seed dev app data so onboarding is skipped and meetings are visible
+PROD_APP_DATA="$HOME/Library/Application Support/com.adamant.ai"
+DEV_APP_DATA="$HOME/Library/Application Support/com.adamant.ai.dev"
+mkdir -p "$DEV_APP_DATA"
+
+# Skip onboarding by seeding completion status
+cat > "$DEV_APP_DATA/onboarding-status.json" << 'EOF'
+{"status":{"completed":true,"current_step":4,"last_updated":"2026-01-01T00:00:00.000000+00:00","model_status":{"parakeet":"downloaded","summary":"downloaded"},"version":"1.0"}}
+EOF
+echo "Dev onboarding pre-seeded (skipped)."
+
+# Copy production meetings database so dev shows real data
+if [ -f "$PROD_APP_DATA/meeting_minutes.sqlite" ]; then
+  cp "$PROD_APP_DATA/meeting_minutes.sqlite" "$DEV_APP_DATA/meeting_minutes.sqlite"
+  echo "Dev database seeded from production ($(du -h "$DEV_APP_DATA/meeting_minutes.sqlite" | cut -f1) copied)."
+else
+  echo "No production database found — dev will start with empty meetings."
+fi
+
+# Symlink production models so dev sees downloaded models without duplicating disk space
+if [ -d "$PROD_APP_DATA/models" ]; then
+  rm -rf "$DEV_APP_DATA/models"
+  ln -s "$PROD_APP_DATA/models" "$DEV_APP_DATA/models"
+  echo "Dev models symlinked from production."
+else
+  echo "No production models directory found — skipping model symlink."
+fi
+
 echo "Building Tauri app (dev mode — uses isolated app data: com.adamant.ai.dev)..."
 pnpm tauri dev --config '{"identifier": "com.adamant.ai.dev"}'
 sleep

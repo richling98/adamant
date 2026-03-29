@@ -38,6 +38,7 @@ pub(crate) use perf_trace;
 pub mod analytics;
 pub mod api;
 pub mod audio;
+pub mod search;
 pub mod chat;
 pub mod console_utils;
 pub mod database;
@@ -499,6 +500,7 @@ pub fn run() {
                 let folder = audio::recording_preferences::get_default_recordings_folder();
                 audio::recording_saver::cleanup_legacy_audio_files(&folder).await;
             });
+
 
             // Initialize bundled templates directory for dynamic template discovery
             log::info!("Initializing bundled templates directory...");

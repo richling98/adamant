@@ -177,7 +177,7 @@ export function SummaryPanel({
           />
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
           {summaryResponse && (
             <div className="fixed bottom-0 left-0 right-0 bg-background/95 shadow-lg p-4 max-h-1/3 overflow-y-auto border-t border-white/10">
               <h3 className="text-lg font-semibold mb-2">Meeting Summary</h3>
@@ -223,7 +223,7 @@ export function SummaryPanel({
               ) : null}
             </div>
           )}
-          <div className="px-4 lg:px-6 py-6 w-full summary-editor-surface overflow-x-auto">
+          <div className="px-4 lg:px-6 py-6 w-full summary-editor-surface">
             <BlockNoteSummaryView
               ref={summaryRef}
               summaryData={displaySummary}

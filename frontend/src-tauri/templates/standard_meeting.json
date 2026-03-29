@@ -1,6 +1,6 @@
 {
   "name": "Standard Meeting Notes",
-  "description": "A comprehensive meeting summary covering attendees, all topics discussed, and action items.",
+  "description": "A comprehensive meeting record covering all topics discussed and action items.",
   "sections": [
     {
       "title": "TLDR",
@@ -8,18 +8,13 @@
       "format": "list"
     },
     {
-      "title": "Key Attendees",
-      "instruction": "List every person identified as a participant or mentioned by name in the meeting. For each person, provide their name and the company or organization they represent. If company is not mentioned, omit it. Format each entry as: **Name** — Company.",
-      "format": "list"
-    },
-    {
       "title": "Topics Covered",
-      "instruction": "For EACH distinct topic that received meaningful discussion, create a sub-heading with the topic name, followed by comprehensive bullet points capturing everything said about that topic — all points raised, opinions shared, context given, and details mentioned. Do NOT collapse or omit detail for brevity. Cover every topic discussed.",
+      "instruction": "For EACH distinct topic that received any discussion, create a sub-heading with the topic name, followed by a complete, detailed record of everything said about that topic — every point raised, every opinion shared, every question asked, every answer given, every piece of context, every specific number or name mentioned. This is a verbatim record, not a summary. Nothing should be omitted or compressed. A longer, more complete record is always preferred over a shorter one.",
       "format": "list"
     },
     {
       "title": "Next Steps & Action Items",
-      "instruction": "List every next step and action item identified in the meeting. For each, include who is responsible (if stated) and any deadline or timeline mentioned. Format as: **[Owner]** — Action item description (due: deadline if mentioned). If no owner was stated, omit the owner field.",
+      "instruction": "List every next step and action item identified in the meeting. For each, describe the action clearly and specifically. Include any deadline or timeline mentioned. Do NOT try to assign owners — focus entirely on what needs to be done, not who should do it.",
       "format": "list"
     }
   ]

@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { PermissionStatus, OnboardingPermissions } from '@/types/onboarding';
 
-const PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
+const PARAKEET_MODEL = 'parakeet-tdt-0.6b-v2-int8';
 
 interface OnboardingStatus {
   version: string;
@@ -96,10 +96,11 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const [permissionsSkipped, setPermissionsSkipped] = useState(false);
 
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const statusLoadedRef = useRef(false);
 
   // Load status on mount and initialize database
   useEffect(() => {
-    loadOnboardingStatus();
+    loadOnboardingStatus().then(() => { statusLoadedRef.current = true; });
     checkDatabaseStatus();
     initializeDatabaseInBackground();
 
@@ -182,6 +183,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   // Auto-save on state change (debounced)
   useEffect(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+    // Don't auto-save until initial status has been loaded from disk
+    // (prevents the 1s debounce timer firing with default values before load completes)
+    if (!statusLoadedRef.current) return;
 
     // Don't auto-save if completed (to avoid overwriting completion status)
     // Also don't auto-save if we are currently in the process of completing

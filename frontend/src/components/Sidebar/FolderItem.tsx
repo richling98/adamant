@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, FolderOpen, Folder as FolderIcon, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FolderOpen, Folder as FolderIcon, Pencil, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDroppable } from '@dnd-kit/core';
 import { invoke } from '@tauri-apps/api/core';
@@ -37,8 +37,26 @@ export function FolderItem({
   const router = useRouter();
   const { renameFolder, deleteFolder, moveMeetingToFolder } = useSidebar();
 
-  // Expand/collapse state (local — doesn't need to survive remounts)
-  const [isExpanded, setIsExpanded] = useState(true);
+  // Expand/collapse state — persisted to localStorage so it survives app restarts.
+  // Key is unique per folder so each folder remembers its own state independently.
+  const STORAGE_KEY = `sidebar-folder-collapsed-${folder.id}`;
+  const [isExpanded, setIsExpanded] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      // Default to expanded (true) if no value has been saved yet
+      return stored === null ? true : stored !== 'true' ? false : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleExpanded = () => {
+    setIsExpanded((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(STORAGE_KEY, String(next)); } catch {}
+      return next;
+    });
+  };
 
   // Inline rename state
   const [isRenaming, setIsRenaming] = useState(false);
@@ -158,7 +176,7 @@ export function FolderItem({
       {/* Folder header row */}
       <div
         className="flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none group"
-        onClick={() => setIsExpanded((prev) => !prev)}
+        onClick={toggleExpanded}
       >
         {/* Collapse chevron */}
         <span className="text-zinc-500 flex-shrink-0">
@@ -204,6 +222,14 @@ export function FolderItem({
         {/* Action buttons — visible on hover */}
         {isHovered && !isRenaming && (
           <div className="flex items-center gap-0.5 ml-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            {/* Rename folder */}
+            <button
+              className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors"
+              title="Rename folder"
+              onClick={startRename}
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
             {/* New meeting in this folder — disabled while creation is in flight */}
             <button
               className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -225,12 +251,17 @@ export function FolderItem({
         )}
       </div>
 
-      {/* Meeting children */}
-      {isExpanded && children.length > 0 && (
-        <div className="ml-4 border-l border-white/5">
-          {children.map((item) => renderMeetingItem(item, true))}
-        </div>
-      )}
+      {/* Meeting children — hidden when collapsed */}
+      <div className={cn(
+        'overflow-hidden transition-all duration-200',
+        isExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
+      )}>
+        {children.length > 0 && (
+          <div className="ml-4 border-l border-white/5">
+            {children.map((item) => renderMeetingItem(item, true))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

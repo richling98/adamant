@@ -8,38 +8,33 @@
       "format": "string"
     },
     {
-      "title": "Attendees",
-      "instruction": "List attendees and their roles",
-      "format": "list"
-    },
-    {
       "title": "Milestones & Status",
-      "instruction": "Current milestones with status and estimated completion date",
+      "instruction": "Every milestone discussed with its current status and any dates or timelines mentioned. Capture all details given.",
       "format": "list"
     },
     {
       "title": "Progress Summary",
-      "instruction": "Short paragraph summarizing progress since last sync meeting",
+      "instruction": "Complete record of all progress discussed since the last sync. Include every detail mentioned — do not condense.",
       "format": "paragraph"
     },
     {
       "title": "Top Risks & Mitigations",
-      "instruction": "List top risks with impact level, mitigation plan, and owner",
+      "instruction": "Every risk, concern, or issue raised, with its impact and any mitigation or response discussed.",
       "format": "list"
     },
     {
       "title": "Key Decisions",
-      "instruction": "Decisions made in this meeting with rationale and timestamp",
+      "instruction": "Every decision made or discussed in this meeting, with the reasoning given and any timestamps mentioned.",
       "format": "list"
     },
     {
       "title": "Action Items",
-      "instruction": "Tasks with owners, due dates, priority, and status",
+      "instruction": "Every action item or next step identified. Describe each action clearly and specifically. Include any deadlines mentioned. Do NOT assign owners — focus on what needs to be done.",
       "format": "list"
     },
     {
       "title": "Related Documents",
-      "instruction": "Links to relevant documents, tickets, or designs discussed",
+      "instruction": "Any documents, tickets, links, or external references mentioned during the meeting.",
       "format": "list"
     }
   ]

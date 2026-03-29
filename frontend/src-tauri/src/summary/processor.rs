@@ -318,8 +318,10 @@ pub async fn generate_meeting_summary(
         info!("Split transcript into {} chunks", num_chunks);
 
         let mut chunk_summaries = Vec::new();
-        let system_prompt_chunk = "You are an expert meeting summarizer.";
-        let user_prompt_template_chunk = "Provide a thorough and comprehensive summary of the following transcript chunk. Capture all key points, decisions, action items, mentioned individuals, and important details — do not omit detail for the sake of brevity.\n\n<transcript_chunk>\n{}\n</transcript_chunk>";
+        // Role is "scribe" not "summarizer" — framing matters: a scribe captures everything,
+        // a summarizer compresses. We want completeness over brevity.
+        let system_prompt_chunk = "You are an expert meeting scribe. Your job is to capture everything — not to condense. Every concept, decision, question, opinion, and detail mentioned must be preserved.";
+        let user_prompt_template_chunk = "Transcribe and organize ALL content from the following meeting transcript chunk. Do NOT summarize, condense, or omit anything. Capture every topic discussed, every point raised, every question asked, every decision mentioned, and every detail given — no matter how minor it seems. The raw transcript is disorganized; your job is to make it organized and complete, not shorter.\n\n<transcript_chunk>\n{}\n</transcript_chunk>";
 
         for (i, chunk) in chunks.iter().enumerate() {
             // Check for cancellation before processing each chunk
@@ -384,8 +386,9 @@ pub async fn generate_meeting_summary(
                 chunk_summaries.len()
             );
             let combined_text = chunk_summaries.join("\n---\n");
-            let system_prompt_combine = "You are an expert at synthesizing meeting summaries.";
-            let user_prompt_combine_template = "The following are consecutive summaries of a meeting. Combine them into a single, coherent, and highly detailed narrative summary. Retain every important detail, nuance, and point from all chunks — do not condense or lose information for the sake of brevity.\n\n<summaries>\n{}\n</summaries>";
+            // Same scribe framing — combining must not discard any content from any chunk.
+            let system_prompt_combine = "You are an expert meeting scribe. Your job is to combine records completely — never discard, compress, or merge details. Every concept from every chunk must appear in the final output.";
+            let user_prompt_combine_template = "The following are consecutive detailed records of sections of a meeting. Merge them into a single, well-organized, and fully complete record. Every concept, decision, question, opinion, and detail from EVERY section must be present in the output. Do NOT condense, summarize, or drop anything — if it was in any section record, it must be in the merged output. Organize by topic where natural, but never at the cost of losing content.\n\n<section_records>\n{}\n</section_records>";
 
             let user_prompt_combine = user_prompt_combine_template.replace("{}", &combined_text);
             generate_summary(
@@ -420,7 +423,7 @@ pub async fn generate_meeting_summary(
     let section_instructions = template.to_section_instructions();
 
     let final_system_prompt = format!(
-        r#"You are an expert meeting summarizer. Generate a final meeting report by filling in the provided Markdown template based on the source text.
+        r#"You are an expert meeting scribe. Your job is to produce a complete, organized record of everything discussed — not a short summary. Fill in the provided Markdown template using ALL content from the source text.
 
 **CRITICAL INSTRUCTIONS:**
 1. Only use information present in the source text; do not add or infer anything.
@@ -430,7 +433,8 @@ pub async fn generate_meeting_summary(
 5. Output **only** the completed Markdown report.
 6. If unsure about something, omit it.
 7. Never output markdown tables. Use bullet points with bold labels instead.
-8. Be thorough and comprehensive. Do not sacrifice detail or nuance for brevity — a longer, complete summary is always preferred over a short, incomplete one.
+8. COMPLETENESS IS MANDATORY: Every concept, topic, decision, question, and detail mentioned in the source text must appear somewhere in the output. A longer, more complete record is always correct. A shorter record that omits content is always wrong.
+9. Do NOT compress, paraphrase into fewer words, or drop topics because they seem minor. Everything discussed belongs in the notes.
 
 **SECTION-SPECIFIC INSTRUCTIONS:**
 {}

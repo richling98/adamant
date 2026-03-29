@@ -340,7 +340,7 @@ export default function PageContent({
       transition={{ duration: 0.3, ease: 'easeOut' }}
       className="flex flex-col h-screen min-h-0 bg-background text-foreground"
     >
-      <div className="flex flex-1 min-h-0 overflow-y-hidden overflow-x-auto flex-col xl:grid xl:grid-cols-3">
+      <div className="flex flex-1 min-h-0 overflow-y-hidden overflow-x-hidden flex-col xl:grid xl:grid-cols-3">
         {/* Three-panel layout: Notes | Transcripts | Summary */}
         <NotesPanel
           meetingId={meeting.id}

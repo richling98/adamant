@@ -100,7 +100,7 @@ pub async fn chat_with_meetings(
     let mut total_chars = 0usize;
 
     'outer: for meeting in &meetings_to_include {
-        // Fetch transcripts for this meeting (up to 500 segments)
+        // Fetch transcripts for this meeting (up to 500 segments).
         let (transcripts, _) =
             MeetingsRepository::get_meeting_transcripts_paginated(&pool, &meeting.id, 500, 0)
                 .await
@@ -112,15 +112,42 @@ pub async fn chat_with_meetings(
             .collect::<Vec<_>>()
             .join(" ");
 
-        if transcript_text.trim().is_empty() {
+        // Fetch manually written notes for this meeting.
+        // Returns None if the meeting has no notes row yet.
+        let notes_text: Option<String> = sqlx::query_scalar(
+            "SELECT notes_markdown FROM meeting_notes WHERE meeting_id = ?",
+        )
+        .bind(&meeting.id)
+        .fetch_optional(pool)
+        .await
+        .unwrap_or(None)
+        .flatten();
+
+        // Skip meetings that have neither transcript nor notes — nothing to offer Adam.
+        let has_transcript = !transcript_text.trim().is_empty();
+        let has_notes = notes_text.as_deref().map_or(false, |n| !n.trim().is_empty());
+        if !has_transcript && !has_notes {
             continue;
         }
 
+        // Build the meeting block: header + transcript (if any) + notes (if any).
         let date_str = meeting.created_at.0.format("%Y-%m-%d").to_string();
-        let header = format!("## Meeting: {}\nDate: {}\n\n", meeting.title, date_str);
-        let block = format!("{}{}\n\n", header, transcript_text.trim());
+        let mut block = format!("## Meeting: {}\nDate: {}\n\n", meeting.title, date_str);
 
-        // Truncate block if it alone would bust the budget
+        if has_transcript {
+            block.push_str(transcript_text.trim());
+            block.push_str("\n\n");
+        }
+
+        if has_notes {
+            // Label the notes section clearly so the LLM can distinguish spoken
+            // content from the user's own written observations.
+            block.push_str("### Notes:\n");
+            block.push_str(notes_text.as_deref().unwrap_or("").trim());
+            block.push_str("\n\n");
+        }
+
+        // Truncate block if it alone would bust the shared character budget.
         let remaining = MAX_CONTEXT_CHARS.saturating_sub(total_chars);
         if remaining == 0 {
             break 'outer;
@@ -129,11 +156,9 @@ pub async fn chat_with_meetings(
         let (to_add, truncated) = if block.len() <= remaining {
             (block, false)
         } else {
-            // Cut at a word boundary within the budget
+            // Cut at a word boundary within the budget.
             let cut = &block[..remaining];
-            let cut = cut
-                .rfind(' ')
-                .map_or(cut, |pos| &block[..pos]);
+            let cut = cut.rfind(' ').map_or(cut, |pos| &block[..pos]);
             (format!("{}… [truncated]", cut), true)
         };
 
@@ -146,7 +171,7 @@ pub async fn chat_with_meetings(
     }
 
     let meetings_context = if context_parts.is_empty() {
-        "No meeting transcripts found.".to_string()
+        "No meeting content found.".to_string()
     } else {
         context_parts.join("")
     };
@@ -154,12 +179,12 @@ pub async fn chat_with_meetings(
     // ── 4. Build system prompt ───────────────────────────────────────────────
     let today = Local::now().format("%A, %B %-d, %Y").to_string();
     let system_prompt = format!(
-        "You are a helpful AI assistant with access to the user's meeting notes. \
+        "You are a helpful AI assistant with access to the user's meeting content. \
         Today is {today}. \
-        Answer the user's questions based on the meeting transcripts provided below. \
+        Answer the user's questions based on the meeting content (transcripts and notes) provided below. \
         Be concise and cite specific meetings when relevant.\n\n\
         ---\n\
-        MEETING TRANSCRIPTS:\n\n\
+        MEETING CONTENT:\n\n\
         {meetings_context}\
         ---"
     );
