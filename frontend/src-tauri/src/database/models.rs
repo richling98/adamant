@@ -13,13 +13,15 @@ pub struct MeetingModel {
     pub folder_id: Option<String>,
 }
 
-/// A user-created folder for organizing meetings (one level deep, no nesting).
+/// A user-created folder for organizing meetings. Folders can be nested
+/// arbitrarily deep via `parent_id`; `None` means the folder is top-level.
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct FolderModel {
     pub id: String,
     pub name: String,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
+    pub parent_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]

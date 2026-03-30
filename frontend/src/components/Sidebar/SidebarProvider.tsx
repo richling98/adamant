@@ -11,6 +11,8 @@ interface SidebarItem {
   title: string;
   type: 'folder' | 'file';
   children?: SidebarItem[];
+  /** Present on type='folder' items so FolderItem can render its own actions. */
+  folderData?: Folder;
 }
 
 export interface CurrentMeeting {
@@ -28,6 +30,7 @@ export interface Folder {
   name: string;
   created_at: string;
   updated_at: string;
+  parent_id?: string | null;
 }
 
 // Keyword search result — FTS5 across title, transcript, notes, and AI summary.
@@ -73,7 +76,7 @@ interface SidebarContextType {
   // Folder management
   folders: Folder[];
   fetchFolders: () => Promise<void>;
-  createFolder: (name: string) => Promise<Folder>;
+  createFolder: (name: string, parentId?: string | null) => Promise<Folder>;
   renameFolder: (folderId: string, name: string) => Promise<void>;
   deleteFolder: (folderId: string) => Promise<void>;
   moveMeetingToFolder: (meetingId: string, folderId: string | null) => Promise<void>;
@@ -157,8 +160,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   // Folder CRUD helpers — each refreshes both meetings and folders after mutation.
 
-  const createFolder = React.useCallback(async (name: string): Promise<Folder> => {
-    const folder = await invoke('api_create_folder', { name }) as Folder;
+  const createFolder = React.useCallback(async (name: string, parentId?: string | null): Promise<Folder> => {
+    const folder = await invoke('api_create_folder', { name, parentId: parentId ?? null }) as Folder;
     await fetchFolders();
     return folder;
   }, [fetchFolders]);
@@ -187,22 +190,33 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     fetchSettings();
   }, []);
 
-  // Build sidebar items: user-created folders first, then unfiled meetings flat below.
+  // Build sidebar items recursively. Each folder item carries its own meetings
+  // as children, followed by any subfolders (which themselves carry their meetings).
   const buildSidebarItems = React.useCallback((): SidebarItem[] => {
-    const folderItems: SidebarItem[] = folders.map((folder) => ({
-      id: folder.id,
-      title: folder.name,
-      type: 'folder' as const,
-      children: meetings
-        .filter((m) => m.folder_id === folder.id)
-        .map((m) => ({ id: m.id, title: m.title, type: 'file' as const })),
-    }));
+    const buildFolderTree = (parentId: string | null): SidebarItem[] => {
+      return folders
+        .filter((f) => (f.parent_id ?? null) === parentId)
+        .map((folder) => ({
+          id: folder.id,
+          title: folder.name,
+          type: 'folder' as const,
+          folderData: folder,
+          children: [
+            // Subfolders first (recursive)
+            ...buildFolderTree(folder.id),
+            // Then meetings directly in this folder
+            ...meetings
+              .filter((m) => m.folder_id === folder.id)
+              .map((m) => ({ id: m.id, title: m.title, type: 'file' as const })),
+          ],
+        }));
+    };
 
     const unfiledItems: SidebarItem[] = meetings
       .filter((m) => !m.folder_id)
       .map((m) => ({ id: m.id, title: m.title, type: 'file' as const }));
 
-    return [...folderItems, ...unfiledItems];
+    return [...buildFolderTree(null), ...unfiledItems];
   }, [folders, meetings]);
 
 

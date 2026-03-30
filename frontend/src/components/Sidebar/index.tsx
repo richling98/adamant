@@ -37,6 +37,7 @@ interface SidebarItem {
   title: string;
   type: 'folder' | 'file';
   children?: SidebarItem[];
+  folderData?: import('./SidebarProvider').Folder;
 }
 
 const Sidebar: React.FC = () => {
@@ -949,24 +950,17 @@ const Sidebar: React.FC = () => {
                     </div>
                   )}
 
-                  {/* User-created folder rows */}
-                  {folders.map((folder) => {
-                    // Compute children directly from `meetings` (which has accurate folder_id values).
-                    // filteredSidebarItems only contains top-level items — filed meetings are nested
-                    // inside folder children there and would never be found by a flat filter.
-                    const folderMeetings: SidebarItem[] = meetings
-                      .filter((m) => m.folder_id === folder.id)
-                      .filter((m) =>
-                        !searchQuery.trim() ||
-                        m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        searchResults.some((r) => r.id === m.id)
-                      )
-                      .map((m) => ({ id: m.id, title: m.title, type: 'file' as const }));
+                  {/* User-created folder rows — root folders only; child folders rendered recursively by FolderItem */}
+                  {folders.filter((f) => !f.parent_id).map((folder) => {
+                    // Use the recursive children built by buildFolderTree in SidebarProvider.
+                    // This includes nested subfolders and their meetings at every depth.
+                    const sidebarFolder = sidebarItems.find((item) => item.id === folder.id);
+                    const folderChildren: SidebarItem[] = sidebarFolder?.children ?? [];
                     return (
                       <FolderItem
                         key={folder.id}
                         folder={folder}
-                        children={folderMeetings}
+                        children={folderChildren}
                         isSidebarCollapsed={isCollapsed}
                         activeMeetingId={currentMeeting?.id}
                         renderMeetingItem={(item, insideFolder) => (

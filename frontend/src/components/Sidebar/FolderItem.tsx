@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, FolderOpen, Folder as FolderIcon, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FolderOpen, Folder as FolderIcon, FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDroppable } from '@dnd-kit/core';
 import { invoke } from '@tauri-apps/api/core';
@@ -13,11 +13,13 @@ interface SidebarItem {
   id: string;
   title: string;
   type: 'folder' | 'file';
+  children?: SidebarItem[];
+  folderData?: Folder;
 }
 
 interface FolderItemProps {
   folder: Folder;
-  /** Meeting items that belong to this folder. */
+  /** All direct children of this folder (subfolders + meetings). */
   children: SidebarItem[];
   /** Whether the outer sidebar is in collapsed (icon-only) mode. */
   isSidebarCollapsed: boolean;
@@ -25,6 +27,8 @@ interface FolderItemProps {
   renderMeetingItem: (item: SidebarItem, insideFolder?: boolean) => React.ReactNode;
   /** Currently active meeting id, for highlight purposes. */
   activeMeetingId?: string;
+  /** Nesting depth — 0 for top-level folders, +1 per level. */
+  depth?: number;
 }
 
 export function FolderItem({
@@ -33,9 +37,10 @@ export function FolderItem({
   isSidebarCollapsed,
   renderMeetingItem,
   activeMeetingId,
+  depth = 0,
 }: FolderItemProps) {
   const router = useRouter();
-  const { renameFolder, deleteFolder, moveMeetingToFolder } = useSidebar();
+  const { renameFolder, deleteFolder, moveMeetingToFolder, createFolder } = useSidebar();
 
   // Expand/collapse state — persisted to localStorage so it survives app restarts.
   // Key is unique per folder so each folder remembers its own state independently.
@@ -66,8 +71,9 @@ export function FolderItem({
   // Hover state for showing action buttons
   const [isHovered, setIsHovered] = useState(false);
 
-  // Loading guard — prevents double-creation if the user clicks "+" rapidly
+  // Loading guard — prevents double-creation if the user clicks rapidly
   const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingSubfolder, setIsCreatingSubfolder] = useState(false);
 
   // Make this folder a droppable target so meetings can be dragged into it
   const { setNodeRef, isOver } = useDroppable({ id: folder.id });
@@ -144,6 +150,24 @@ export function FolderItem({
     }
   };
 
+  // --- New subfolder ---
+
+  const handleNewSubfolder = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isCreatingSubfolder) return;
+    setIsCreatingSubfolder(true);
+    try {
+      await createFolder('New Folder', folder.id);
+      // Expand so the new subfolder is immediately visible
+      setIsExpanded(true);
+      try { localStorage.setItem(STORAGE_KEY, 'true'); } catch {}
+    } catch (err) {
+      console.error('Failed to create subfolder:', err);
+    } finally {
+      setIsCreatingSubfolder(false);
+    }
+  };
+
   // --- Collapsed sidebar: icon-only rendering ---
 
   if (isSidebarCollapsed) {
@@ -176,6 +200,7 @@ export function FolderItem({
       {/* Folder header row */}
       <div
         className="flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none group"
+        style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={toggleExpanded}
       >
         {/* Collapse chevron */}
@@ -230,6 +255,15 @@ export function FolderItem({
             >
               <Pencil className="h-3 w-3" />
             </button>
+            {/* New subfolder inside this folder */}
+            <button
+              className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="New subfolder"
+              disabled={isCreatingSubfolder}
+              onClick={handleNewSubfolder}
+            >
+              <FolderPlus className="h-3 w-3" />
+            </button>
             {/* New meeting in this folder — disabled while creation is in flight */}
             <button
               className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -251,14 +285,29 @@ export function FolderItem({
         )}
       </div>
 
-      {/* Meeting children — hidden when collapsed */}
+      {/* Children — subfolders and meetings — hidden when collapsed */}
       <div className={cn(
         'overflow-hidden transition-all duration-200',
         isExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
       )}>
         {children.length > 0 && (
           <div className="ml-4 border-l border-white/5">
-            {children.map((item) => renderMeetingItem(item, true))}
+            {children.map((item) => {
+              if (item.type === 'folder' && item.folderData) {
+                return (
+                  <FolderItem
+                    key={item.id}
+                    folder={item.folderData}
+                    children={item.children ?? []}
+                    isSidebarCollapsed={isSidebarCollapsed}
+                    renderMeetingItem={renderMeetingItem}
+                    activeMeetingId={activeMeetingId}
+                    depth={depth + 1}
+                  />
+                );
+              }
+              return renderMeetingItem(item, true);
+            })}
           </div>
         )}
       </div>

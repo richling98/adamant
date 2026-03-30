@@ -46,6 +46,8 @@ pub struct Folder {
     pub name: String,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1566,6 +1568,7 @@ pub async fn api_get_folders<R: Runtime>(
                     name: f.name,
                     created_at: f.created_at.0.to_rfc3339(),
                     updated_at: f.updated_at.0.to_rfc3339(),
+                    parent_id: f.parent_id,
                 })
                 .collect()
         })
@@ -1576,13 +1579,15 @@ pub async fn api_get_folders<R: Runtime>(
 }
 
 /// Create a new folder with the given name.
+/// Pass `parent_id` to create a subfolder inside an existing folder.
 #[tauri::command]
 pub async fn api_create_folder<R: Runtime>(
     _app: AppHandle<R>,
     state: tauri::State<'_, AppState>,
     name: String,
+    parent_id: Option<String>,
 ) -> Result<Folder, String> {
-    log_info!("api_create_folder called with name: {}", name);
+    log_info!("api_create_folder called with name: {}, parent_id: {:?}", name, parent_id);
 
     if name.trim().is_empty() {
         return Err("Folder name cannot be empty".to_string());
@@ -1591,13 +1596,14 @@ pub async fn api_create_folder<R: Runtime>(
     let id = format!("folder-{}", uuid::Uuid::new_v4());
     let pool = state.db_manager.pool();
 
-    FoldersRepository::create_folder(pool, &id, name.trim())
+    FoldersRepository::create_folder(pool, &id, name.trim(), parent_id.as_deref())
         .await
         .map(|f| Folder {
             id: f.id,
             name: f.name,
             created_at: f.created_at.0.to_rfc3339(),
             updated_at: f.updated_at.0.to_rfc3339(),
+            parent_id: f.parent_id,
         })
         .map_err(|e| {
             log_error!("Failed to create folder: {}", e);

@@ -46,7 +46,9 @@ pub struct FtsMatch {
 ///      from fusing into the single mangled token `Q3results`.
 ///   2. Split on whitespace.
 ///   3. Drop tokens shorter than 2 characters to avoid matching nearly everything.
-///   4. Join with ` OR `.
+///   4. Append `*` to each token for prefix matching (e.g. `quart` → `quart*`
+///      matches `quarterly`, `quarter`, `quarters`, etc.).
+///   5. Join with ` OR `.
 ///
 /// Returns `None` if no usable tokens remain (caller should return empty results).
 fn build_fts_query(raw: &str) -> Option<String> {
@@ -61,7 +63,8 @@ fn build_fts_query(raw: &str) -> Option<String> {
         return None;
     }
 
-    Some(tokens.join(" OR "))
+    let prefixed: Vec<String> = tokens.iter().map(|t| format!("{}*", t)).collect();
+    Some(prefixed.join(" OR "))
 }
 
 /// Search the FTS5 index for `query`, returning up to 20 ranked results.

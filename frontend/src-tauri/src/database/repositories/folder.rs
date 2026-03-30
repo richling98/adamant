@@ -8,28 +8,31 @@ pub struct FoldersRepository;
 
 impl FoldersRepository {
     /// Insert a new folder. The caller is responsible for generating a unique `id` (UUID).
+    /// `parent_id` is `None` for top-level folders, `Some(id)` for subfolders.
     pub async fn create_folder(
         pool: &SqlitePool,
         id: &str,
         name: &str,
+        parent_id: Option<&str>,
     ) -> Result<FolderModel, SqlxError> {
         let now = Utc::now().naive_utc();
 
         sqlx::query(
-            "INSERT INTO folders (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO folders (id, name, created_at, updated_at, parent_id) VALUES (?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(name)
         .bind(now)
         .bind(now)
+        .bind(parent_id)
         .execute(pool)
         .await?;
 
-        info!("Created folder '{}' with id {}", name, id);
+        info!("Created folder '{}' with id {} (parent: {:?})", name, id, parent_id);
 
         // Return the freshly created row
         let folder = sqlx::query_as::<_, FolderModel>(
-            "SELECT id, name, created_at, updated_at FROM folders WHERE id = ?",
+            "SELECT id, name, created_at, updated_at, parent_id FROM folders WHERE id = ?",
         )
         .bind(id)
         .fetch_one(pool)
@@ -41,7 +44,7 @@ impl FoldersRepository {
     /// Return all folders ordered by creation time (oldest first).
     pub async fn get_all_folders(pool: &SqlitePool) -> Result<Vec<FolderModel>, SqlxError> {
         let folders = sqlx::query_as::<_, FolderModel>(
-            "SELECT id, name, created_at, updated_at FROM folders ORDER BY created_at ASC",
+            "SELECT id, name, created_at, updated_at, parent_id FROM folders ORDER BY created_at ASC",
         )
         .fetch_all(pool)
         .await?;
