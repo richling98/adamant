@@ -413,6 +413,48 @@ pub fn run() {
         .manage(audio::init_system_audio_state())
         .manage(summary::summary_engine::ModelManagerState(Arc::new(tokio::sync::Mutex::new(None))))
         .setup(|_app| {
+            // ── Auto-clear WebKit cache on version upgrade (macOS) ───────────
+            // The WKWebView aggressively caches the compiled frontend bundle.
+            // Without this, users who install a new DMG see the old UI until
+            // they manually delete the cache. We detect a version change by
+            // comparing the running version against a `last_version.txt` file
+            // stored in the app data directory. On mismatch we delete the
+            // WebKit cache directory — which is re-created clean on first load —
+            // then update the stored version. This runs before the webview is
+            // created so the fresh assets are loaded on this very launch.
+            #[cfg(target_os = "macos")]
+            {
+                let current_version = _app.package_info().version.to_string();
+                if let Ok(data_dir) = _app.path().app_data_dir() {
+                    let version_file = data_dir.join("last_version.txt");
+                    let stored_version = std::fs::read_to_string(&version_file).unwrap_or_default();
+                    if stored_version.trim() != current_version {
+                        // Clear the WebKit disk cache so the new frontend assets are loaded.
+                        if let Some(home) = dirs::home_dir() {
+                            let webkit_cache = home
+                                .join("Library/WebKit")
+                                .join(&_app.config().identifier);
+                            if webkit_cache.exists() {
+                                if let Err(e) = std::fs::remove_dir_all(&webkit_cache) {
+                                    log::warn!("Failed to clear WebKit cache: {}", e);
+                                } else {
+                                    log::info!(
+                                        "Cleared WebKit cache for upgrade {} → {}",
+                                        stored_version.trim(),
+                                        current_version
+                                    );
+                                }
+                            }
+                        }
+                        // Write the new version so we only do this once per upgrade.
+                        if let Some(parent) = version_file.parent() {
+                            let _ = std::fs::create_dir_all(parent);
+                        }
+                        let _ = std::fs::write(&version_file, &current_version);
+                    }
+                }
+            }
+
             log::info!("Application setup complete");
 
             // Initialize system tray
