@@ -1128,23 +1128,28 @@ const Sidebar: React.FC = () => {
                                   isGroupExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
                                 )}>
                                   <div className="ml-4 border-l border-white/5">
-                                    {dateMeetings.map((m) => (
-                                      // Read-only navigation row — no drag, no edit/delete shown
-                                      <DraggableMeetingRow
-                                        key={m.id}
-                                        item={{ id: m.id, title: m.title, type: 'file' }}
-                                        isActive={currentMeeting?.id === m.id}
-                                        indent={true}
-                                        isSelected={false}
-                                        onToggleSelect={() => {}}
-                                        onNavigate={() => {
-                                          setCurrentMeeting({ id: m.id, title: m.title });
-                                          router.push(`/meeting-details?id=${m.id}`);
-                                        }}
-                                        onEdit={() => {}}
-                                        onDelete={() => {}}
-                                      />
-                                    ))}
+                                    {dateMeetings.map((m) => {
+                                      const isActive = currentMeeting?.id === m.id;
+                                      return (
+                                        <div
+                                          key={m.id}
+                                          className={`flex items-center px-2 py-1.5 my-0.5 rounded-md text-sm cursor-pointer transition-colors ${
+                                            isActive
+                                              ? 'bg-emerald-500/20 text-emerald-100 font-medium'
+                                              : 'hover:bg-white/5 text-foreground/85'
+                                          }`}
+                                          onClick={() => {
+                                            setCurrentMeeting({ id: m.id, title: m.title });
+                                            router.push(`/meeting-details?id=${m.id}`);
+                                          }}
+                                        >
+                                          <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full mr-2 bg-white/10">
+                                            <File className="w-3 h-3 text-foreground/65" />
+                                          </div>
+                                          <span className="flex-1 truncate">{m.title}</span>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               </div>

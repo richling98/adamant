@@ -278,6 +278,7 @@ pub async fn generate_meeting_summary(
     top_p: Option<f32>,
     app_data_dir: Option<&PathBuf>,
     cancellation_token: Option<&CancellationToken>,
+    notes_markdown: Option<&str>,
 ) -> Result<(String, i64), String> {
     // Check cancellation at the start
     if let Some(token) = cancellation_token {
@@ -435,6 +436,7 @@ pub async fn generate_meeting_summary(
 7. Never output markdown tables. Use bullet points with bold labels instead.
 8. COMPLETENESS IS MANDATORY: Every concept, topic, decision, question, and detail mentioned in the source text must appear somewhere in the output. A longer, more complete record is always correct. A shorter record that omits content is always wrong.
 9. Do NOT compress, paraphrase into fewer words, or drop topics because they seem minor. Everything discussed belongs in the notes.
+10. If `<user_notes>` are provided, treat them as authoritative context from the meeting participant. Where notes and transcript cover the same topic, synthesize them into a single coherent point rather than repeating both.
 
 **SECTION-SPECIFIC INSTRUCTIONS:**
 {}
@@ -454,6 +456,14 @@ pub async fn generate_meeting_summary(
 "#,
         content_to_summarize
     );
+
+    if let Some(notes) = notes_markdown {
+        if !notes.trim().is_empty() {
+            final_user_prompt.push_str("\n\n<user_notes>\n");
+            final_user_prompt.push_str(notes);
+            final_user_prompt.push_str("\n</user_notes>");
+        }
+    }
 
     if !custom_prompt.is_empty() {
         final_user_prompt.push_str("\n\nUser Provided Context:\n\n<user_context>\n");

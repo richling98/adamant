@@ -88,10 +88,12 @@ export function useSummaryGeneration({
     transcriptText,
     customPrompt = '',
     isRegeneration = false,
+    notesMarkdown = '',
   }: {
     transcriptText: string;
     customPrompt?: string;
     isRegeneration?: boolean;
+    notesMarkdown?: string;
   }) => {
     setSummaryStatus(isRegeneration ? 'regenerating' : 'processing');
     setSummaryError(null);
@@ -148,6 +150,7 @@ export function useSummaryGeneration({
         overlap: 1000,
         customPrompt: customPrompt,
         templateId: selectedTemplate,
+        notesMarkdown: notesMarkdown || null,
       }) as any;
 
       const process_id = result.process_id;
@@ -623,7 +626,16 @@ export function useSummaryGeneration({
       .map(t => `${formatTime(t.audio_start_time, t.timestamp)} ${t.text}`)
       .join('\n');
 
-    await processSummary({ transcriptText: fullTranscript, customPrompt });
+    // Fetch user-typed notes to include alongside transcript
+    let notesMarkdown = '';
+    try {
+      const noteData = await invokeTauri('api_get_note', { meetingId: meeting.id }) as any;
+      notesMarkdown = noteData?.content_markdown?.trim() ?? '';
+    } catch {
+      // Notes are optional — silently skip if fetch fails
+    }
+
+    await processSummary({ transcriptText: fullTranscript, customPrompt, notesMarkdown });
   }, [meeting.id, fetchAllTranscripts, processSummary, modelConfig, isModelConfigLoading, selectedTemplate]);
 
   // Public API: Regenerate summary from original transcript

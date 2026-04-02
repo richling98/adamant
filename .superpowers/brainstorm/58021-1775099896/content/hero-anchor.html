@@ -1,0 +1,90 @@
+<h2>What anchors the hero?</h2>
+<p class="subtitle">Below the headline and download button — what does the user see next?</p>
+
+<div class="cards">
+
+  <!-- Option A: App mockup (simplified) -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0a0a0a; padding: 20px;">
+      <div style="margin-bottom:14px;">
+        <div style="color:#fff;font-size:15px;font-weight:600;margin-bottom:5px;letter-spacing:-0.4px;">AI meeting assistant.<br/>Everything local.</div>
+        <div style="color:#555;font-size:11px;margin-bottom:12px;">Whisper + local LLMs. Nothing leaves your Mac.</div>
+        <span style="background:#10b981;color:#fff;padding:5px 14px;border-radius:4px;font-size:11px;font-weight:600;">↓ Download for Mac</span>
+      </div>
+      <!-- Simplified app mockup -->
+      <div style="border:1px solid #1e1e1e;border-radius:8px;overflow:hidden;">
+        <div style="background:#111;padding:8px 12px;display:flex;gap:5px;align-items:center;border-bottom:1px solid #1e1e1e;">
+          <div style="width:8px;height:8px;border-radius:50%;background:#333;"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:#333;"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:#333;"></div>
+          <span style="font-size:10px;color:#444;margin-left:8px;">Adamant</span>
+        </div>
+        <div style="display:flex;min-height:80px;">
+          <div style="width:100px;background:#0d0d0d;border-right:1px solid #1a1a1a;padding:10px;">
+            <div style="color:#555;font-size:9px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Meetings</div>
+            <div style="color:#10b981;font-size:9px;padding:3px 5px;background:rgba(16,185,129,0.08);border-radius:3px;margin-bottom:3px;">Team Standup</div>
+            <div style="color:#444;font-size:9px;padding:3px 5px;">1:1 with Sarah</div>
+            <div style="color:#444;font-size:9px;padding:3px 5px;">Eng Review</div>
+          </div>
+          <div style="flex:1;padding:10px;">
+            <div style="color:#777;font-size:9px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Summary</div>
+            <div style="color:#555;font-size:9px;line-height:1.6;">Discussed Q2 roadmap priorities. Action items: Alice to finalize spec by Friday, Bob to unblock infra access...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — App mockup</h3>
+      <p>Simplified macOS window showing the UI. Shows what you're actually getting before you download.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Text only -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0a0a0a; padding: 20px;">
+      <div style="margin-bottom:20px;">
+        <div style="color:#fff;font-size:15px;font-weight:600;margin-bottom:5px;letter-spacing:-0.4px;">AI meeting assistant.<br/>Everything local.</div>
+        <div style="color:#555;font-size:11px;margin-bottom:12px;">Whisper + local LLMs. Nothing leaves your Mac.</div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span style="background:#10b981;color:#fff;padding:5px 14px;border-radius:4px;font-size:11px;font-weight:600;">↓ Download for Mac</span>
+          <span style="color:#444;font-size:10px;">★ 142 on GitHub</span>
+        </div>
+      </div>
+      <!-- Trust line -->
+      <div style="display:flex;gap:16px;padding-top:16px;border-top:1px solid #111;">
+        <span style="color:#444;font-size:10px;">✓ No cloud</span>
+        <span style="color:#444;font-size:10px;">✓ No bots</span>
+        <span style="color:#444;font-size:10px;">✓ No subscriptions</span>
+        <span style="color:#444;font-size:10px;">✓ MIT license</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Text only</h3>
+      <p>Headline, CTA, and a single trust row. Nothing else. Maximum restraint — lets the words do the work.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Terminal/summary output -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0a0a0a; padding: 20px;">
+      <div style="margin-bottom:14px;">
+        <div style="color:#fff;font-size:15px;font-weight:600;margin-bottom:5px;letter-spacing:-0.4px;">AI meeting assistant.<br/>Everything local.</div>
+        <div style="color:#555;font-size:11px;margin-bottom:12px;">Whisper + local LLMs. Nothing leaves your Mac.</div>
+        <span style="background:#10b981;color:#fff;padding:5px 14px;border-radius:4px;font-size:11px;font-weight:600;">↓ Download for Mac</span>
+      </div>
+      <!-- Output sample -->
+      <div style="border:1px solid #1a1a1a;border-radius:6px;padding:12px;background:#0d0d0d;font-family:monospace;">
+        <div style="color:#444;font-size:9px;margin-bottom:8px;">// Team Standup · Apr 1 · 18 min</div>
+        <div style="color:#10b981;font-size:10px;margin-bottom:4px;">## Summary</div>
+        <div style="color:#666;font-size:9px;line-height:1.6;margin-bottom:8px;">Discussed Q2 roadmap. Shipping auth refactor Thursday. Infra costs up 12% — Bob investigating.</div>
+        <div style="color:#10b981;font-size:10px;margin-bottom:4px;">## Action items</div>
+        <div style="color:#666;font-size:9px;line-height:1.6;">- [ ] Alice: finalize spec by Friday<br/>- [ ] Bob: unblock staging access<br/>- [ ] Sync on pricing before EOW</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Summary output</h3>
+      <p>Show a sample AI summary as a code-style block. Developers immediately understand the value prop.</p>
+    </div>
+  </div>
+
+</div>

@@ -15,10 +15,10 @@ interface SettingTabsProps {
     defaultTab?: string;
 }
 
-export function SettingTabs({ 
-    modelConfig, 
-    setModelConfig, 
-    onSave, 
+export function SettingTabs({
+    modelConfig,
+    setModelConfig,
+    onSave,
     setSaveSuccess,
     defaultTab = "transcriptSettings",
     transcriptModelConfig,

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { ArrowLeft, Settings2, Mic, Database as DatabaseIcon, SparkleIcon, Info } from 'lucide-react';
+import { ArrowLeft, Settings2, Mic, SparkleIcon, Info } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
@@ -17,8 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 const TABS = [
   { value: 'general', label: 'General', icon: Settings2 },
   { value: 'recording', label: 'Recordings', icon: Mic },
-  { value: 'Transcriptionmodels', label: 'Transcription', icon: DatabaseIcon },
-  { value: 'summaryModels', label: 'Summary', icon: SparkleIcon },
+  { value: 'aiModels', label: 'AI Models', icon: SparkleIcon },
   { value: 'about', label: 'About', icon: Info },
 ] as const;
 
@@ -115,14 +114,20 @@ export default function SettingsPage() {
             <TabsContent value="recording">
               <RecordingSettings />
             </TabsContent>
-            <TabsContent value="Transcriptionmodels">
-              <TranscriptSettings
-                transcriptModelConfig={transcriptModelConfig}
-                setTranscriptModelConfig={setTranscriptModelConfig}
-              />
-            </TabsContent>
-            <TabsContent value="summaryModels">
-              <SummaryModelSettings />
+            <TabsContent value="aiModels">
+              <div className="space-y-8">
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">Transcription</h3>
+                  <TranscriptSettings
+                    transcriptModelConfig={transcriptModelConfig}
+                    setTranscriptModelConfig={setTranscriptModelConfig}
+                  />
+                </div>
+                <div className="border-t border-white/10 pt-8">
+                  <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">AI Summary</h3>
+                  <SummaryModelSettings />
+                </div>
+              </div>
             </TabsContent>
             <TabsContent value="about">
               <About />

@@ -1,0 +1,400 @@
+# Website Redesign: Stoic Minimalist Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace `website/index.html` with a Linear/Vercel-style dark page — flat green CTA, no glows, no animations, no gradient text, sections: nav → hero (with app mockup) → how it works → features → footer.
+
+**Architecture:** Single static HTML file using Tailwind CDN + inline `<style>` block. CSS custom properties for the color palette. All visual changes are in the HTML/CSS; the JS `downloadLatest()` and GitHub stars functions are preserved unchanged.
+
+**Tech Stack:** HTML, CSS custom properties, Tailwind CDN, vanilla JS (unchanged)
+
+---
+
+## File Map
+
+| File | Action |
+|---|---|
+| `website/index.html` | Full rewrite — all sections replaced |
+
+---
+
+## Task 1: Rewrite `<head>` and CSS
+
+**Files:**
+- Modify: `website/index.html` (lines 1–165)
+
+Replace everything from `<!DOCTYPE html>` through the closing `</style>` tag with the new head. This strips all glow/animation classes and establishes the CSS custom property palette.
+
+- [x] **Step 1: Replace head + style block**
+
+Replace from line 1 to the closing `</style>` on line 164 with:
+
+```html
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adamant — AI Meeting Assistant for Mac</title>
+  <meta name="description" content="Adamant records, transcribes, and summarizes your meetings entirely on your Mac. No cloud. No bots. No token costs. Fully private, fully local." />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Adamant — AI Meeting Assistant for Mac" />
+  <meta property="og:description" content="Real-time transcription and AI summaries that never leave your machine." />
+  <meta property="og:image" content="https://raw.githubusercontent.com/richling98/adamant/main/website/logo.png" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
+    }
+  </script>
+
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --border: #1a1a1a;
+      --border-hover: #2a2a2a;
+      --text-primary: #ffffff;
+      --text-secondary: #999999;
+      --text-muted: #555555;
+      --accent: #10b981;
+    }
+    body { background-color: var(--bg); color: var(--text-secondary); font-family: 'Inter', sans-serif; }
+    .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+    .feature-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 20px; transition: border-color 0.15s ease; }
+    .feature-card:hover { border-color: var(--border-hover); }
+    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 13px; transition: color 0.15s; }
+    .nav-link:hover { color: #fff; }
+    .ghost-btn { color: var(--text-secondary); text-decoration: none; padding: 9px 16px; border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; transition: border-color 0.15s; }
+    .ghost-btn:hover { border-color: var(--border-hover); }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+```
+
+- [x] **Step 2: Verify in browser**
+
+Open http://localhost:8080. The page will likely look broken (sections not yet rewritten) — that's fine. Confirm the page loads without JS errors and the body background is `#0a0a0a`.
+
+---
+
+## Task 2: Rewrite nav + hero
+
+**Files:**
+- Modify: `website/index.html` (nav section ~lines 168–188, hero section ~lines 190–410)
+
+Replace from `<!-- ── NAV ──` through the closing `</section>` of the hero.
+
+- [x] **Step 1: Replace nav + hero**
+
+Replace from `<!-- ── NAV ──` (line 168) through the closing `</section>` of the hero (line 410) with:
+
+```html
+<!-- ── NAV ── -->
+<nav style="position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(10,10,10,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);">
+  <div style="max-width:1024px;margin:0 auto;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <img src="logo.png" alt="Adamant" style="width:22px;height:22px;object-fit:contain;" />
+      <span style="font-weight:600;color:#fff;font-size:14px;letter-spacing:-0.3px;">Adamant</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:24px;">
+      <div style="display:flex;gap:20px;">
+        <a href="#how-it-works" class="nav-link">How it works</a>
+        <a href="#features" class="nav-link">Features</a>
+        <a href="https://github.com/richling98/adamant" target="_blank" class="nav-link">GitHub</a>
+      </div>
+      <button onclick="downloadLatest()" style="background:var(--accent);color:#fff;font-size:13px;font-weight:600;padding:7px 16px;border:none;border-radius:5px;cursor:pointer;">↓ Download for Mac</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section style="padding:112px 24px 72px;max-width:1024px;margin:0 auto;">
+  <div style="max-width:580px;">
+    <p class="section-label" style="margin-bottom:20px;">Open Source · macOS · Apple Silicon</p>
+    <h1 style="font-size:clamp(2rem,5vw,3.25rem);font-weight:600;color:#fff;line-height:1.15;letter-spacing:-1px;margin-bottom:16px;">
+      AI meeting assistant.<br/>Everything stays on your Mac.
+    </h1>
+    <p style="font-size:1.05rem;color:var(--text-secondary);line-height:1.7;margin-bottom:32px;max-width:460px;">
+      Record, transcribe, summarize — entirely on your Mac. Whisper for transcription. Your LLM of choice. No cloud. No bots. No subscriptions.
+    </p>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <button onclick="downloadLatest()" style="background:var(--accent);color:#fff;font-size:14px;font-weight:600;padding:10px 22px;border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Download for Mac
+      </button>
+      <a href="https://github.com/richling98/adamant" target="_blank" class="ghost-btn">
+        <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        View on GitHub
+        <span id="star-count" style="font-size:11px;color:var(--text-muted);"></span>
+      </a>
+    </div>
+  </div>
+
+  <!-- App mockup -->
+  <div style="margin-top:48px;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-width:860px;">
+    <div style="background:#111;padding:10px 14px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border);">
+      <div style="width:10px;height:10px;border-radius:50%;background:#222;"></div>
+      <div style="width:10px;height:10px;border-radius:50%;background:#222;"></div>
+      <div style="width:10px;height:10px;border-radius:50%;background:#222;"></div>
+      <span style="font-size:11px;color:var(--text-muted);margin-left:10px;">Adamant</span>
+    </div>
+    <div style="display:flex;min-height:260px;">
+      <!-- Sidebar -->
+      <div style="width:156px;flex-shrink:0;background:#0d0d0d;border-right:1px solid var(--border);padding:12px;">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:10px;">Meetings</div>
+        <div style="font-size:11px;color:#10b981;padding:5px 8px;background:rgba(16,185,129,0.06);border-radius:4px;margin-bottom:2px;">Team Standup</div>
+        <div style="font-size:11px;color:var(--text-muted);padding:5px 8px;margin-bottom:2px;">1:1 with Sarah</div>
+        <div style="font-size:11px;color:var(--text-muted);padding:5px 8px;margin-bottom:2px;">Eng Review</div>
+        <div style="font-size:11px;color:var(--text-muted);padding:5px 8px;">Design Sync</div>
+      </div>
+      <!-- 3 panels -->
+      <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;">
+        <!-- Notes -->
+        <div style="border-right:1px solid var(--border);padding:16px;">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:12px;">Notes</div>
+          <div style="font-size:10px;color:#444;margin-bottom:8px;">Team Standup · Apr 1</div>
+          <div style="font-size:11px;color:#555;line-height:1.8;">
+            - Auth refactor: target EOD Friday<br/>
+            - API docs owner → Marcus<br/>
+            - Q3 roadmap review moved to Thurs
+          </div>
+        </div>
+        <!-- Transcript -->
+        <div style="border-right:1px solid var(--border);padding:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Transcript</div>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <div style="width:6px;height:6px;border-radius:50%;background:#ef4444;"></div>
+              <span style="font-size:9px;color:#ef4444;">Live</span>
+            </div>
+          </div>
+          <div>
+            <div style="margin-bottom:10px;">
+              <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">Sarah · 0:12</div>
+              <div style="font-size:11px;color:#555;line-height:1.6;">Let's go through the Q3 roadmap items...</div>
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">Marcus · 0:48</div>
+              <div style="font-size:11px;color:#555;line-height:1.6;">Auth refactor is 90% done. Targeting end of sprint.</div>
+            </div>
+          </div>
+        </div>
+        <!-- Summary -->
+        <div style="padding:16px;">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:12px;">Summary</div>
+          <div style="background:#0d0d0d;border:1px solid var(--border);border-radius:4px;padding:10px;margin-bottom:8px;">
+            <div style="font-size:9px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;">Key Decisions</div>
+            <div style="font-size:10px;color:#555;line-height:1.8;">
+              • Auth refactor ships end of sprint<br/>
+              • Q3 review deferred to Thursday<br/>
+              • Marcus leads API docs
+            </div>
+          </div>
+          <div style="background:#0d0d0d;border:1px solid var(--border);border-radius:4px;padding:10px;">
+            <div style="font-size:9px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;">Action Items</div>
+            <div style="font-size:10px;color:#555;line-height:1.8;">
+              • Finalize spec by Friday<br/>
+              • Unblock staging access
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:var(--text-muted);margin-top:12px;">All processing happens locally on your Mac. Nothing is sent to any server.</p>
+</section>
+```
+
+- [x] **Step 2: Verify nav + hero in browser**
+
+Open http://localhost:8080. Confirm:
+- Nav is fixed, dark, single bottom border, green Download button
+- Hero headline is plain white (no gradient)
+- App mockup has neutral gray traffic-light dots (no red/yellow/green)
+- No glow or background decorations visible
+
+---
+
+## Task 3: Rewrite how-it-works + features, remove trust bar / privacy manifesto / FAQ / final CTA
+
+**Files:**
+- Modify: `website/index.html` (lines 412–680 — trust bar through final CTA section)
+
+Delete everything from `<!-- ── TRUST BAR ──` (line 412) through the closing `</section>` of the final CTA (line 680), and replace with the new how-it-works + features sections.
+
+- [x] **Step 1: Replace trust bar → final CTA with new sections**
+
+Replace from `<!-- ── TRUST BAR ──` (line 412) through the closing `</section>` of the final CTA (line 680) with:
+
+```html
+<!-- ── HOW IT WORKS ── -->
+<section id="how-it-works" style="padding:80px 24px;border-top:1px solid var(--border);">
+  <div style="max-width:1024px;margin:0 auto;">
+    <p class="section-label" style="margin-bottom:36px;">How it works</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:48px;max-width:720px;">
+      <div>
+        <div style="font-size:13px;color:var(--text-muted);font-weight:500;margin-bottom:10px;">01</div>
+        <div style="font-size:15px;color:#fff;font-weight:600;letter-spacing:-0.3px;margin-bottom:8px;">Record</div>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.7;">Open Zoom, Meet, or Teams. Hit record. Adamant captures mic + system audio locally.</p>
+      </div>
+      <div>
+        <div style="font-size:13px;color:var(--text-muted);font-weight:500;margin-bottom:10px;">02</div>
+        <div style="font-size:15px;color:#fff;font-weight:600;letter-spacing:-0.3px;margin-bottom:8px;">Transcribe</div>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.7;">Whisper runs on your Mac's chips. Every word appears live — no internet, no round trips.</p>
+      </div>
+      <div>
+        <div style="font-size:13px;color:var(--text-muted);font-weight:500;margin-bottom:10px;">03</div>
+        <div style="font-size:15px;color:#fff;font-weight:600;letter-spacing:-0.3px;margin-bottom:8px;">Summarize</div>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.7;">Decisions, action items, key points — auto-generated by your LLM of choice.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ── -->
+<section id="features" style="padding:80px 24px;border-top:1px solid var(--border);">
+  <div style="max-width:1024px;margin:0 auto;">
+    <p class="section-label" style="margin-bottom:36px;">Features</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:860px;">
+      <div class="feature-card">
+        <div style="font-size:14px;color:#fff;font-weight:500;margin-bottom:6px;">Local transcription</div>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">Whisper.cpp runs on-device. No audio ever leaves your Mac.</p>
+      </div>
+      <div class="feature-card">
+        <div style="font-size:14px;color:#fff;font-weight:500;margin-bottom:6px;">AI summaries</div>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">Ollama, Claude, Groq, or OpenRouter. Your LLM, your choice.</p>
+      </div>
+      <div class="feature-card">
+        <div style="font-size:14px;color:#fff;font-weight:500;margin-bottom:6px;">Private by default</div>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">No cloud, no accounts, no telemetry. Stored in SQLite on your machine.</p>
+      </div>
+      <div class="feature-card">
+        <div style="font-size:14px;color:#fff;font-weight:500;margin-bottom:6px;">Folders &amp; search</div>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">Organize meetings into folders. Full-text search across all transcripts.</p>
+      </div>
+      <div class="feature-card">
+        <div style="font-size:14px;color:#fff;font-weight:500;margin-bottom:6px;">Apple Silicon</div>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">Optimized for M-series chips with Metal GPU acceleration for Whisper.</p>
+      </div>
+      <div class="feature-card">
+        <div style="font-size:14px;color:#fff;font-weight:500;margin-bottom:6px;">Open source</div>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">MIT license. Read the code. Self-hostable. No vendor lock-in.</p>
+      </div>
+    </div>
+  </div>
+</section>
+```
+
+- [x] **Step 2: Verify sections in browser**
+
+Scroll down. Confirm:
+- "How it works" shows 3 numbered steps with plain `01 / 02 / 03` in muted gray — no icons, no circles, no connector lines
+- "Features" shows a 3×2 grid of flat cards — no icon glows, no lift on hover (only subtle border lightening)
+- Trust bar, privacy manifesto, FAQ accordion, and final CTA section are all gone
+
+---
+
+## Task 4: Rewrite footer and clean up JS
+
+**Files:**
+- Modify: `website/index.html` (footer ~lines 682–696, scripts ~lines 698–767)
+
+Replace the existing footer and script block with the simplified versions.
+
+- [x] **Step 1: Replace footer**
+
+Replace from `<!-- ── FOOTER ──` (line 682) through the closing `</footer>` (line 696) with:
+
+```html
+<!-- ── FOOTER ── -->
+<footer style="border-top:1px solid var(--border);padding:32px 24px;">
+  <div style="max-width:1024px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <img src="logo.png" alt="Adamant" style="width:20px;height:20px;object-fit:contain;opacity:0.4;" />
+      <span style="font-size:13px;color:var(--text-muted);">Adamant</span>
+    </div>
+    <div style="display:flex;gap:20px;font-size:13px;">
+      <a href="https://github.com/richling98/adamant" target="_blank" class="nav-link">GitHub</a>
+      <a href="https://github.com/richling98/adamant/releases" target="_blank" class="nav-link">Releases</a>
+      <a href="https://github.com/richling98/adamant/issues" target="_blank" class="nav-link">Issues</a>
+    </div>
+    <span style="font-size:12px;color:#333;">MIT License · © 2025</span>
+  </div>
+</footer>
+```
+
+- [x] **Step 2: Replace script block**
+
+Replace from `<!-- ── SCRIPTS ──` (line 698) through `</html>` (line 770) with:
+
+```html
+<!-- ── SCRIPTS ── -->
+<script>
+  const GITHUB_REPO = 'richling98/adamant';
+
+  async function downloadLatest() {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+      const data = await res.json();
+      const dmg = data.assets?.find(a => a.name.endsWith('.dmg'));
+      if (dmg) {
+        window.location.href = dmg.browser_download_url;
+      } else {
+        window.open(`https://github.com/${GITHUB_REPO}/releases/latest`, '_blank');
+      }
+    } catch {
+      window.open(`https://github.com/${GITHUB_REPO}/releases/latest`, '_blank');
+    }
+  }
+
+  async function loadGithubStats() {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}`);
+      const data = await res.json();
+      if (data.stargazers_count != null) {
+        const stars = data.stargazers_count >= 1000
+          ? `${(data.stargazers_count / 1000).toFixed(1)}k`
+          : data.stargazers_count;
+        document.getElementById('star-count').textContent = `★ ${stars}`;
+      }
+    } catch {}
+  }
+
+  loadGithubStats();
+</script>
+
+</body>
+</html>
+```
+
+- [x] **Step 3: Final visual verification**
+
+Open http://localhost:8080 and do a full scroll-through. Check:
+- [ ] Nav: fixed dark bar, logo + links + green Download button
+- [ ] Hero: plain white headline, flat green button, gray GitHub button, neutral-dot mockup
+- [ ] How it works: 3 numbered steps, no decoration
+- [ ] Features: 3×2 flat card grid
+- [ ] Footer: single-line, 3 links, MIT copyright
+- [ ] No green glows, no gradient text, no animated elements anywhere on the page
+- [ ] Open browser DevTools console — no JS errors
+
+- [x] **Step 4: Commit**
+
+```bash
+cd "/Users/richardling/Documents/Documents - Updated/Projects/adamant"
+git add website/index.html
+git commit -m "redesign: stoic minimalist landing page (Linear/Vercel aesthetic)"
+```

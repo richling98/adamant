@@ -16,7 +16,7 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <style>
     html { scroll-behavior: smooth; }
@@ -30,7 +30,218 @@
       --text-muted: #555555;
       --accent: #10b981;
     }
-    body { background-color: var(--bg); color: var(--text-secondary); font-family: 'Inter', sans-serif; }
+    body { margin: 0; background-color: var(--bg); color: var(--text-secondary); font-family: 'Manrope', sans-serif; }
+
+    /* ── MOCKUP ── */
+    .mockup-frame {
+      position: relative;
+      max-width: 1100px;
+      margin: 52px auto 0;
+      border-radius: 16px;
+      border: 1px solid #222;
+      background: #0e0e0e;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04) inset,
+        0 60px 120px rgba(0,0,0,0.7),
+        0 0 80px rgba(16,185,129,0.07);
+      overflow: hidden;
+    }
+    /* title bar */
+    .mockup-titlebar {
+      height: 44px;
+      background: #111;
+      border-bottom: 1px solid #1e1e1e;
+      display: flex;
+      align-items: center;
+      padding: 0 18px;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .mockup-dot { width: 11px; height: 11px; border-radius: 50%; }
+    .mockup-dot-red   { background: #3a1b1b; border: 1px solid #5a2020; }
+    .mockup-dot-yellow{ background: #2e2710; border: 1px solid #4d4012; }
+    .mockup-dot-green { background: #0e2a1a; border: 1px solid #1a4a28; }
+    .mockup-title { margin-left: 10px; font-size: 13px; color: #555; font-weight: 500; }
+    /* body */
+    .mockup-body {
+      display: flex;
+      height: 440px;
+      overflow: hidden;
+    }
+    /* sidebar */
+    .mockup-sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: #0b0b0b;
+      border-right: 1px solid #1c1c1c;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 14px 16px;
+      gap: 0;
+    }
+    .mockup-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px 20px;
+      border-bottom: 1px solid #1a1a1a;
+      margin-bottom: 16px;
+    }
+    .mockup-brand-icon {
+      width: 28px; height: 28px;
+      background: #1a3326;
+      border-radius: 8px;
+      border: 1px solid #2a4a38;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .mockup-brand-name { font-size: 13px; font-weight: 600; color: #d0d0d0; }
+    .mockup-search {
+      background: #141414;
+      border: 1px solid #1e1e1e;
+      border-radius: 7px;
+      padding: 7px 10px;
+      font-size: 11px;
+      color: #444;
+      margin-bottom: 18px;
+    }
+    .mockup-section-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #404040;
+      margin-bottom: 8px;
+      padding: 0 4px;
+    }
+    .mockup-item {
+      font-size: 12px;
+      color: #606060;
+      padding: 7px 10px;
+      border-radius: 7px;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mockup-item-active {
+      background: #1a1a1a;
+      color: #e0e0e0;
+      font-weight: 500;
+    }
+    .mockup-item-icon { font-size: 11px; opacity: 0.5; flex-shrink: 0; }
+    .mockup-settings {
+      margin-top: auto;
+      font-size: 11px;
+      color: #404040;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    /* main area: 3 equal columns */
+    .mockup-panels {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      min-width: 0;
+    }
+    .mockup-panel {
+      border-right: 1px solid #1c1c1c;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .mockup-panel:last-child { border-right: none; }
+    .mockup-panel-header {
+      height: 48px;
+      border-bottom: 1px solid #1c1c1c;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .mockup-panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #c0c0c0;
+      letter-spacing: -0.2px;
+    }
+    .mockup-panel-action {
+      margin-left: auto;
+      font-size: 10px;
+      color: #404040;
+      border: 1px solid #242424;
+      border-radius: 5px;
+      padding: 3px 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .mockup-panel-body {
+      flex: 1;
+      padding: 20px;
+      overflow: hidden;
+    }
+    /* notes content */
+    .mockup-note-heading {
+      font-size: 13px;
+      font-weight: 700;
+      color: #d8d8d8;
+      margin-bottom: 4px;
+    }
+    .mockup-note-line {
+      font-size: 12px;
+      color: #585858;
+      line-height: 1.7;
+      margin-bottom: 2px;
+    }
+    .mockup-note-bullet {
+      font-size: 12px;
+      color: #505050;
+      line-height: 1.65;
+      padding-left: 14px;
+      position: relative;
+      margin-bottom: 3px;
+    }
+    .mockup-note-bullet::before { content: '•'; position: absolute; left: 0; color: #383838; }
+    /* transcript rows */
+    .mockup-tx-row { margin-bottom: 18px; }
+    .mockup-tx-meta { font-size: 11px; color: #484848; margin-bottom: 4px; }
+    .mockup-tx-text { font-size: 13px; color: #686868; line-height: 1.55; }
+    /* ai summary */
+    .mockup-ai-summary { font-size: 12px; color: #686868; line-height: 1.7; margin-bottom: 12px; }
+    .mockup-ai-heading { font-size: 13px; font-weight: 700; color: #d0d0d0; margin-bottom: 6px; margin-top: 14px; }
+    /* live pill */
+    .mockup-live {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      color: #ef5555;
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 999px;
+      padding: 2px 9px 2px 6px;
+    }
+    .mockup-live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 6px rgba(239,68,68,0.5);
+    }
+    /* faint glow overlay at top of mockup */
+    .mockup-glow {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 300px;
+      background: radial-gradient(ellipse 70% 60% at 65% 0%, rgba(16,185,129,0.09) 0%, transparent 70%);
+      pointer-events: none;
+    }
     .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
     .feature-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 20px; transition: border-color 0.15s ease; }
     .feature-card:hover { border-color: var(--border-hover); }
@@ -64,102 +275,147 @@
 </nav>
 
 <!-- ── HERO ── -->
-<section style="padding:112px 24px 72px;max-width:1024px;margin:0 auto;position:relative;">
-  <!-- Glow -->
-  <div aria-hidden="true" style="position:absolute;top:-60px;right:-80px;width:580px;height:580px;background:radial-gradient(circle,rgba(16,185,129,0.08) 0%,rgba(16,185,129,0.03) 40%,transparent 70%);pointer-events:none;filter:blur(80px);"></div>
-  <div style="max-width:580px;">
-    <p class="section-label" style="margin-bottom:20px;">Open Source · macOS · Apple Silicon</p>
-    <h1 style="font-size:clamp(2rem,5vw,3.25rem);font-weight:600;color:#fff;line-height:1.15;letter-spacing:-1px;margin-bottom:16px;">
-      AI meeting assistant.<br/>Everything stays on your Mac.
-    </h1>
-    <p style="font-size:1.05rem;color:var(--text-secondary);line-height:1.7;margin-bottom:32px;max-width:460px;">
-      Record, transcribe, summarize — entirely on your Mac. Whisper for transcription. Your LLM of choice. No cloud. No bots. No subscriptions.
-    </p>
-    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-      <button onclick="downloadLatest()" style="background:var(--accent);color:#fff;font-size:14px;font-weight:600;padding:10px 22px;border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-        Download for Mac
-      </button>
-      <a href="https://github.com/richling98/adamant" target="_blank" class="ghost-btn">
-        <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-        View on GitHub
-        <span id="star-count" style="font-size:11px;color:var(--text-muted);"></span>
-      </a>
-    </div>
-  </div>
+<section style="padding:112px 24px 72px;position:relative;">
+  <div style="max-width:1100px;margin:0 auto;">
 
-  <!-- App mockup -->
-  <div style="margin-top:48px;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-width:860px;">
-    <div style="background:#111;padding:10px 14px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border);">
-      <div style="width:10px;height:10px;border-radius:50%;background:#222;"></div>
-      <div style="width:10px;height:10px;border-radius:50%;background:#222;"></div>
-      <div style="width:10px;height:10px;border-radius:50%;background:#222;"></div>
-      <span style="font-size:11px;color:var(--text-muted);margin-left:10px;">Adamant</span>
-    </div>
-    <div style="display:flex;min-height:260px;">
-      <!-- Sidebar -->
-      <div style="width:156px;flex-shrink:0;background:#0d0d0d;border-right:1px solid var(--border);padding:12px;">
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:10px;">Meetings</div>
-        <div style="font-size:11px;color:#fff;padding:5px 8px;background:rgba(255,255,255,0.06);border-radius:4px;margin-bottom:2px;">Team Standup</div>
-        <div style="font-size:11px;color:var(--text-muted);padding:5px 8px;margin-bottom:2px;">1:1 with Sarah</div>
-        <div style="font-size:11px;color:var(--text-muted);padding:5px 8px;margin-bottom:2px;">Eng Review</div>
-        <div style="font-size:11px;color:var(--text-muted);padding:5px 8px;">Design Sync</div>
-      </div>
-      <!-- 3 panels -->
-      <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;">
-        <!-- Notes -->
-        <div style="border-right:1px solid var(--border);padding:16px;">
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:12px;">Notes</div>
-          <div style="font-size:10px;color:#444;margin-bottom:8px;">Team Standup · Apr 1</div>
-          <div style="font-size:11px;color:#555;line-height:1.8;">
-            - Auth refactor: target EOD Friday<br/>
-            - API docs owner → Marcus<br/>
-            - Q3 roadmap review moved to Thurs
-          </div>
-        </div>
-        <!-- Transcript -->
-        <div style="border-right:1px solid var(--border);padding:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Transcript</div>
-            <div style="display:flex;align-items:center;gap:4px;">
-              <div style="width:6px;height:6px;border-radius:50%;background:#ef4444;"></div>
-              <span style="font-size:9px;color:#ef4444;">Live</span>
-            </div>
-          </div>
-          <div>
-            <div style="margin-bottom:10px;">
-              <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">Sarah · 0:12</div>
-              <div style="font-size:11px;color:#555;line-height:1.6;">Let's go through the Q3 roadmap items...</div>
-            </div>
-            <div>
-              <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">Marcus · 0:48</div>
-              <div style="font-size:11px;color:#555;line-height:1.6;">Auth refactor is 90% done. Targeting end of sprint.</div>
-            </div>
-          </div>
-        </div>
-        <!-- Summary -->
-        <div style="padding:16px;">
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:12px;">Summary</div>
-          <div style="background:#0d0d0d;border:1px solid var(--border);border-radius:4px;padding:10px;margin-bottom:8px;">
-            <div style="font-size:9px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;">Key Decisions</div>
-            <div style="font-size:10px;color:#555;line-height:1.8;">
-              • Auth refactor ships end of sprint<br/>
-              • Q3 review deferred to Thursday<br/>
-              • Marcus leads API docs
-            </div>
-          </div>
-          <div style="background:#0d0d0d;border:1px solid var(--border);border-radius:4px;padding:10px;">
-            <div style="font-size:9px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;">Action Items</div>
-            <div style="font-size:10px;color:#555;line-height:1.8;">
-              • Finalize spec by Friday<br/>
-              • Unblock staging access
-            </div>
-          </div>
-        </div>
+    <!-- Copy: centered above mockup -->
+    <div style="text-align:center;max-width:680px;margin:0 auto 0;">
+      <p class="section-label" style="margin-bottom:20px;">Open Source · macOS · Apple Silicon</p>
+      <h1 style="font-size:clamp(2rem,5vw,3.3rem);font-weight:700;color:#fff;line-height:1.14;letter-spacing:-1px;margin-bottom:18px;">
+        AI meeting assistant.<br/>Everything stays on your Mac.
+      </h1>
+      <p style="font-size:1.06rem;color:var(--text-secondary);line-height:1.7;margin-bottom:34px;">
+        Record, transcribe, summarize — entirely on your Mac. Whisper for transcription. Your LLM of choice. No cloud. No bots. No subscriptions.
+      </p>
+      <div style="display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;">
+        <button onclick="downloadLatest()" style="background:linear-gradient(180deg,#15d47d,#10b981);color:#031a0e;font-size:14px;font-weight:700;padding:11px 26px;border:none;border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 28px rgba(16,185,129,0.3);">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          Download for Mac
+        </button>
+        <a href="https://github.com/richling98/adamant" target="_blank" class="ghost-btn">
+          <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          View on GitHub
+          <span id="star-count" style="font-size:11px;color:var(--text-muted);"></span>
+        </a>
       </div>
     </div>
+
+    <!-- App mockup: full width, generous proportions -->
+    <div class="mockup-frame">
+      <div class="mockup-glow"></div>
+
+      <!-- Title bar -->
+      <div class="mockup-titlebar">
+        <span class="mockup-dot mockup-dot-red"></span>
+        <span class="mockup-dot mockup-dot-yellow"></span>
+        <span class="mockup-dot mockup-dot-green"></span>
+        <span class="mockup-title">Adamant</span>
+      </div>
+
+      <!-- App body -->
+      <div class="mockup-body">
+
+        <!-- Sidebar -->
+        <div class="mockup-sidebar">
+          <div class="mockup-brand">
+            <div class="mockup-brand-icon" style="overflow:hidden;padding:0;">
+              <img src="logo.png" alt="Adamant" style="width:28px;height:28px;object-fit:cover;display:block;border-radius:7px;" />
+            </div>
+            <span class="mockup-brand-name">Adamant</span>
+          </div>
+          <div class="mockup-search">Search meeting content...</div>
+          <div class="mockup-item" style="color:#909090;margin-bottom:10px;">
+            <span class="mockup-item-icon">⌂</span> Home
+          </div>
+          <div class="mockup-section-label">Meeting Notes</div>
+          <div class="mockup-item mockup-item-active">
+            <span class="mockup-item-icon" style="opacity:1;">▪</span> Q2 Strategy Review
+          </div>
+          <div class="mockup-item"><span class="mockup-item-icon">▪</span> Team Standup</div>
+          <div class="mockup-item"><span class="mockup-item-icon">▪</span> 1:1 with Sarah</div>
+          <div class="mockup-item"><span class="mockup-item-icon">▪</span> Eng Review</div>
+          <div class="mockup-item"><span class="mockup-item-icon">▪</span> Design Sync</div>
+          <div class="mockup-item"><span class="mockup-item-icon">▪</span> Investor Call</div>
+          <div class="mockup-settings">
+            <span>⚙</span> Settings
+          </div>
+        </div>
+
+        <!-- Notes panel -->
+        <div class="mockup-panels">
+          <div class="mockup-panel">
+            <div class="mockup-panel-header">
+              <span class="mockup-panel-title">My Notes</span>
+              <span class="mockup-panel-action">
+                <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2" stroke-width="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke-width="2"/></svg>
+                Copy
+              </span>
+            </div>
+            <div class="mockup-panel-body">
+              <div class="mockup-note-heading">Key Decisions</div>
+              <div class="mockup-note-bullet">Roadmap locked for Q3. No scope additions until July.</div>
+              <div class="mockup-note-bullet">New eng hire approved — targeting senior backend.</div>
+              <div class="mockup-note-heading" style="margin-top:18px;">Action Items</div>
+              <div class="mockup-note-bullet">Marcus: finalize API migration spec by Friday</div>
+              <div class="mockup-note-bullet">Sarah: unblock staging environment access</div>
+              <div class="mockup-note-bullet">Team: review updated OKRs before Thursday</div>
+              <div class="mockup-note-heading" style="margin-top:18px;">Discussion Highlights</div>
+              <div class="mockup-note-line">The rollout timeline was discussed at length. Current pace requires shipping the auth refactor before the Q3 feature flag launch.</div>
+            </div>
+          </div>
+
+          <!-- Transcript panel -->
+          <div class="mockup-panel">
+            <div class="mockup-panel-header">
+              <span class="mockup-panel-title">Transcript</span>
+              <span class="mockup-live"><span class="mockup-live-dot"></span> Live</span>
+            </div>
+            <div class="mockup-panel-body">
+              <div class="mockup-tx-row">
+                <div class="mockup-tx-meta">[00:00] Sarah</div>
+                <div class="mockup-tx-text">Let's lock in the Q3 scope. We've been slipping on decisions and it's starting to affect velocity.</div>
+              </div>
+              <div class="mockup-tx-row">
+                <div class="mockup-tx-meta">[00:35] Marcus</div>
+                <div class="mockup-tx-text">Auth refactor is 90% done. I can ship it by end of sprint if we freeze the current branch.</div>
+              </div>
+              <div class="mockup-tx-row">
+                <div class="mockup-tx-meta">[00:54] Sarah</div>
+                <div class="mockup-tx-text">Good. Let's do that. Staging is the other blocker — who has access?</div>
+              </div>
+              <div class="mockup-tx-row">
+                <div class="mockup-tx-meta">[01:08] Maya</div>
+                <div class="mockup-tx-text">I can unblock that today. DevOps gave me the credentials last week.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Summary panel -->
+          <div class="mockup-panel">
+            <div class="mockup-panel-header">
+              <span class="mockup-panel-title">AI notes</span>
+              <span class="mockup-panel-action">
+                <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2" stroke-width="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke-width="2"/></svg>
+                Copy
+              </span>
+            </div>
+            <div class="mockup-panel-body">
+              <div class="mockup-ai-heading">Summary</div>
+              <div class="mockup-ai-summary">The team aligned on freezing Q3 scope and shipping the auth refactor before feature flag launch. Staging access was identified as a blocker and will be resolved today.</div>
+              <div class="mockup-ai-heading">Key Decisions</div>
+              <div class="mockup-note-bullet">Q3 scope is locked — no additions until July</div>
+              <div class="mockup-note-bullet">Auth refactor ships end of sprint</div>
+              <div class="mockup-note-bullet">Senior backend hire approved</div>
+              <div class="mockup-ai-heading">Action Items</div>
+              <div class="mockup-note-bullet">Marcus: finalize migration spec by Friday</div>
+              <div class="mockup-note-bullet">Maya: unblock staging access today</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
-  <p style="font-size:12px;color:var(--text-muted);margin-top:12px;">All processing happens locally on your Mac. Nothing is sent to any server.</p>
 </section>
 
 <!-- ── HOW IT WORKS ── -->
