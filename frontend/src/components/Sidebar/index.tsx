@@ -69,11 +69,13 @@ const Sidebar: React.FC = () => {
     model: '',
     whisperModel: '',
     apiKey: null,
+    hasApiKey: false,
     ollamaEndpoint: null
   });
   const [transcriptModelConfig, setTranscriptModelConfig] = useState<TranscriptModelProps>({
     provider: 'parakeet',
     model: 'parakeet-tdt-0.6b-v3-int8',
+    hasApiKey: true,
   });
   const [settingsSaveSuccess, setSettingsSaveSuccess] = useState<boolean | null>(null);
 
@@ -253,17 +255,6 @@ const Sidebar: React.FC = () => {
       try {
         const data = await invoke('api_get_model_config') as any;
         if (data && data.provider !== null) {
-          // Fetch API key if not included and provider requires it
-          if (data.provider !== 'ollama' && !data.apiKey) {
-            try {
-              const apiKeyData = await invoke('api_get_api_key', {
-                provider: data.provider
-              }) as string;
-              data.apiKey = apiKeyData;
-            } catch (err) {
-              console.error('Failed to fetch API key:', err);
-            }
-          }
           setModelConfig(data);
         }
       } catch (error) {
@@ -287,6 +278,7 @@ const Sidebar: React.FC = () => {
       try {
         const data = await invoke('api_get_transcript_config') as any;
         if (data && data.provider !== null) {
+          data.apiKey = null;
           setTranscriptModelConfig(data);
         }
       } catch (error) {
@@ -325,7 +317,7 @@ const Sidebar: React.FC = () => {
         provider: config.provider,
         model: config.model,
         whisperModel: config.whisperModel,
-        apiKey: config.apiKey,
+        apiKey: config.apiKey ?? null,
         ollamaEndpoint: config.ollamaEndpoint,
       });
 

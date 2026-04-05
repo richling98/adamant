@@ -13,7 +13,8 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
     provider: 'ollama',
     model: '', // Empty until loaded from DB
-    whisperModel: 'large-v3'
+    whisperModel: 'large-v3',
+    hasApiKey: false,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [, setError] = useState<string>('');
@@ -30,20 +31,9 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
             provider: data.provider,
             model: data.model,
             whisperModel: data.whisperModel,
-            hasApiKey: !!data.apiKey,
+            hasApiKey: Boolean(data.hasApiKey),
             ollamaEndpoint: data.ollamaEndpoint || 'default'
           });
-          // Fetch API key if not included and provider requires it
-          if (data.provider !== 'ollama' && data.provider !== 'custom-openai' && !data.apiKey) {
-            try {
-              const apiKeyData = await invokeTauri('api_get_api_key', {
-                provider: data.provider
-              }) as string;
-              data.apiKey = apiKeyData;
-            } catch (err) {
-              console.error('Failed to fetch API key:', err);
-            }
-          }
 
           // Fetch custom OpenAI config if provider is custom-openai
           if (data.provider === 'custom-openai') {
@@ -53,7 +43,8 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
                 data.customOpenAIDisplayName = customConfig.displayName || null;
                 data.customOpenAIEndpoint = customConfig.endpoint || null;
                 data.customOpenAIModel = customConfig.model || null;
-                data.customOpenAIApiKey = customConfig.apiKey || null;
+                data.customOpenAIApiKey = null;
+                data.hasApiKey = Boolean(customConfig.hasApiKey);
                 data.maxTokens = customConfig.maxTokens || null;
                 data.temperature = customConfig.temperature || null;
                 data.topP = customConfig.topP || null;
@@ -114,6 +105,7 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
         model: configToSave.model,
         whisperModel: configToSave.whisperModel,
         apiKey: configToSave.apiKey ?? null,
+        hasApiKey: configToSave.hasApiKey ?? false,
         ollamaEndpoint: configToSave.ollamaEndpoint ?? null
       };
       console.debug('Saving model config with payload:', payload);

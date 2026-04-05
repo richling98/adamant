@@ -86,14 +86,16 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
     provider: 'ollama',
     model: 'llama3.2:latest',
-    whisperModel: 'large-v3'
+    whisperModel: 'large-v3',
+    hasApiKey: false,
   });
 
   // Transcript model configuration state
   const [transcriptModelConfig, setTranscriptModelConfig] = useState<TranscriptModelProps>({
     provider: 'parakeet',
     model: 'parakeet-tdt-0.6b-v3-int8',
-    apiKey: null
+    apiKey: null,
+    hasApiKey: true,
   });
 
   // Ollama models list and error state
@@ -201,12 +203,13 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
             '[ConfigContext] Loaded saved transcript config: provider=%s model=%s hasKey=%s',
             config.provider,
             config.model,
-            Boolean(config.apiKey)
+            Boolean(config.hasApiKey)
           );
           setTranscriptModelConfig({
             provider: config.provider || 'parakeet',
             model: config.model || 'parakeet-tdt-0.6b-v3-int8',
-            apiKey: config.apiKey || null
+            apiKey: null,
+            hasApiKey: Boolean(config.hasApiKey)
           });
         }
       } catch (error) {
@@ -232,16 +235,17 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
                   '[ConfigContext] Loading custom OpenAI config: endpoint=%s model=%s hasKey=%s',
                   customConfig.endpoint,
                   customConfig.model,
-                  Boolean(customConfig.apiKey)
+                  Boolean(customConfig.hasApiKey)
                 );
                 setModelConfig(prev => ({
                   ...prev,
                   provider: data.provider,
                   model: customConfig.model || data.model || prev.model,
                   whisperModel: data.whisperModel || prev.whisperModel,
+                  hasApiKey: Boolean(customConfig.hasApiKey),
                   customOpenAIEndpoint: customConfig.endpoint,
                   customOpenAIModel: customConfig.model,
-                  customOpenAIApiKey: customConfig.apiKey,
+                  customOpenAIApiKey: null,
                   maxTokens: customConfig.maxTokens,
                   temperature: customConfig.temperature,
                   topP: customConfig.topP,
@@ -259,6 +263,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
             provider: data.provider,
             model: data.model || prev.model,
             whisperModel: data.whisperModel || prev.whisperModel,
+            hasApiKey: Boolean(data.hasApiKey),
           }));
         }
       } catch (error) {

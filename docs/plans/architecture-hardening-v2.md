@@ -1,6 +1,6 @@
 # Architecture Hardening Plan V2
 
-**Overall Progress:** `20%`
+**Overall Progress:** `27%`
 
 ## TLDR
 This is a safer version of the remediation plan for the 10 CTO-level findings. The core change is not "fix everything at once," but "reduce risk in controlled waves with dependency gates, rollback points, and explicit proof before each high-blast-radius migration."
@@ -100,11 +100,11 @@ Do not delete legacy files until all of the following are true:
   - [x] 🟩 Add a developer-only verbose mode gated behind explicit opt-in.
   - [x] 🟩 Add detection for accidental `console.log`, `print`, or transcript-content logging in production paths.
 
-- [ ] 🟥 **Step 4: Redesign Secret APIs Without Migrating Secrets Yet**
-  - [ ] 🟥 Add new Tauri command shapes for `has_key`, `save_key`, `delete_key`, and `test_key`.
-  - [ ] 🟥 Keep old raw-key APIs temporarily for compatibility, but mark them deprecated and internally trace their remaining callers.
-  - [ ] 🟥 Update settings UI to use masked-state semantics instead of expecting raw secrets back.
-  - [ ] 🟥 Split custom OpenAI config into secret and non-secret handling so endpoint/model survive independently of the API key.
+- [x] 🟩 **Step 4: Redesign Secret APIs Without Migrating Secrets Yet**
+  - [x] 🟩 Add new Tauri command shapes for `has_key` and `test_key`, while preserving existing save/delete compatibility paths for this wave.
+  - [x] 🟩 Keep old raw-key APIs temporarily for compatibility, but mark them deprecated and internally trace their remaining callers.
+  - [x] 🟩 Update settings UI to use masked-state semantics instead of expecting raw secrets back.
+  - [x] 🟩 Split custom OpenAI config into secret and non-secret handling so endpoint/model survive independently of the API key.
 
 - [ ] 🟥 **Step 5: Introduce Keychain Storage Behind A Compatibility Layer**
   - [ ] 🟥 Evaluate `tauri-plugin-stronghold` (encrypted local vault) and `tauri-plugin-store` (persistent KV) as the implementation vehicle before building a custom abstraction — prefer existing Tauri plugins over custom code.
@@ -351,7 +351,7 @@ This section explains the whole plan in plain English.
 
 - Do we want Python to survive as a local worker, or is full retirement a real target? *(Decide before Wave 3)*
 - Which current release channels and user cohorts are most likely to have mixed DB states? *(Decide before Wave 4)*
-- **[Gate A blocker]** Do we want a temporary feature flag to fall back to DB-stored secrets if keychain fails? Options: (a) feature flag fallback to DB, (b) user re-entry flow with clear error, (c) stronghold as universal fallback eliminating the question. Must be decided and recorded before Step 5 begins.
+- **[Resolved in ADR-001]** Keychain fallback strategy: no DB-secret fallback after migration begins. Prefer platform keychain first, Stronghold as the universal encrypted fallback, and use a user-visible re-entry/remediation flow if secure storage still fails.
 - How much backward compatibility do we want to preserve for current internal debug workflows? *(Decide before Wave 1 Step 3)*
 
 ## Recommended First Implementation Slice

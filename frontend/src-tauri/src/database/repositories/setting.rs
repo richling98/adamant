@@ -139,6 +139,28 @@ impl SettingsRepository {
         Ok(api_key)
     }
 
+    pub async fn has_api_key(
+        pool: &SqlitePool,
+        provider: &str,
+    ) -> std::result::Result<bool, sqlx::Error> {
+        if provider == "custom-openai" {
+            let config = Self::get_custom_openai_config(pool).await?;
+            return Ok(config
+                .and_then(|c| c.api_key)
+                .map(|key| !key.trim().is_empty())
+                .unwrap_or(false));
+        }
+
+        if provider == "builtin-ai" {
+            return Ok(true);
+        }
+
+        Ok(Self::get_api_key(pool, provider)
+            .await?
+            .map(|key| !key.trim().is_empty())
+            .unwrap_or(false))
+    }
+
     pub async fn get_transcript_config(
         pool: &SqlitePool,
     ) -> std::result::Result<Option<TranscriptSetting>, sqlx::Error> {
@@ -229,6 +251,20 @@ impl SettingsRepository {
         );
         let api_key = sqlx::query_scalar(&query).fetch_optional(pool).await?;
         Ok(api_key)
+    }
+
+    pub async fn has_transcript_api_key(
+        pool: &SqlitePool,
+        provider: &str,
+    ) -> std::result::Result<bool, sqlx::Error> {
+        if matches!(provider, "localWhisper" | "parakeet") {
+            return Ok(true);
+        }
+
+        Ok(Self::get_transcript_api_key(pool, provider)
+            .await?
+            .map(|key| !key.trim().is_empty())
+            .unwrap_or(false))
     }
 
     pub async fn delete_api_key(
@@ -344,5 +380,107 @@ impl SettingsRepository {
         .await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn test_pool() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .connect("sqlite::memory:")
+            .await
+            .expect("Failed to create in-memory SQLite pool");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS settings (
+                id TEXT PRIMARY KEY,
+                provider TEXT NOT NULL DEFAULT 'openai',
+                model TEXT NOT NULL DEFAULT 'gpt-4o-2024-11-20',
+                whisperModel TEXT NOT NULL DEFAULT 'large-v3',
+                openaiApiKey TEXT,
+                anthropicApiKey TEXT,
+                groqApiKey TEXT,
+                openRouterApiKey TEXT,
+                ollamaApiKey TEXT,
+                ollamaEndpoint TEXT,
+                customOpenAIConfig TEXT
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("Failed to create settings table");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS transcript_settings (
+                id TEXT PRIMARY KEY,
+                provider TEXT NOT NULL DEFAULT 'parakeet',
+                model TEXT NOT NULL DEFAULT 'parakeet-tdt-0.6b-v3-int8',
+                whisperApiKey TEXT,
+                deepgramApiKey TEXT,
+                elevenLabsApiKey TEXT,
+                groqApiKey TEXT,
+                openaiApiKey TEXT
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("Failed to create transcript_settings table");
+
+        pool
+    }
+
+    #[tokio::test]
+    async fn test_has_api_key_returns_false_when_no_key() {
+        let pool = test_pool().await;
+        let result = SettingsRepository::has_api_key(&pool, "openai")
+            .await
+            .unwrap();
+        assert!(!result);
+    }
+
+    #[tokio::test]
+    async fn test_has_api_key_returns_true_when_key_set() {
+        let pool = test_pool().await;
+        SettingsRepository::save_api_key(&pool, "openai", "sk-test-key-123")
+            .await
+            .unwrap();
+        let result = SettingsRepository::has_api_key(&pool, "openai")
+            .await
+            .unwrap();
+        assert!(result);
+    }
+
+    #[tokio::test]
+    async fn test_has_api_key_returns_false_after_delete() {
+        let pool = test_pool().await;
+        SettingsRepository::save_api_key(&pool, "openai", "sk-test-key-123")
+            .await
+            .unwrap();
+        SettingsRepository::delete_api_key(&pool, "openai")
+            .await
+            .unwrap();
+        let result = SettingsRepository::has_api_key(&pool, "openai")
+            .await
+            .unwrap();
+        assert!(!result);
+    }
+
+    #[tokio::test]
+    async fn test_has_transcript_api_key_returns_true_when_key_set() {
+        let pool = test_pool().await;
+        SettingsRepository::save_transcript_api_key(&pool, "deepgram", "dg-test-key")
+            .await
+            .unwrap();
+        let result = SettingsRepository::has_transcript_api_key(&pool, "deepgram")
+            .await
+            .unwrap();
+        assert!(result);
     }
 }

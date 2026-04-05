@@ -23,6 +23,11 @@ Tauri (Rust) is the sole owner of all API key secrets. Secrets are stored in the
 key value is ever returned to a React component. UI components receive only a boolean
 presence/masked indicator.
 
+Keychain fallback decision: we do not keep a long-term feature-flag fallback to DB-stored
+secrets. If the platform keychain is unavailable or write verification fails, Adamant uses
+Stronghold as the universal encrypted fallback. If neither secure path succeeds, the user is
+shown a re-entry/remediation flow instead of silently retaining plaintext secrets in SQLite.
+
 ### Persistence
 Tauri SQLite (sqlx) is the canonical store for all user data: meetings, notes, transcripts,
 summaries, settings, folders. The Python FastAPI backend moves toward a stateless worker role

@@ -13,6 +13,7 @@ export interface ModelConfig {
   model: string;
   whisperModel: string;
   apiKey?: string | null;
+  hasApiKey?: boolean;
   ollamaEndpoint?: string | null;
   // Custom OpenAI fields (only populated when provider is 'custom-openai')
   customOpenAIEndpoint?: string | null;
@@ -26,6 +27,7 @@ export interface ModelConfig {
 export interface CustomOpenAIConfig {
   endpoint: string;
   apiKey: string | null;
+  hasApiKey: boolean;
   model: string;
   maxTokens: number | null;
   temperature: number | null;

@@ -40,12 +40,13 @@ export default function SettingsPage() {
             'Loaded saved transcript config: provider=%s model=%s hasKey=%s',
             config.provider,
             config.model,
-            Boolean(config.apiKey)
+            Boolean(config.hasApiKey)
           );
           setTranscriptModelConfig({
             provider: config.provider || 'localWhisper',
             model: config.model || 'large-v3',
-            apiKey: config.apiKey || null
+            apiKey: null,
+            hasApiKey: Boolean(config.hasApiKey)
           });
         }
       } catch (error) {

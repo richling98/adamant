@@ -13,6 +13,7 @@ export interface TranscriptModelProps {
     provider: 'localWhisper' | 'parakeet' | 'deepgram' | 'elevenLabs' | 'groq' | 'openai';
     model: string;
     apiKey?: string | null;
+    hasApiKey?: boolean;
 }
 
 export interface TranscriptSettingsProps {
@@ -22,28 +23,33 @@ export interface TranscriptSettingsProps {
 }
 
 export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelConfig, onModelSelect }: TranscriptSettingsProps) {
-    const [apiKey, setApiKey] = useState<string | null>(transcriptModelConfig.apiKey || null);
+    const [apiKey, setApiKey] = useState<string>('');
     const [showApiKey, setShowApiKey] = useState<boolean>(false);
-    const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
+    const [hasStoredApiKey, setHasStoredApiKey] = useState<boolean>(Boolean(transcriptModelConfig.hasApiKey));
+    const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(Boolean(transcriptModelConfig.hasApiKey));
     const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
     const [selectedWhisperModel, setSelectedWhisperModel] = useState<string>(transcriptModelConfig.provider === 'localWhisper' ? transcriptModelConfig.model : 'small');
     const [selectedParakeetModel, setSelectedParakeetModel] = useState<string>(transcriptModelConfig.provider === 'parakeet' ? transcriptModelConfig.model : 'parakeet-tdt-0.6b-v2-int8');
 
     useEffect(() => {
         if (transcriptModelConfig.provider === 'localWhisper' || transcriptModelConfig.provider === 'parakeet') {
-            setApiKey(null);
+            setApiKey('');
+            setHasStoredApiKey(true);
+            setIsApiKeyLocked(false);
         }
     }, [transcriptModelConfig.provider]);
 
     const fetchApiKey = async (provider: string) => {
         try {
-
-            const data = await invoke('api_get_transcript_api_key', { provider }) as string;
-
-            setApiKey(data || '');
+            const data = await invoke('api_has_transcript_key', { provider }) as boolean;
+            setHasStoredApiKey(Boolean(data));
+            setApiKey('');
+            setIsApiKeyLocked(Boolean(data));
         } catch (err) {
-            console.error('Error fetching API key:', err);
-            setApiKey(null);
+            console.error('Error checking API key presence:', err);
+            setHasStoredApiKey(false);
+            setApiKey('');
+            setIsApiKeyLocked(false);
         }
     };
     const modelOptions = {
@@ -55,6 +61,10 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
         openai: ['gpt-4o'],
     };
     const requiresApiKey = transcriptModelConfig.provider === 'deepgram' || transcriptModelConfig.provider === 'elevenLabs' || transcriptModelConfig.provider === 'openai' || transcriptModelConfig.provider === 'groq';
+
+    useEffect(() => {
+        setHasStoredApiKey(Boolean(transcriptModelConfig.hasApiKey));
+    }, [transcriptModelConfig.hasApiKey]);
 
     const handleInputClick = () => {
         if (isApiKeyLocked) {
@@ -108,7 +118,13 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                 onValueChange={(value) => {
                                     const provider = value as TranscriptModelProps['provider'];
                                     const newModel = provider === 'localWhisper' ? selectedWhisperModel : modelOptions[provider][0];
-                                    setTranscriptModelConfig({ ...transcriptModelConfig, provider, model: newModel });
+                                    setTranscriptModelConfig({
+                                        ...transcriptModelConfig,
+                                        provider,
+                                        model: newModel,
+                                        apiKey: null,
+                                        hasApiKey: provider === 'localWhisper' || provider === 'parakeet'
+                                    });
                                     if (provider !== 'localWhisper') {
                                         fetchApiKey(provider);
                                     }
@@ -180,13 +196,13 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                     type={showApiKey ? "text" : "password"}
                                     className={`pr-24 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isApiKeyLocked ? 'bg-white/5 cursor-not-allowed' : ''
                                         }`}
-                                    value={apiKey || ''}
+                                    value={isApiKeyLocked && hasStoredApiKey ? '••••••••••••' : apiKey}
                                     onChange={(e) => setApiKey(e.target.value)}
                                     disabled={isApiKeyLocked}
                                     onClick={handleInputClick}
-                                    placeholder="Enter your API key"
+                                    placeholder={hasStoredApiKey ? "Stored securely. Enter a new key only to replace it." : "Enter your API key"}
                                 />
-                                {isApiKeyLocked && (
+                                {isApiKeyLocked && hasStoredApiKey && (
                                     <div
                                         onClick={handleInputClick}
                                         className="absolute inset-0 flex items-center justify-center bg-white/5 bg-opacity-50 rounded-md cursor-not-allowed"
@@ -197,7 +213,13 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        onClick={() => setIsApiKeyLocked(!isApiKeyLocked)}
+                                        onClick={() => {
+                                            const nextLocked = !isApiKeyLocked;
+                                            setIsApiKeyLocked(nextLocked);
+                                            if (!nextLocked) {
+                                                setApiKey('');
+                                            }
+                                        }}
                                         className={`transition-colors duration-200 ${isLockButtonVibrating ? 'animate-vibrate text-red-500' : ''
                                             }`}
                                         title={isApiKeyLocked ? "Unlock to edit" : "Lock to prevent editing"}
@@ -221,9 +243,6 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
         </div>
     )
 }
-
-
-
 
 
 
