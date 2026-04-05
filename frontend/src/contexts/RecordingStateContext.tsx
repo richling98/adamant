@@ -71,7 +71,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
 
   // NEW: Status setter with logging
   const setStatus = useCallback((status: RecordingStatus, message?: string) => {
-    console.log(`[RecordingState] Status: ${state.status} → ${status}`, message || '');
+    console.debug(`[RecordingState] Status: ${state.status} → ${status}`, message || '');
 
     setState(prev => ({
       ...prev,
@@ -97,7 +97,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
         activeDuration: backendState.active_duration,
       }));
 
-      console.log('[RecordingStateContext] Synced with backend:', backendState);
+      console.debug('[RecordingStateContext] Synced with backend:', backendState);
     } catch (error) {
       console.error('[RecordingStateContext] Failed to sync with backend:', error);
       // Don't update state on error - keep current state
@@ -112,7 +112,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
       clearInterval(pollingIntervalRef.current);
     }
 
-    console.log('[RecordingStateContext] Starting state polling (500ms interval)');
+    console.debug('[RecordingStateContext] Starting state polling (500ms interval)');
     pollingIntervalRef.current = setInterval(syncWithBackend, 500);
   };
 
@@ -121,7 +121,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
    */
   const stopPolling = () => {
     if (pollingIntervalRef.current) {
-      console.log('[RecordingStateContext] Stopping state polling');
+      console.debug('[RecordingStateContext] Stopping state polling');
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
@@ -131,14 +131,14 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
    * Set up event listeners for backend state changes
    */
   useEffect(() => {
-    console.log('[RecordingStateContext] Setting up event listeners');
+    console.debug('[RecordingStateContext] Setting up event listeners');
     const unsubscribers: (() => void)[] = [];
 
     const setupListeners = async () => {
       try {
         // Recording started
         const unlistenStarted = await recordingService.onRecordingStarted(() => {
-          console.log('[RecordingStateContext] Recording started event');
+          console.debug('[RecordingStateContext] Recording started event');
           setState(prev => ({
             ...prev,
             isRecording: true,
@@ -152,7 +152,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
 
         // Recording stopped
         const unlistenStopped = await recordingService.onRecordingStopped((payload) => {
-          console.log('[RecordingStateContext] Recording stopped event:', payload);
+          console.debug('[RecordingStateContext] Recording stopped event:', payload);
           setState(prev => {
             // Set status to STOPPING if not already in stop flow
             // This ensures smooth UI transition for tray/keyboard stops
@@ -181,7 +181,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
 
         // Recording paused
         const unlistenPaused = await recordingService.onRecordingPaused(() => {
-          console.log('[RecordingStateContext] Recording paused event');
+          console.debug('[RecordingStateContext] Recording paused event');
           setState(prev => ({
             ...prev,
             isPaused: true,
@@ -192,7 +192,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
 
         // Recording resumed
         const unlistenResumed = await recordingService.onRecordingResumed(() => {
-          console.log('[RecordingStateContext] Recording resumed event');
+          console.debug('[RecordingStateContext] Recording resumed event');
           setState(prev => ({
             ...prev,
             isPaused: false,
@@ -201,7 +201,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
         });
         unsubscribers.push(unlistenResumed);
 
-        console.log('[RecordingStateContext] Event listeners set up successfully');
+        console.debug('[RecordingStateContext] Event listeners set up successfully');
       } catch (error) {
         console.error('[RecordingStateContext] Failed to set up event listeners:', error);
       }
@@ -210,7 +210,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
     setupListeners();
 
     return () => {
-      console.log('[RecordingStateContext] Cleaning up event listeners');
+      console.debug('[RecordingStateContext] Cleaning up event listeners');
       unsubscribers.forEach(unsub => unsub());
       stopPolling();
     };
@@ -221,7 +221,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
    * If backend is recording but UI state is false, this will correct it
    */
   useEffect(() => {
-    console.log('[RecordingStateContext] Initial mount - syncing with backend');
+    console.debug('[RecordingStateContext] Initial mount - syncing with backend');
     syncWithBackend();
   }, []);
 

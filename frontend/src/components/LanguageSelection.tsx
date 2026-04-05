@@ -141,7 +141,7 @@ export function LanguageSelection({
       // Save language preference to backend
       await invoke('set_language_preference', { language: languageCode });
       onLanguageChange(languageCode);
-      console.log('Language preference saved:', languageCode);
+      console.debug('Language preference saved:', languageCode);
 
       // Track language selection analytics
       const selectedLang = LANGUAGES.find(lang => lang.code === languageCode);

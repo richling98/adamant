@@ -48,7 +48,7 @@ export class UpdateService {
     if (!force && this.lastCheckTime) {
       const timeSinceLastCheck = Date.now() - this.lastCheckTime;
       if (timeSinceLastCheck < this.CHECK_INTERVAL_MS) {
-        console.log('Skipping update check - checked recently');
+        console.debug('Skipping update check - checked recently');
         return {
           available: false,
           currentVersion: await getVersion(),

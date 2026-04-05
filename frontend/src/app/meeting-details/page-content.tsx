@@ -59,7 +59,7 @@ export default function PageContent({
   loadedCount?: number;
   onLoadMore?: () => void;
 }) {
-  console.log('📄 PAGE CONTENT: Initializing with data:', {
+  console.debug('📄 PAGE CONTENT: Initializing with data:', {
     meetingId: meeting.id,
     summaryDataKeys: summaryData ? Object.keys(summaryData) : null,
     transcriptsCount: meeting.transcripts?.length,
@@ -315,7 +315,7 @@ export default function PageContent({
 
     const autoGenerate = async () => {
       if (shouldAutoGenerate && meetingData.transcripts.length > 0 && !cancelled && !isTemplateLoading) {
-        console.log(`🤖 Auto-generating summary with ${modelConfig.provider}/${modelConfig.model}...`);
+        console.debug(`🤖 Auto-generating summary with ${modelConfig.provider}/${modelConfig.model}...`);
         await handleGenerateSummary();
 
         // Notify parent that auto-generation is complete (only if not cancelled)

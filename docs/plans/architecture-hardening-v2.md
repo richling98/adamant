@@ -1,6 +1,6 @@
 # Architecture Hardening Plan V2
 
-**Overall Progress:** `13%`
+**Overall Progress:** `20%`
 
 ## TLDR
 This is a safer version of the remediation plan for the 10 CTO-level findings. The core change is not "fix everything at once," but "reduce risk in controlled waves with dependency gates, rollback points, and explicit proof before each high-blast-radius migration."
@@ -94,11 +94,11 @@ Do not delete legacy files until all of the following are true:
   - [x] 🟩 Map every place recording state is synchronized by event, polling, or both.
   - [x] 🟩 Classify legacy code into: not compiled, compiled but unused, indirectly used, or uncertain.
 
-- [ ] 🟥 **Step 3: Build Privacy-Safe Observability Before Removing Debugging**
-  - [ ] 🟥 Introduce a shared logging policy for Rust, Python, and frontend.
-  - [ ] 🟥 Replace transcript and summary content logging with metadata-only structured logs.
-  - [ ] 🟥 Add a developer-only verbose mode gated behind explicit opt-in.
-  - [ ] 🟥 Add detection for accidental `console.log`, `print`, or transcript-content logging in production paths.
+- [x] 🟩 **Step 3: Build Privacy-Safe Observability Before Removing Debugging**
+  - [x] 🟩 Introduce a shared logging policy for Rust, Python, and frontend.
+  - [x] 🟩 Replace transcript and summary content logging with metadata-only structured logs.
+  - [x] 🟩 Add a developer-only verbose mode gated behind explicit opt-in.
+  - [x] 🟩 Add detection for accidental `console.log`, `print`, or transcript-content logging in production paths.
 
 - [ ] 🟥 **Step 4: Redesign Secret APIs Without Migrating Secrets Yet**
   - [ ] 🟥 Add new Tauri command shapes for `has_key`, `save_key`, `delete_key`, and `test_key`.

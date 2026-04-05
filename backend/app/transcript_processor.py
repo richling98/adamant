@@ -206,7 +206,11 @@ class TranscriptProcessor:
                             # If it's a string (JSON), validate it
                             summary_result = SummaryResponse.model_validate_json(response)
                             
-                        logger.info(f"Summary result for chunk {i+1}: {summary_result}")
+                        if os.environ.get("ADAMANT_VERBOSE"):
+                            logger.debug(f"Summary content for chunk {i+1}: {summary_result}")  # ADAMANT_VERBOSE
+                        logger.info(
+                            f"Chunk {i+1} result type={type(summary_result).__name__}"
+                        )
                         logger.info(f"Summary result type for chunk {i+1}: {type(summary_result)}")
 
                     if hasattr(summary_result, 'data') and isinstance(summary_result.data, SummaryResponse):
@@ -265,12 +269,14 @@ class TranscriptProcessor:
             full_response = ""
             async for part in response:
                 content = part['message']['content']
-                print(content, end='', flush=True)
+                if os.environ.get("ADAMANT_VERBOSE"):
+                    print(content, end='', flush=True)  # ADAMANT_VERBOSE
                 full_response += content
             
             try:
                 summary = SummaryResponse.model_validate_json(full_response)
-                print("\n", summary.model_dump_json(indent=2), type(summary))
+                if os.environ.get("ADAMANT_VERBOSE"):
+                    print("\n", summary.model_dump_json(indent=2), type(summary))  # ADAMANT_VERBOSE
                 return summary
             except Exception as e:
                 print(f"\nError parsing response: {e}")

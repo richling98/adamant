@@ -246,7 +246,7 @@ const Sidebar: React.FC = () => {
     const fetchModelConfig = async () => {
       // Only make API call if serverAddress is loaded
       if (!serverAddress) {
-        console.log('Waiting for server address to load before fetching model config');
+        console.debug('Waiting for server address to load before fetching model config');
         return;
       }
 
@@ -280,7 +280,7 @@ const Sidebar: React.FC = () => {
     const fetchTranscriptSettings = async () => {
       // Only make API call if serverAddress is loaded
       if (!serverAddress) {
-        console.log('Waiting for server address to load before fetching transcript settings');
+        console.debug('Waiting for server address to load before fetching transcript settings');
         return;
       }
 
@@ -301,7 +301,7 @@ const Sidebar: React.FC = () => {
     const setupListener = async () => {
       const { listen } = await import('@tauri-apps/api/event');
       const unlisten = await listen<ModelConfig>('model-config-updated', (event) => {
-        console.log('Sidebar received model-config-updated event:', event.payload);
+        console.debug('Sidebar received model-config-updated event:', event.payload);
         setModelConfig(event.payload);
       });
 
@@ -330,7 +330,7 @@ const Sidebar: React.FC = () => {
       });
 
       setModelConfig(config);
-      console.log('Model config saved successfully');
+      console.debug('Model config saved successfully');
       setSettingsSaveSuccess(true);
 
       // Emit event to sync other components
@@ -353,7 +353,7 @@ const Sidebar: React.FC = () => {
         model: configToSave.model,
         apiKey: configToSave.apiKey ?? null
       };
-      console.log('Saving transcript config with payload:', payload);
+      console.debug('Saving transcript config with payload:', payload);
 
       await invoke('api_save_transcript_config', {
         provider: payload.provider,
@@ -455,7 +455,7 @@ const Sidebar: React.FC = () => {
 
 
   const handleDelete = async (itemId: string) => {
-    console.log('Deleting item:', itemId);
+    console.debug('Deleting item:', itemId);
     const payload = {
       meetingId: itemId
     };
@@ -465,7 +465,7 @@ const Sidebar: React.FC = () => {
       await invoke('api_delete_meeting', {
         meetingId: itemId,
       });
-      console.log('Meeting deleted successfully');
+      console.debug('Meeting deleted successfully');
       const updatedMeetings = meetings.filter((m: CurrentMeeting) => m.id !== itemId);
       setMeetings(updatedMeetings);
 

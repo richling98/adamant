@@ -101,7 +101,7 @@ function MeetingDetailsContent() {
     try {
       const models = await invoke('get_ollama_models', { endpoint: null }) as any[];
       const hasGemma = models.some((m: any) => m.name === 'gemma3:1b');
-      console.log('🔍 Checked for gemma3:1b:', hasGemma);
+      console.debug('🔍 Checked for gemma3:1b:', hasGemma);
       return hasGemma;
     } catch (error) {
       console.error('❌ Failed to check Ollama models:', error);
@@ -115,14 +115,14 @@ function MeetingDetailsContent() {
 
     // Only auto-generate if navigated from recording
     if (source !== 'recording') {
-      console.log('Not from recording navigation, skipping auto-generation');
+      console.debug('Not from recording navigation, skipping auto-generation');
       setHasCheckedAutoGen(true);
       return;
     }
 
     // Respect user's auto-summary toggle preference
     if (!isAutoSummary) {
-      console.log('Auto-summary is disabled in settings');
+      console.debug('Auto-summary is disabled in settings');
       setHasCheckedAutoGen(true);
       return;
     }
@@ -133,7 +133,7 @@ function MeetingDetailsContent() {
 
       // If DB already has a model, use it (never override!)
       if (currentConfig && currentConfig.model) {
-        console.log('Using existing model from DB:', currentConfig.model);
+        console.debug('Using existing model from DB:', currentConfig.model);
         setShouldAutoGenerate(true);
         setHasCheckedAutoGen(true);
         return;
@@ -143,7 +143,7 @@ function MeetingDetailsContent() {
       const hasGemma = await checkForGemmaModel();
 
       if (hasGemma) {
-        console.log('💾 DB empty, using gemma3:1b as initial default');
+        console.debug('💾 DB empty, using gemma3:1b as initial default');
 
         await invoke('api_save_model_config', {
           provider: 'ollama',
@@ -155,7 +155,7 @@ function MeetingDetailsContent() {
 
         setShouldAutoGenerate(true);
       } else {
-        console.log('⚠️ No model configured and gemma3:1b not found');
+        console.debug('⚠️ No model configured and gemma3:1b not found');
       }
     } catch (error) {
       console.error('❌ Failed to setup auto-generation:', error);
@@ -172,7 +172,7 @@ function MeetingDetailsContent() {
     }
 
     if (metadata) {
-      console.log('Meeting metadata loaded:', metadata);
+      console.debug('Meeting metadata loaded:', metadata);
 
       // Build meeting details from metadata and paginated transcripts
       setMeetingDetails({
@@ -208,7 +208,7 @@ function MeetingDetailsContent() {
       }
 
       if (updatedMeetingId === meetingId) {
-        console.log('Detected transcript update for current meeting; refetching paginated transcripts...');
+        console.debug('Detected transcript update for current meeting; refetching paginated transcripts...');
         refetchTranscripts();
       }
     };
@@ -241,7 +241,12 @@ function MeetingDetailsContent() {
         meetingId: effectiveMeetingId,
       }) as any;
 
-      console.log('FETCH SUMMARY: Raw response:', summary);
+      console.debug(
+        'FETCH SUMMARY: status=%s hasData=%s hasError=%s',
+        summary.status,
+        Boolean(summary.data),
+        Boolean(summary.error)
+      );
 
       if (summary.status === 'idle' || (!summary.data && summary.status === 'error')) {
         console.warn('Meeting summary not found or no summary generated yet:', summary.error || 'idle');
@@ -260,7 +265,10 @@ function MeetingDetailsContent() {
         }
       }
 
-      console.log('🔍 FETCH SUMMARY: Parsed data:', parsedData);
+      console.debug(
+        'FETCH SUMMARY: parsed data keys=%s',
+        Object.keys(parsedData || {}).join(',')
+      );
 
       if (parsedData.summary_json) {
         setMeetingSummary(parsedData as any);
@@ -272,13 +280,13 @@ function MeetingDetailsContent() {
         return;
       }
 
-      console.log('LEGACY FORMAT: Detected legacy format, applying section formatting');
+      console.debug('LEGACY FORMAT: Detected legacy format, applying section formatting');
 
       const { MeetingName, _section_order, ...restSummaryData } = parsedData;
       const formattedSummary: Summary = {};
       const sectionKeys = _section_order || Object.keys(restSummaryData);
 
-      console.log('LEGACY FORMAT: Processing sections:', sectionKeys);
+      console.debug('LEGACY FORMAT: Processing sections:', sectionKeys);
 
       for (const key of sectionKeys) {
         try {
@@ -313,7 +321,10 @@ function MeetingDetailsContent() {
         }
       }
 
-      console.log('LEGACY FORMAT: Formatted summary:', formattedSummary);
+      console.debug(
+        'LEGACY FORMAT: Formatted summary sections=%s',
+        Object.keys(formattedSummary).length
+      );
       setMeetingSummary(formattedSummary);
     } catch (error) {
       console.error('FETCH SUMMARY: Error fetching meeting summary:', error);
@@ -349,18 +360,18 @@ function MeetingDetailsContent() {
   useEffect(() => {
     return () => {
       if (meetingId) {
-        console.log('Cleaning up: Stopping summary polling for meeting:', meetingId);
+        console.debug('Cleaning up: Stopping summary polling for meeting:', meetingId);
         stopSummaryPolling(meetingId);
       }
     };
   }, [meetingId, stopSummaryPolling]);
 
   useEffect(() => {
-    console.log('MeetingDetails useEffect triggered - meetingId:', meetingId);
+    console.debug('MeetingDetails useEffect triggered - meetingId:', meetingId);
 
     // Skip data fetching for new note mode (check meetingId directly to avoid race conditions)
     if (meetingId === 'new') {
-      console.log('New note mode detected, skipping data fetch');
+      console.debug('New note mode detected, skipping data fetch');
       setIsLoading(false); // Important: Set loading to false for new notes
       Analytics.trackPageView('meeting_details_new_note');
       return;
@@ -379,7 +390,7 @@ function MeetingDetailsContent() {
       return;
     }
 
-    console.log('Valid meeting ID found, fetching details for:', meetingId);
+    console.debug('Valid meeting ID found, fetching details for:', meetingId);
 
     setMeetingDetails(null);
     setMeetingSummary(null);
@@ -412,7 +423,7 @@ function MeetingDetailsContent() {
         meetingDetails.transcripts.length > 0 &&
         !hasCheckedAutoGen
       ) {
-        console.log('No summary found, checking for auto-generation...');
+        console.debug('No summary found, checking for auto-generation...');
         await setupAutoGeneration();
       }
     };
@@ -482,7 +493,7 @@ function MeetingDetailsContent() {
       if (pendingFolderId) {
         try {
           await invoke('api_move_meeting_to_folder', { meetingId: actualMeetingId, folderId: pendingFolderId });
-          console.log('✅ New note assigned to folder:', pendingFolderId);
+          console.debug('✅ New note assigned to folder:', pendingFolderId);
         } catch (err) {
           console.warn('Could not assign new note to folder:', err);
         } finally {
@@ -492,7 +503,7 @@ function MeetingDetailsContent() {
 
       // Refresh sidebar to show newly created note (in the correct folder if applicable)
       await refetchMeetings();
-      console.log('✅ Sidebar refreshed with new note:', actualMeetingId);
+      console.debug('✅ Sidebar refreshed with new note:', actualMeetingId);
     }}
     // Pagination props for efficient transcript loading
     segments={segments}

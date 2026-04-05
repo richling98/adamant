@@ -469,7 +469,14 @@ impl ParakeetEngine {
             .transcribe_samples(audio_data)
             .map_err(|e| anyhow!("Parakeet transcription failed: {}", e))?;
 
-        log::debug!("Parakeet transcription result: '{}'", result.text);
+        if std::env::var("ADAMANT_VERBOSE").is_ok() {
+            log::debug!("Parakeet transcription content: '{}'", result.text); // ADAMANT_VERBOSE
+        } else {
+            log::debug!(
+                "Parakeet transcription result: {} chars",
+                result.text.len()
+            );
+        }
 
         Ok(result.text)
     }

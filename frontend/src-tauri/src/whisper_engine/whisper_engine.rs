@@ -806,14 +806,43 @@ impl WhisperEngine {
             }
         } else {
             if cleaned_result != final_result {
-                log::info!("Cleaned repetitive transcription #{}: '{}' -> '{}'", transcription_count, final_result, cleaned_result);
+                if std::env::var("ADAMANT_VERBOSE").is_ok() {
+                    log::debug!( // ADAMANT_VERBOSE
+                        "Cleaned repetitive transcription #{} content: '{}' -> '{}'",
+                        transcription_count,
+                        final_result,
+                        cleaned_result
+                    );
+                }
+                log::info!(
+                    "Cleaned repetitive transcription #{}: {} chars -> {} chars",
+                    transcription_count,
+                    final_result.len(),
+                    cleaned_result.len()
+                );
             }
             // Reduce successful transcription logging frequency
             // Only log every 5th result or significant results (>50 chars) to reduce I/O overhead
             if transcription_count % 5 == 0 || cleaned_result.len() > 50 || duration_seconds > 10.0 {
-                log::info!("Transcription #{} result: '{}'", transcription_count, cleaned_result);
+                log::info!(
+                    "Transcription #{} result: {} chars",
+                    transcription_count,
+                    cleaned_result.len()
+                );
             } else {
-                perf_debug!("Transcription #{} result: '{}'", transcription_count, cleaned_result);
+                if std::env::var("ADAMANT_VERBOSE").is_ok() {
+                    perf_debug!( // ADAMANT_VERBOSE
+                        "Transcription #{} content: '{}'",
+                        transcription_count,
+                        cleaned_result
+                    );
+                } else {
+                    perf_debug!(
+                        "Transcription #{} result: {} chars",
+                        transcription_count,
+                        cleaned_result.len()
+                    );
+                }
             }
         }
 

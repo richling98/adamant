@@ -295,7 +295,7 @@ export function ModelSettingsModal({
   // Sync custom OpenAI state from modelConfig (context or props)
   useEffect(() => {
     if (modelConfig.provider === 'custom-openai') {
-      console.log('🔄 Syncing custom OpenAI fields from ConfigContext:', {
+      console.debug('🔄 Syncing custom OpenAI fields from ConfigContext:', {
         endpoint: modelConfig.customOpenAIEndpoint,
         model: modelConfig.customOpenAIModel,
         hasApiKey: !!modelConfig.customOpenAIApiKey,
@@ -474,7 +474,7 @@ export function ModelSettingsModal({
           temperature: customTemperature ? parseFloat(customTemperature) : null,
           topP: customTopP ? parseFloat(customTopP) : null,
         });
-        console.log('Custom OpenAI config saved successfully');
+        console.debug('Custom OpenAI config saved successfully');
       } catch (err) {
         console.error('Failed to save custom OpenAI config:', err);
         toast.error('Failed to save custom OpenAI configuration');
@@ -499,7 +499,7 @@ export function ModelSettingsModal({
       model: modelConfig.provider === 'custom-openai' ? customOpenAIModel.trim() : modelConfig.model,
     };
     setModelConfig(updatedConfig);
-    console.log('ModelSettingsModal - handleSave - Updated ModelConfig:', updatedConfig);
+    console.debug('ModelSettingsModal - handleSave - Updated ModelConfig:', updatedConfig);
 
     onSave(updatedConfig);
   };
@@ -612,7 +612,7 @@ export function ModelSettingsModal({
     for (const modelName of previous) {
       if (!current.has(modelName)) {
         // Download completed, refresh models list
-        console.log(`[ModelSettingsModal] Download completed for ${modelName}, refreshing list`);
+        console.debug(`[ModelSettingsModal] Download completed for ${modelName}, refreshing list`);
         fetchOllamaModels(true);
         break; // Only refresh once even if multiple completed
       }

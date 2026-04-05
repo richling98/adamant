@@ -51,7 +51,7 @@ export function NotesPanel({
   const renderCount = useRef(0);
   renderCount.current += 1;
 
-  console.log('🔍 DEBUG NotesPanel RENDER #' + renderCount.current, {
+  console.debug('🔍 DEBUG NotesPanel RENDER #' + renderCount.current, {
     meetingId,
     isNewNote,
     timestamp: new Date().toISOString().split('T')[1]
@@ -75,15 +75,15 @@ export function NotesPanel({
 
   // Track component mount/unmount
   useEffect(() => {
-    console.log('🎬 COMPONENT MOUNTED');
+    console.debug('🎬 COMPONENT MOUNTED');
     return () => {
-      console.log('💀 COMPONENT UNMOUNTING');
+      console.debug('💀 COMPONENT UNMOUNTING');
     };
   }, []);
 
   // Track prop changes
   useEffect(() => {
-    console.log('🔍 DEBUG Props changed:', { meetingId, isNewNote, actualMeetingId });
+    console.debug('🔍 DEBUG Props changed:', { meetingId, isNewNote, actualMeetingId });
   }, [meetingId, isNewNote, actualMeetingId]);
 
   // Convert blocks to markdown
@@ -100,7 +100,7 @@ export function NotesPanel({
 
   // Save note function
   const saveNote = useCallback(async (blocks: Block[]) => {
-    console.log('🔍 DEBUG saveNote called:', {
+    console.debug('🔍 DEBUG saveNote called:', {
       blocksCount: blocks?.length,
       isNewNote,
       actualMeetingId,
@@ -108,7 +108,7 @@ export function NotesPanel({
     });
 
     if (!blocks || blocks.length === 0) {
-      console.log('📝 NotesPanel: No content to save');
+      console.debug('📝 NotesPanel: No content to save');
       return;
     }
 
@@ -119,7 +119,7 @@ export function NotesPanel({
       const contentJson = JSON.stringify(blocks);
       const contentMarkdown = await blocksToMarkdown(blocks);
 
-      console.log('🔍 DEBUG content to save:', {
+      console.debug('🔍 DEBUG content to save:', {
         contentJsonLength: contentJson.length,
         contentMarkdown: contentMarkdown.substring(0, 100), // First 100 chars
         hasContent: contentMarkdown.trim().length > 0
@@ -127,7 +127,7 @@ export function NotesPanel({
 
       // Scenario 1: New note - need to create meeting first
       if (isNewNote && !actualMeetingId) {
-        console.log('📝 NotesPanel: Creating new meeting for note...');
+        console.debug('📝 NotesPanel: Creating new meeting for note...');
 
         // Create meeting using Tauri command
         const meetingData = await invoke('api_create_meeting', {
@@ -137,7 +137,7 @@ export function NotesPanel({
         const newMeetingId = meetingData.id;
         setActualMeetingId(newMeetingId);
 
-        console.log('✅ NotesPanel: Meeting created:', newMeetingId);
+        console.debug('✅ NotesPanel: Meeting created:', newMeetingId);
 
         // Save note using Tauri command FIRST before notifying parent
         const noteData = await invoke('api_save_note', {
@@ -151,7 +151,7 @@ export function NotesPanel({
         setLastSaved(new Date());
         setHasUnsavedChanges(false);
 
-        console.log('✅ NotesPanel: Note created successfully', {
+        console.debug('✅ NotesPanel: Note created successfully', {
           newMeetingId,
           version: noteData.version,
           contentLength: contentMarkdown.length
@@ -169,17 +169,17 @@ export function NotesPanel({
         debouncedSave.cancel();
 
         // Notify parent component AFTER note is saved to prevent race condition
-        console.log('🔍 DEBUG: About to call onMeetingCreated callback');
+        console.debug('🔍 DEBUG: About to call onMeetingCreated callback');
         if (onMeetingCreated) {
           onMeetingCreated(newMeetingId);
-          console.log('🔍 DEBUG: onMeetingCreated callback completed');
+          console.debug('🔍 DEBUG: onMeetingCreated callback completed');
         }
       }
       // Scenario 2: Existing note - update it
       else {
         const targetMeetingId = actualMeetingId || meetingId;
 
-        console.log('📝 NotesPanel: Updating note for meeting:', targetMeetingId);
+        console.debug('📝 NotesPanel: Updating note for meeting:', targetMeetingId);
 
         const noteData = await invoke('api_save_note', {
           meetingId: targetMeetingId,
@@ -192,7 +192,7 @@ export function NotesPanel({
         setLastSaved(new Date());
         setHasUnsavedChanges(false);
 
-        console.log('✅ NotesPanel: Note updated successfully');
+        console.debug('✅ NotesPanel: Note updated successfully');
       }
     } catch (err) {
       console.error('❌ NotesPanel: Save error:', err);
@@ -240,7 +240,7 @@ export function NotesPanel({
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         if (noteContent && noteContent.length > 0) {
-          console.log('📝 NotesPanel: Manual save triggered via Cmd+S');
+          console.debug('📝 NotesPanel: Manual save triggered via Cmd+S');
           // Cancel any pending debounced save and save immediately
           debouncedSave.cancel();
           saveNote(noteContent);
@@ -257,7 +257,7 @@ export function NotesPanel({
     ? [{ type: 'paragraph', content: '' }]
     : noteContent || undefined;
 
-  console.log('📝 INITIAL CONTENT computed:', {
+  console.debug('📝 INITIAL CONTENT computed:', {
     isNewNote,
     hasNoteContent: !!noteContent,
     noteContentBlocksCount: noteContent?.length || 0,
@@ -267,7 +267,7 @@ export function NotesPanel({
   // Only create editor on client side (not during SSR)
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
-    console.log('✅ Component mounted on client');
+    console.debug('✅ Component mounted on client');
     setIsMounted(true);
   }, []);
 
@@ -278,7 +278,7 @@ export function NotesPanel({
     },
   });
 
-  console.log('🎨 EDITOR state:', {
+  console.debug('🎨 EDITOR state:', {
     editorExists: !!editor,
     editorDocumentLength: editor?.document?.length || 0,
     isMounted
@@ -291,12 +291,12 @@ export function NotesPanel({
     if (isRestoringContent.current) return;
 
     const firstBlockContent = (blocks[0] as any)?.content?.[0]?.text || '';
-    console.log('📝 EDITOR CHANGE:', {
+    console.debug('📝 EDITOR CHANGE:', {
       blocksCount: blocks.length,
       firstBlockPreview: firstBlockContent.substring(0, 50),
       timestamp: new Date().toISOString().split('T')[1]
     });
-    console.log('💾 Setting noteContent state with', blocks.length, 'blocks');
+    console.debug('💾 Setting noteContent state with', blocks.length, 'blocks');
     setNoteContent(blocks);
     editorContentRef.current = blocks; // Preserve content in ref for recovery after prop changes
     setHasUnsavedChanges(true);
@@ -320,11 +320,11 @@ export function NotesPanel({
 
   // Load existing note if not in new note mode
   useEffect(() => {
-    console.log('🔍 DEBUG loadNote useEffect triggered:', { meetingId, isNewNote });
+    console.debug('🔍 DEBUG loadNote useEffect triggered:', { meetingId, isNewNote });
 
     const loadNote = async () => {
       if (isNewNote || !meetingId || meetingId === 'new') {
-        console.log('🔍 DEBUG Skipping load (new note mode or invalid ID) — clearing editor');
+        console.debug('🔍 DEBUG Skipping load (new note mode or invalid ID) — clearing editor');
         // Clear any content from the previous meeting so the editor starts blank.
         // useCreateBlockNote() only uses initialContent at creation time; subsequent
         // prop changes do NOT reset the editor, so we must call replaceBlocks() here.
@@ -341,7 +341,7 @@ export function NotesPanel({
 
       // Skip reload if we just saved - restore content from ref instead
       if (justSavedRef.current) {
-        console.log('🔍 DEBUG Skipping load (just saved, restoring content from ref)');
+        console.debug('🔍 DEBUG Skipping load (just saved, restoring content from ref)');
         justSavedRef.current = false; // Reset flag
 
         // Restore content using BlockNote API to prevent blank editor after URL transition.
@@ -351,13 +351,13 @@ export function NotesPanel({
           editor.replaceBlocks(editor.document, editorContentRef.current);
           // Clear flag after a microtask — BlockNote may dispatch onChange asynchronously.
           setTimeout(() => { isRestoringContent.current = false; }, 0);
-          console.log('✅ Content restored from ref:', editorContentRef.current.length, 'blocks');
+          console.debug('✅ Content restored from ref:', editorContentRef.current.length, 'blocks');
         }
         setIsEditorReady(true);
         return;
       }
 
-      console.log('🔍 DEBUG Loading note from database for:', meetingId);
+      console.debug('🔍 DEBUG Loading note from database for:', meetingId);
       setIsLoading(true);
       setError(null);
 
@@ -366,14 +366,14 @@ export function NotesPanel({
           meetingId,
         }) as { content_json: string; format: string; version: number; updated_at: string } | null;
 
-        console.log('🔍 DEBUG Note data from DB:', {
+        console.debug('🔍 DEBUG Note data from DB:', {
           hasData: !!data,
           contentLength: data?.content_json?.length || 0
         });
 
         if (data) {
           const content = data.content_json ? JSON.parse(data.content_json) : null;
-          console.log('🔍 DEBUG Setting noteContent from DB:', {
+          console.debug('🔍 DEBUG Setting noteContent from DB:', {
             blocksCount: content?.length || 0
           });
           setNoteContent(content);
@@ -391,12 +391,12 @@ export function NotesPanel({
             setTimeout(() => { isRestoringContent.current = false; }, 0);
           }
 
-          console.log('✅ NotesPanel: Loaded note', { hasContent: !!content, version: data.version });
+          console.debug('✅ NotesPanel: Loaded note', { hasContent: !!content, version: data.version });
         } else {
           // No note exists yet - start with empty
-          console.log('⚠️ DEBUG Setting noteContent to null (no data from DB)');
+          console.debug('⚠️ DEBUG Setting noteContent to null (no data from DB)');
           setNoteContent(null);
-          console.log('ℹ️ NotesPanel: No existing note found');
+          console.debug('ℹ️ NotesPanel: No existing note found');
         }
       } catch (err) {
         console.error('❌ NotesPanel: Error loading note:', err);

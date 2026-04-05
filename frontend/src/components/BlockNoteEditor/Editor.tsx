@@ -11,7 +11,7 @@ interface EditorProps {
 }
 
 export default function Editor({ initialContent, onChange, editable = true }: EditorProps) {
-  console.log('📝 EDITOR: Initializing BlockNote editor with blocks:', {
+  console.debug('📝 EDITOR: Initializing BlockNote editor with blocks:', {
     hasContent: !!initialContent,
     blocksCount: initialContent?.length || 0,
     editable
@@ -25,7 +25,7 @@ export default function Editor({ initialContent, onChange, editable = true }: Ed
     initialContent: initialContent as PartialBlock[] | undefined,
   });
 
-  console.log('📝 EDITOR: BlockNote editor created successfully');
+  console.debug('📝 EDITOR: BlockNote editor created successfully');
 
   // Expose blocksToMarkdown method
   (editor as any).blocksToMarkdownLossy = async (blocks: Block[]) => {
@@ -42,7 +42,7 @@ export default function Editor({ initialContent, onChange, editable = true }: Ed
     if (!onChange) return;
 
     const handleChange = () => {
-      console.log('📝 EDITOR: Content changed, notifying parent...', {
+      console.debug('📝 EDITOR: Content changed, notifying parent...', {
         blocksCount: editor.document.length
       });
       onChange(editor.document);
@@ -52,7 +52,7 @@ export default function Editor({ initialContent, onChange, editable = true }: Ed
 
     return () => {
       if (typeof unsubscribe === 'function') {
-        console.log('📝 EDITOR: Cleaning up onChange listener');
+        console.debug('📝 EDITOR: Cleaning up onChange listener');
         unsubscribe();
       }
     };

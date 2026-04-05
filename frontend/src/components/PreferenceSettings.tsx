@@ -95,7 +95,7 @@ export function PreferenceSettings() {
     if (!notificationSettings) return;
 
     const handleUpdateNotificationSettings = async () => {
-      console.log("Updating notification settings to:", notificationsEnabled);
+      console.debug("Updating notification settings to:", notificationsEnabled);
 
       try {
         // Update the notification preferences
@@ -108,10 +108,10 @@ export function PreferenceSettings() {
           }
         };
 
-        console.log("Calling updateNotificationSettings with:", updatedSettings);
+        console.debug("Calling updateNotificationSettings with:", updatedSettings);
         await updateNotificationSettings(updatedSettings);
         setPreviousNotificationsEnabled(notificationsEnabled);
-        console.log("Successfully updated notification settings to:", notificationsEnabled);
+        console.debug("Successfully updated notification settings to:", notificationsEnabled);
 
         // Track notification preference change - only fires when user manually toggles
         await Analytics.track('notification_settings_changed', {

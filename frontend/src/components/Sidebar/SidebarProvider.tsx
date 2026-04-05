@@ -308,7 +308,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       clearInterval(activeSummaryPolls.get(meetingId)!);
     }
 
-    console.log(`📊 Starting polling for meeting ${meetingId}, process ${processId}`);
+    console.debug(`📊 Starting polling for meeting ${meetingId}, process ${processId}`);
 
     let pollCount = 0;
     const MAX_POLLS = 200; // ~16.5 minutes at 5-second intervals (slightly longer than backend's 15-min timeout to avoid race conditions)
@@ -336,14 +336,14 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
           meetingId: meetingId,
         }) as any;
 
-        console.log(`📊 Polling update for ${meetingId}:`, result.status);
+        console.debug(`📊 Polling update for ${meetingId}:`, result.status);
 
         // Call the update callback with result
         onUpdate(result);
 
         // Stop polling if completed, error, failed, cancelled, or idle (after initial processing)
         if (result.status === 'completed' || result.status === 'error' || result.status === 'failed' || result.status === 'cancelled') {
-          console.log(`Polling completed for ${meetingId}, status: ${result.status}`);
+          console.debug(`Polling completed for ${meetingId}, status: ${result.status}`);
           clearInterval(pollInterval);
           setActiveSummaryPolls(prev => {
             const next = new Map(prev);
@@ -352,7 +352,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
           });
         } else if (result.status === 'idle' && pollCount > 1) {
           // If we get 'idle' after polling started, process completed/disappeared
-          console.log(`Process completed or not found for ${meetingId}, stopping poll`);
+          console.debug(`Process completed or not found for ${meetingId}, stopping poll`);
           clearInterval(pollInterval);
           setActiveSummaryPolls(prev => {
             const next = new Map(prev);
@@ -382,7 +382,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const stopSummaryPolling = React.useCallback((meetingId: string) => {
     const pollInterval = activeSummaryPolls.get(meetingId);
     if (pollInterval) {
-      console.log(`⏹️ Stopping polling for meeting ${meetingId}`);
+      console.debug(`⏹️ Stopping polling for meeting ${meetingId}`);
       clearInterval(pollInterval);
       setActiveSummaryPolls(prev => {
         const next = new Map(prev);
@@ -395,7 +395,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   // Cleanup all polling intervals on unmount
   useEffect(() => {
     return () => {
-      console.log('🧹 Cleaning up all summary polling intervals');
+      console.debug('🧹 Cleaning up all summary polling intervals');
       activeSummaryPolls.forEach(interval => clearInterval(interval));
     };
   }, [activeSummaryPolls]);

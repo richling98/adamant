@@ -1050,13 +1050,15 @@ pub async fn api_save_transcript<R: Runtime>(
             format!("Invalid transcript data format: {}. Please check the data structure.", e)
         })?;
 
-    // Log parsed segments count and first segment details
+    // Log parsed segments count and first segment metadata
     if let Some(first_seg) = transcripts_to_save.first() {
-        log_debug!("First parsed segment: text='{}', audio_start_time={:?}, audio_end_time={:?}, duration={:?}",
-                   first_seg.text.chars().take(50).collect::<String>(),
-                   first_seg.audio_start_time,
-                   first_seg.audio_end_time,
-                   first_seg.duration);
+        log_debug!(
+            "First parsed segment: {} chars, audio_start_time={:?}, audio_end_time={:?}, duration={:?}",
+            first_seg.text.len(),
+            first_seg.audio_start_time,
+            first_seg.audio_end_time,
+            first_seg.duration
+        );
     }
 
     let pool = state.db_manager.pool();
@@ -1452,17 +1454,32 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
                         }
 
                         // Response was 200 but doesn't match OpenAI format
-                        log_warn!("⚠️ Endpoint returned 200 but response doesn't match OpenAI format: {}", response_text);
+                        log_warn!(
+                            "⚠️ Endpoint returned 200 but response doesn't match OpenAI format ({} chars)",
+                            response_text.len()
+                        );
                         Err("Endpoint is reachable but doesn't appear to be OpenAI-compatible. Response is missing 'choices' array or 'message.content' field.".to_string())
                     }
                     Err(e) => {
                         log_warn!("⚠️ Endpoint returned 200 but response is not valid JSON: {}", e);
-                        Err(format!("Endpoint is reachable but returned invalid JSON: {}. Response: {}", e, response_text))
+                        Err(format!(
+                            "Endpoint is reachable but returned invalid JSON: {}. Response length: {} chars",
+                            e,
+                            response_text.len()
+                        ))
                     }
                 }
             } else {
-                log_warn!("⚠️ Custom OpenAI connection test failed with status {}: {}", status, response_text);
-                Err(format!("Connection failed with status {}: {}", status, response_text))
+                log_warn!(
+                    "⚠️ Custom OpenAI connection test failed with status {} ({} chars)",
+                    status,
+                    response_text.len()
+                );
+                Err(format!(
+                    "Connection failed with status {}. Response length: {} chars",
+                    status,
+                    response_text.len()
+                ))
             }
         }
         Err(e) => {
@@ -1765,4 +1782,3 @@ pub async fn api_chat_with_meetings<R: Runtime>(
     )
     .await
 }
-

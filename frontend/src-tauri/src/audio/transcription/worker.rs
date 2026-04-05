@@ -163,8 +163,25 @@ pub fn start_transcription_task<R: Runtime>(
                                         None => "N/A".to_string(),
                                     };
 
-                                    info!("🔍 Worker {} transcription result: text='{}', confidence={}, partial={}, threshold={:.2}",
-                                          worker_id, transcript, confidence_str, is_partial, confidence_threshold);
+                                    if std::env::var("ADAMANT_VERBOSE").is_ok() {
+                                        info!( // ADAMANT_VERBOSE
+                                            "🔍 Worker {} transcription content: text='{}', confidence={}, partial={}, threshold={:.2}",
+                                            worker_id,
+                                            transcript,
+                                            confidence_str,
+                                            is_partial,
+                                            confidence_threshold
+                                        );
+                                    } else {
+                                        info!(
+                                            "🔍 Worker {} transcription result: {} chars, confidence={}, partial={}, threshold={:.2}",
+                                            worker_id,
+                                            transcript.len(),
+                                            confidence_str,
+                                            is_partial,
+                                            confidence_threshold
+                                        );
+                                    }
 
                                     // Check confidence threshold (or accept if no confidence provided)
                                     let meets_threshold = confidence_opt.map_or(true, |c| c >= confidence_threshold);

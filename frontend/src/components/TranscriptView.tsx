@@ -108,7 +108,7 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts, isR
   const [speechDetected, setSpeechDetected] = useState(false);
 
   // Debug: Log the props to understand what's happening
-  console.log('TranscriptView render:', {
+  console.debug('TranscriptView render:', {
     isRecording,
     isPaused,
     isProcessing,

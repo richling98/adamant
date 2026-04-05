@@ -140,7 +140,7 @@ export function ModelManager({
     let unlistenError: (() => void) | null = null;
 
     const setupListeners = async () => {
-      console.log('[ModelManager] Setting up event listeners...');
+      console.debug('[ModelManager] Setting up event listeners...');
 
       // Download progress with throttling
       unlistenProgress = await listen<{ modelName: string; progress: number }>(
@@ -156,7 +156,7 @@ export function ModelManager({
             Math.abs(progress - throttleData.progress) >= 5;
 
           if (shouldUpdate) {
-            console.log(`[ModelManager] Progress update for ${modelName}: ${progress}%`);
+            console.debug(`[ModelManager] Progress update for ${modelName}: ${progress}%`);
             progressThrottleRef.current.set(modelName, { progress, timestamp: now });
 
             setModels(prevModels =>
@@ -249,7 +249,7 @@ export function ModelManager({
     setupListeners();
 
     return () => {
-      console.log('[ModelManager] Cleaning up event listeners...');
+      console.debug('[ModelManager] Cleaning up event listeners...');
       if (unlistenProgress) unlistenProgress();
       if (unlistenComplete) unlistenComplete();
       if (unlistenError) unlistenError();

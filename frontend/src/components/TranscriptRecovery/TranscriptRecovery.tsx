@@ -82,7 +82,7 @@ export function TranscriptRecovery({
     setIsRecovering(true);
     try {
       const result = await onRecover(selectedMeetingId);
-      console.log('Recovery successful:', result);
+      console.debug('Recovery successful:', result);
       onClose();
     } catch (error) {
       console.error('Recovery failed:', error);

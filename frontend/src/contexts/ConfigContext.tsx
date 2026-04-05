@@ -197,7 +197,12 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       try {
         const config = await configService.getTranscriptConfig();
         if (config) {
-          console.log('[ConfigContext] Loaded saved transcript config:', config);
+          console.debug(
+            '[ConfigContext] Loaded saved transcript config: provider=%s model=%s hasKey=%s',
+            config.provider,
+            config.model,
+            Boolean(config.apiKey)
+          );
           setTranscriptModelConfig({
             provider: config.provider || 'parakeet',
             model: config.model || 'parakeet-tdt-0.6b-v3-int8',
@@ -223,10 +228,12 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
               const customConfig = await configService.getCustomOpenAIConfig();
               if (customConfig) {
                 // Merge custom config fields into modelConfig
-                console.log('[ConfigContext] Loading custom OpenAI config:', {
-                  endpoint: customConfig.endpoint,
-                  model: customConfig.model,
-                });
+                console.debug(
+                  '[ConfigContext] Loading custom OpenAI config: endpoint=%s model=%s hasKey=%s',
+                  customConfig.endpoint,
+                  customConfig.model,
+                  Boolean(customConfig.apiKey)
+                );
                 setModelConfig(prev => ({
                   ...prev,
                   provider: data.provider,
@@ -266,7 +273,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     const setupListener = async () => {
       const { listen } = await import('@tauri-apps/api/event');
       const unlisten = await listen<ModelConfig>('model-config-updated', (event) => {
-        console.log('[ConfigContext] Received model-config-updated event:', event.payload);
+        console.debug('[ConfigContext] Received model-config-updated event:', event.payload);
         setModelConfig(event.payload);
       });
       return unlisten;
@@ -290,10 +297,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
             micDevice: prefs.preferred_mic_device,
             systemDevice: prefs.preferred_system_device
           });
-          console.log('Loaded device preferences:', prefs);
+          console.debug('Loaded device preferences:', prefs);
         }
       } catch (error) {
-        console.log('No device preferences found or failed to load:', error);
+        console.debug('No device preferences found or failed to load:', error);
       }
     };
     loadDevicePreferences();
@@ -306,10 +313,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         const language = await configService.getLanguagePreference();
         if (language) {
           setSelectedLanguage(language);
-          console.log('Loaded language preference:', language);
+          console.debug('Loaded language preference:', language);
         }
       } catch (error) {
-        console.log('No language preference found or failed to load, using default (auto-translate):', error);
+        console.debug('No language preference found or failed to load, using default (auto-translate):', error);
         // Default to 'auto-translate' (Auto Detect with English translation) if no preference is saved
         setSelectedLanguage('auto-translate');
       }

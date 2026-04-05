@@ -62,11 +62,11 @@ export function DownloadProgressStep() {
   const handleRetryDownload = async () => {
     // Prevent multiple simultaneous retries
     if (retryingRef.current) {
-      console.log('[DownloadProgressStep] Retry already in progress, ignoring');
+      console.debug('[DownloadProgressStep] Retry already in progress, ignoring');
       return;
     }
 
-    console.log('[DownloadProgressStep] Retrying Parakeet download');
+    console.debug('[DownloadProgressStep] Retrying Parakeet download');
     retryingRef.current = true;
 
     // Reset error state
@@ -105,11 +105,11 @@ export function DownloadProgressStep() {
   const handleRetrySummaryDownload = async () => {
     // Prevent multiple simultaneous retries
     if (retryingSummaryRef.current) {
-      console.log('[DownloadProgressStep] Summary retry already in progress, ignoring');
+      console.debug('[DownloadProgressStep] Summary retry already in progress, ignoring');
       return;
     }
 
-    console.log('[DownloadProgressStep] Retrying summary model download');
+    console.debug('[DownloadProgressStep] Retrying summary model download');
     retryingSummaryRef.current = true;
 
     // Reset error state
@@ -300,7 +300,7 @@ export function DownloadProgressStep() {
       const actuallyAvailable = await invoke<boolean>('parakeet_has_available_models');
 
       if (actuallyAvailable && !parakeetDownloaded) {
-        console.log('[DownloadProgressStep] Model available but state not updated');
+        console.debug('[DownloadProgressStep] Model available but state not updated');
         setParakeetDownloaded(true);
         setParakeetState((prev) => ({
           ...prev,

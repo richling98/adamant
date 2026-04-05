@@ -102,7 +102,7 @@ export function useRecordingStop(
 
     const setupRecordingStoppedListener = async () => {
       try {
-        console.log('Setting up recording-stopped listener for navigation...');
+        console.debug('Setting up recording-stopped listener for navigation...');
         unlistenFn = await listen<{
           message: string;
           folder_path?: string;
@@ -122,7 +122,7 @@ export function useRecordingStop(
           })();
 
         });
-        console.log('Recording stopped listener setup complete');
+        console.debug('Recording stopped listener setup complete');
       } catch (error) {
         console.error('Failed to setup recording stopped listener:', error);
       }
@@ -131,7 +131,7 @@ export function useRecordingStop(
     setupRecordingStoppedListener();
 
     return () => {
-      console.log('Cleaning up recording stopped listener...');
+      console.debug('Cleaning up recording stopped listener...');
       if (unlistenFn) {
         unlistenFn();
       }
@@ -143,7 +143,7 @@ export function useRecordingStop(
     const { source, callApi } = normalizeStopOptions(options);
     // Guard: prevent duplicate/concurrent stop calls
     if (stopInProgressRef.current) {
-      console.log('Ignoring duplicate stop request while stop is already in progress');
+      console.debug('Ignoring duplicate stop request while stop is already in progress');
       return;
     }
     stopInProgressRef.current = true;
@@ -154,7 +154,7 @@ export function useRecordingStop(
     const stopStartTime = Date.now();
 
     try {
-      console.log('Stop flow initiated', {
+      console.debug('Stop flow initiated', {
         source,
         callApi,
         stop_initiated_at: new Date(stopStartTime).toISOString(),
@@ -172,13 +172,13 @@ export function useRecordingStop(
         let stopError: unknown = null;
         for (let attempt = 1; attempt <= 2; attempt += 1) {
           try {
-            console.log(`Calling backend stop_recording (attempt ${attempt}/2)...`, { savePath });
+            console.debug(`Calling backend stop_recording (attempt ${attempt}/2)...`, { savePath });
             await invoke('stop_recording', {
               args: {
                 save_path: savePath,
               },
             });
-            console.log('Backend stop_recording succeeded');
+            console.debug('Backend stop_recording succeeded');
             stopError = null;
             break;
           } catch (error) {
@@ -186,7 +186,7 @@ export function useRecordingStop(
             console.error(`Backend stop_recording failed (attempt ${attempt}/2):`, error);
 
             if (attempt < 2) {
-              console.log('Retrying backend stop_recording once...');
+              console.debug('Retrying backend stop_recording once...');
               await new Promise(resolve => setTimeout(resolve, 300));
             }
           }
@@ -219,7 +219,7 @@ export function useRecordingStop(
 
       // Wait for transcription to complete
       setStatus(RecordingStatus.PROCESSING_TRANSCRIPTS, 'Waiting for transcription...');
-      console.log('Waiting for transcription to complete...');
+      console.debug('Waiting for transcription to complete...');
 
       const MAX_WAIT_TIME = 60000; // 60 seconds maximum wait (increased for longer processing)
       const POLL_INTERVAL = 500; // Check every 500ms
@@ -228,7 +228,7 @@ export function useRecordingStop(
 
       // Listen for transcription-complete event
       const unlistenComplete = await listen('transcription-complete', () => {
-        console.log('Received transcription-complete event');
+        console.debug('Received transcription-complete event');
         transcriptionComplete = true;
       });
 
@@ -236,25 +236,25 @@ export function useRecordingStop(
       while (elapsedTime < MAX_WAIT_TIME && !transcriptionComplete) {
         try {
           const status = await transcriptService.getTranscriptionStatus();
-          console.log('Transcription status:', status);
+          console.debug('Transcription status:', status);
 
           // Check if transcription is complete
           if (!status.is_processing && status.chunks_in_queue === 0) {
-            console.log('Transcription complete - no active processing and no chunks in queue');
+            console.debug('Transcription complete - no active processing and no chunks in queue');
             transcriptionComplete = true;
             break;
           }
 
           // If no activity for more than 8 seconds and no chunks in queue, consider it done (increased from 5s to 8s)
           if (status.last_activity_ms > 8000 && status.chunks_in_queue === 0) {
-            console.log('Transcription likely complete - no recent activity and empty queue');
+            console.debug('Transcription likely complete - no recent activity and empty queue');
             transcriptionComplete = true;
             break;
           }
 
           // Update user with current status
           if (status.chunks_in_queue > 0) {
-            console.log(`Processing ${status.chunks_in_queue} remaining audio chunks...`);
+            console.debug(`Processing ${status.chunks_in_queue} remaining audio chunks...`);
             setStatus(RecordingStatus.PROCESSING_TRANSCRIPTS, `Processing ${status.chunks_in_queue} remaining chunks...`);
           }
 
@@ -268,21 +268,21 @@ export function useRecordingStop(
       }
 
       // Clean up listener
-      console.log('🧹 CLEANUP: Cleaning up transcription-complete listener');
+      console.debug('🧹 CLEANUP: Cleaning up transcription-complete listener');
       unlistenComplete();
 
       if (!transcriptionComplete && elapsedTime >= MAX_WAIT_TIME) {
         console.warn('⏰ Transcription wait timeout reached after', elapsedTime, 'ms');
       } else {
-        console.log('✅ Transcription completed after', elapsedTime, 'ms');
+        console.debug('✅ Transcription completed after', elapsedTime, 'ms');
         // Wait longer for any late transcript segments (increased from 1s to 4s)
-        console.log('⏳ Waiting for late transcript segments...');
+        console.debug('⏳ Waiting for late transcript segments...');
         await new Promise(resolve => setTimeout(resolve, 4000));
       }
 
       // Final buffer flush: process ALL remaining transcripts regardless of timing
       const flushStartTime = Date.now();
-      console.log('🔄 Final buffer flush: forcing processing of any remaining transcripts...', {
+      console.debug('🔄 Final buffer flush: forcing processing of any remaining transcripts...', {
         flush_started_at: new Date(flushStartTime).toISOString(),
         time_since_stop: flushStartTime - stopStartTime,
         current_transcript_count: transcriptsRef.current.length
@@ -290,7 +290,7 @@ export function useRecordingStop(
       setStatus(RecordingStatus.PROCESSING_TRANSCRIPTS, 'Flushing transcript buffer...');
       flushBuffer();
       const flushEndTime = Date.now();
-      console.log('✅ Final buffer flush completed', {
+      console.debug('✅ Final buffer flush completed', {
         flush_duration: flushEndTime - flushStartTime,
         total_time_since_stop: flushEndTime - stopStartTime,
         final_transcript_count: transcriptsRef.current.length
@@ -299,7 +299,7 @@ export function useRecordingStop(
       // NOTE: Status remains PROCESSING_TRANSCRIPTS until we start saving
 
       // Wait a bit more to ensure all transcript state updates have been processed
-      console.log('Waiting for transcript state updates to complete...');
+      console.debug('Waiting for transcript state updates to complete...');
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Save to SQLite
@@ -316,7 +316,7 @@ export function useRecordingStop(
         const folderPath = sessionStorage.getItem('last_recording_folder_path');
         const savedMeetingName = sessionStorage.getItem('last_recording_meeting_name');
 
-        console.log('💾 Saving COMPLETE transcripts to database...', {
+        console.debug('💾 Saving COMPLETE transcripts to database...', {
           transcript_count: freshTranscripts.length,
           meeting_name: savedMeetingName || meetingTitle,
           folder_path: folderPath,
@@ -342,15 +342,15 @@ export function useRecordingStop(
             throw new Error('No meeting ID received from save operation');
           }
 
-          console.log('✅ Successfully saved COMPLETE meeting with ID:', meetingId, existingMeetingId ? '(attached to existing meeting)' : '(new meeting)');
-          console.log('   Transcripts:', freshTranscripts.length);
-          console.log('   folder_path:', folderPath);
+          console.debug('✅ Successfully saved COMPLETE meeting with ID:', meetingId, existingMeetingId ? '(attached to existing meeting)' : '(new meeting)');
+          console.debug('   Transcripts:', freshTranscripts.length);
+          console.debug('   folder_path:', folderPath);
 
           // Assign meeting to pending folder if one was set (user clicked "+" on a folder before recording)
           if (pendingFolderId) {
             try {
               await invoke('api_move_meeting_to_folder', { meetingId, folderId: pendingFolderId });
-              console.log('✅ Assigned new meeting to folder:', pendingFolderId);
+              console.debug('✅ Assigned new meeting to folder:', pendingFolderId);
             } catch (folderError) {
               console.warn('Could not assign meeting to folder:', folderError);
             } finally {
@@ -358,7 +358,7 @@ export function useRecordingStop(
             }
           }
 
-          console.log('Dispatching meeting-transcripts-updated event for meeting:', meetingId);
+          console.debug('Dispatching meeting-transcripts-updated event for meeting:', meetingId);
           window.dispatchEvent(new CustomEvent('meeting-transcripts-updated', {
             detail: { meetingId },
           }));
@@ -385,7 +385,7 @@ export function useRecordingStop(
                 id: meetingId,
                 title: meetingData.title
               });
-              console.log('✅ Current meeting set:', meetingData.title);
+              console.debug('✅ Current meeting set:', meetingData.title);
             }
           } catch (error) {
             console.warn('Could not fetch meeting details, using ID only:', error);

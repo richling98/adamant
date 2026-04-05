@@ -215,7 +215,7 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
   };
 
   const handleTitleChange = (sectionKey: keyof Summary, newTitle: string) => {
-    console.log('Title change:', { sectionKey, newTitle });
+    console.debug('Title change:', { sectionKey, newTitle });
     const updatedSummary = {
       ...currentSummary,
       [sectionKey]: {
@@ -223,7 +223,10 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
         title: newTitle
       }
     };
-    console.log('Updated summary:', updatedSummary);
+    console.debug(
+      'Updated summary: sections=%s',
+      Object.keys(updatedSummary).length
+    );
     onSummaryChange(updatedSummary);
   };
 

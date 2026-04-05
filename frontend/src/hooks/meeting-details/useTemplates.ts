@@ -20,7 +20,7 @@ export function useTemplates() {
           name: string;
           description: string;
         }>;
-        console.log('Available templates:', templates);
+        console.debug('Available templates:', templates);
         setAvailableTemplates(templates);
       } catch (error) {
         console.error('Failed to fetch templates:', error);

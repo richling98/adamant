@@ -45,7 +45,7 @@ export class Analytics {
     try {
       await invoke('init_analytics');
       this.initialized = true;
-      console.log('Analytics initialized successfully');
+      console.debug('Analytics initialized successfully');
     } catch (error) {
       console.error('Failed to initialize analytics:', error);
       throw error;
@@ -60,7 +60,7 @@ export class Analytics {
       this.initialized = false;
       this.currentUserId = null;
       this.initializationPromise = null;
-      console.log('Analytics disabled successfully');
+      console.debug('Analytics disabled successfully');
     } catch (error) {
       console.error('Failed to disable analytics:', error);
     }
@@ -651,7 +651,7 @@ export class Analytics {
     }
 
     try {
-      console.log('Tracking backend connection event:', { success, error });
+      console.debug('Tracking backend connection event:', { success, error });
       await invoke('track_event', {
         eventName: 'backend_connection',
         properties: {
@@ -660,7 +660,7 @@ export class Analytics {
           timestamp: new Date().toISOString()
         }
       });
-      console.log('Backend connection event tracked successfully');
+      console.debug('Backend connection event tracked successfully');
     } catch (error) {
       console.error('Failed to track backend connection:', error);
     }
@@ -674,7 +674,7 @@ export class Analytics {
     }
 
     try {
-      console.log('Tracking transcription error event:', { errorMessage });
+      console.debug('Tracking transcription error event:', { errorMessage });
       await invoke('track_event', {
         eventName: 'transcription_error',
         properties: {
@@ -682,7 +682,7 @@ export class Analytics {
           timestamp: new Date().toISOString()
         }
       });
-      console.log('Transcription error event tracked successfully');
+      console.debug('Transcription error event tracked successfully');
     } catch (error) {
       console.error('Failed to track transcription error:', error);
     }
@@ -696,7 +696,7 @@ export class Analytics {
     }
 
     try {
-      console.log('Tracking transcription success event:', { duration });
+      console.debug('Tracking transcription success event:', { duration });
       await invoke('track_event', {
         eventName: 'transcription_success',
         properties: {
@@ -704,7 +704,7 @@ export class Analytics {
           timestamp: new Date().toISOString()
         }
       });
-      console.log('Transcription success event tracked successfully');
+      console.debug('Transcription success event tracked successfully');
     } catch (error) {
       console.error('Failed to track transcription success:', error);
     }
@@ -724,7 +724,7 @@ export class Analytics {
 
     try {
       const deviceInfo = await this.getDeviceInfo();
-      console.log('Tracking summary generation started event:', {
+      console.debug('Tracking summary generation started event:', {
         modelProvider,
         modelName,
         transcriptLength,
@@ -744,7 +744,7 @@ export class Analytics {
       }
 
       await this.track('summary_generation_started', properties);
-      console.log('Summary generation started event tracked successfully');
+      console.debug('Summary generation started event tracked successfully');
     } catch (error) {
       console.error('Failed to track summary generation started:', error);
     }
@@ -763,7 +763,7 @@ export class Analytics {
     }
 
     try {
-      console.log('Tracking summary generation completed event:', { modelProvider, modelName, success, durationSeconds, errorMessage });
+      console.debug('Tracking summary generation completed event:', { modelProvider, modelName, success, durationSeconds, errorMessage });
       await invoke('track_summary_generation_completed', {
         modelProvider,
         modelName,
@@ -771,7 +771,7 @@ export class Analytics {
         durationSeconds,
         errorMessage
       });
-      console.log('Summary generation completed event tracked successfully');
+      console.debug('Summary generation completed event tracked successfully');
     } catch (error) {
       console.error('Failed to track summary generation completed:', error);
     }
@@ -784,12 +784,12 @@ export class Analytics {
     }
 
     try {
-      console.log('Tracking summary regenerated event:', { modelProvider, modelName });
+      console.debug('Tracking summary regenerated event:', { modelProvider, modelName });
       await invoke('track_summary_regenerated', {
         modelProvider,
         modelName
       });
-      console.log('Summary regenerated event tracked successfully');
+      console.debug('Summary regenerated event tracked successfully');
     } catch (error) {
       console.error('Failed to track summary regenerated:', error);
     }
@@ -802,14 +802,14 @@ export class Analytics {
     }
 
     try {
-      console.log('Tracking model changed event:', { oldProvider, oldModel, newProvider, newModel });
+      console.debug('Tracking model changed event:', { oldProvider, oldModel, newProvider, newModel });
       await invoke('track_model_changed', {
         oldProvider,
         oldModel,
         newProvider,
         newModel
       });
-      console.log('Model changed event tracked successfully');
+      console.debug('Model changed event tracked successfully');
     } catch (error) {
       console.error('Failed to track model changed:', error);
     }
@@ -822,11 +822,11 @@ export class Analytics {
     }
 
     try {
-      console.log('Tracking custom prompt used event:', { promptLength });
+      console.debug('Tracking custom prompt used event:', { promptLength });
       await invoke('track_custom_prompt_used', {
         promptLength
       });
-      console.log('Custom prompt used event tracked successfully');
+      console.debug('Custom prompt used event tracked successfully');
     } catch (error) {
       console.error('Failed to track custom prompt used:', error);
     }

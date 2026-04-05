@@ -90,7 +90,7 @@ export function UpdateDialog({ open, onOpenChange, updateInfo }: UpdateDialogPro
         switch (event.event) {
           case 'Started':
             contentLength = event.data.contentLength || 0;
-            console.log(`[UpdateDialog] Started downloading ${contentLength} bytes`);
+            console.debug(`[UpdateDialog] Started downloading ${contentLength} bytes`);
             setProgress({
               downloaded: 0,
               total: contentLength,
@@ -103,7 +103,7 @@ export function UpdateDialog({ open, onOpenChange, updateInfo }: UpdateDialogPro
             const percentage = contentLength > 0
               ? Math.round((downloaded / contentLength) * 100)
               : 0;
-            console.log(`[UpdateDialog] Progress: ${downloaded} / ${contentLength} bytes (${percentage}%)`);
+            console.debug(`[UpdateDialog] Progress: ${downloaded} / ${contentLength} bytes (${percentage}%)`);
             setProgress({
               downloaded,
               total: contentLength,
@@ -112,7 +112,7 @@ export function UpdateDialog({ open, onOpenChange, updateInfo }: UpdateDialogPro
             break;
 
           case 'Finished':
-            console.log('[UpdateDialog] Download finished');
+            console.debug('[UpdateDialog] Download finished');
             setProgress({
               downloaded: contentLength,
               total: contentLength,
@@ -122,7 +122,7 @@ export function UpdateDialog({ open, onOpenChange, updateInfo }: UpdateDialogPro
         }
       });
 
-      console.log('[UpdateDialog] Update installed successfully');
+      console.debug('[UpdateDialog] Update installed successfully');
       toast.success('Update installed successfully. The app will restart...');
 
       // Mark download as complete before closing

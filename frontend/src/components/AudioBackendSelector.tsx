@@ -66,7 +66,7 @@ export function AudioBackendSelector({
         onBackendChange(backendId);
       }
 
-      console.log(`Audio backend changed to: ${backendId}`);
+      console.debug(`Audio backend changed to: ${backendId}`);
     } catch (err) {
       console.error('Failed to set audio backend:', err);
       setError('Failed to change backend. Please try again.');

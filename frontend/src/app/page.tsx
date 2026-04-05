@@ -50,7 +50,7 @@ export default function Home() {
           status === RecordingStatus.PROCESSING_TRANSCRIPTS ||
           status === RecordingStatus.SAVING
         ) {
-          console.log('Skipping recovery check - recording in progress or processing');
+          console.debug('Skipping recovery check - recording in progress or processing');
           return;
         }
 

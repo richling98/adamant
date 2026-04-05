@@ -632,7 +632,7 @@ async def get_summary(meeting_id: str):
 async def save_transcript(request: SaveTranscriptRequest):
     """Save transcript segments for a meeting without processing"""
     try:
-        logger.info(f"Received save-transcript request for meeting: {request.meeting_title}")
+        logger.info("Received save-transcript request")
         logger.info(f"Number of transcripts to save: {len(request.transcripts)}")
 
         # Log first transcript timestamps for debugging

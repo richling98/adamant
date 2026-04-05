@@ -360,7 +360,7 @@ class IndexedDBService {
         }
       }
 
-      console.log(`Cleaned up ${deletedCount} old meetings`);
+      console.debug(`Cleaned up ${deletedCount} old meetings`);
       return deletedCount;
     } catch (error) {
       console.error('Failed to delete old meetings:', error);
@@ -410,7 +410,7 @@ class IndexedDBService {
         }
       }
 
-      console.log(`Cleaned up ${deletedCount} saved meetings`);
+      console.debug(`Cleaned up ${deletedCount} saved meetings`);
       return deletedCount;
     } catch (error) {
       console.error('Failed to delete saved meetings:', error);

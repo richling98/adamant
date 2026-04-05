@@ -45,7 +45,7 @@ Step 2 inventory must be complete. Use `docs/dependency-inventory.md` to confirm
 
 ### Task 1: Write the logging policy
 
-- [ ] **Step 1: Create `docs/logging-policy.md`**
+- [x] **Step 1: Create `docs/logging-policy.md`**
 
 ```markdown
 # Adamant Logging Policy
@@ -108,7 +108,7 @@ git commit -m "docs: add logging policy — no transcript/summary/key content in
 
 ### Task 2: Fix Rust content logging
 
-- [ ] **Step 3: Find every Rust log line that emits transcript or summary content**
+- [x] **Step 3: Find every Rust log line that emits transcript or summary content**
 
 Run from repo root:
 
@@ -127,7 +127,7 @@ grep -rn 'log.*!.*{}\|tracing.*!.*{}' frontend/src-tauri/src/ --include="*.rs" |
 
 Document every hit before changing anything.
 
-- [ ] **Step 4: Replace each content log line with a metadata-only equivalent**
+- [x] **Step 4: Replace each content log line with a metadata-only equivalent**
 
 For each hit from Step 3, apply this pattern:
 
@@ -154,7 +154,7 @@ if std::env::var("ADAMANT_VERBOSE").is_ok() {
 log::info!("Processing transcript: {} chars", transcript_text.len());
 ```
 
-- [ ] **Step 5: Build to confirm no compilation errors**
+- [x] **Step 5: Build to confirm no compilation errors**
 
 ```bash
 cd frontend && cargo check --manifest-path src-tauri/Cargo.toml
@@ -173,7 +173,7 @@ git commit -m "fix(privacy): replace transcript/summary content logs with metada
 
 ### Task 3: Fix Python content logging
 
-- [ ] **Step 7: Find every Python log line that emits transcript or summary content**
+- [x] **Step 7: Find every Python log line that emits transcript or summary content**
 
 ```bash
 grep -rn \
@@ -188,7 +188,7 @@ Also:
 grep -rn 'logging\.\(info\|debug\)' backend/ --include="*.py" | grep -i 'text\|content\|transcript\|summary'
 ```
 
-- [ ] **Step 8: Replace each Python content log with metadata-only equivalent**
+- [x] **Step 8: Replace each Python content log with metadata-only equivalent**
 
 **Before:**
 ```python
@@ -223,7 +223,7 @@ git commit -m "fix(privacy): replace transcript/summary content logs with metada
 
 ### Task 4: Fix TypeScript console.log usage
 
-- [ ] **Step 10: Find every console.log in production frontend code that emits config or content**
+- [x] **Step 10: Find every console.log in production frontend code that emits config or content**
 
 ```bash
 grep -rn "console\.log\|console\.debug\|console\.warn\|console\.error" \
@@ -239,7 +239,7 @@ Pay special attention to any line that logs:
 
 Example from `frontend/src/app/settings/page.tsx:39`: `console.log('Loaded saved transcript config:', config)` — this logs the full config object which may include an `apiKey` field.
 
-- [ ] **Step 11: Remove or sanitize each hit**
+- [x] **Step 11: Remove or sanitize each hit**
 
 For each `console.log` that logs a config object containing `apiKey`:
 
@@ -275,7 +275,7 @@ git commit -m "fix(privacy): remove/sanitize console.log of config and transcrip
 
 ### Task 5: Add CI enforcement script
 
-- [ ] **Step 13: Create `scripts/check-content-logging.sh`**
+- [x] **Step 13: Create `scripts/check-content-logging.sh`**
 
 ```bash
 #!/usr/bin/env bash
