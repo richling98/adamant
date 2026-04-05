@@ -1,6 +1,6 @@
 # Architecture Hardening Plan V2
 
-**Overall Progress:** `7%`
+**Overall Progress:** `13%`
 
 ## TLDR
 This is a safer version of the remediation plan for the 10 CTO-level findings. The core change is not "fix everything at once," but "reduce risk in controlled waves with dependency gates, rollback points, and explicit proof before each high-blast-radius migration."
@@ -88,11 +88,11 @@ Do not delete legacy files until all of the following are true:
   - [x] 🟩 Freeze feature work that touches settings, secrets, summary ownership, or persistence until this program is sequenced.
   - [x] 🟩 Create a risk register for each of the 10 issues with owner, blast radius, and rollback plan.
 
-- [ ] 🟥 **Step 2: Inventory All Live Dependencies Before Changing Them**
-  - [ ] 🟥 Map every frontend, Rust, and Python code path that reads summary config, transcript config, or API keys.
-  - [ ] 🟥 Map every route and command still depending on `localhost:5167` semantics.
-  - [ ] 🟥 Map every place recording state is synchronized by event, polling, or both.
-  - [ ] 🟥 Classify legacy code into: not compiled, compiled but unused, indirectly used, or uncertain.
+- [x] 🟩 **Step 2: Inventory All Live Dependencies Before Changing Them**
+  - [x] 🟩 Map every frontend, Rust, and Python code path that reads summary config, transcript config, or API keys.
+  - [x] 🟩 Map every route and command still depending on `localhost:5167` semantics.
+  - [x] 🟩 Map every place recording state is synchronized by event, polling, or both.
+  - [x] 🟩 Classify legacy code into: not compiled, compiled but unused, indirectly used, or uncertain.
 
 - [ ] 🟥 **Step 3: Build Privacy-Safe Observability Before Removing Debugging**
   - [ ] 🟥 Introduce a shared logging policy for Rust, Python, and frontend.

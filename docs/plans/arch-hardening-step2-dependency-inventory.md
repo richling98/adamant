@@ -189,7 +189,7 @@ List every hit and classify.
 
 ### Task 5: Produce the inventory document
 
-- [ ] **Step 13: Create `docs/dependency-inventory.md`**
+- [x] **Step 13: Create `docs/dependency-inventory.md`**
 
 Create the file using all findings from Steps 1–12. Use this structure exactly:
 
