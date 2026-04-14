@@ -10,187 +10,256 @@
 ## TLDR
 
 Transform Adamant from a meeting recorder into a Karpathy-style personal knowledge system.
-After each meeting, an LLM compiles it into a structured wiki article (decisions, people, action
-items, topics). A Memory chat page lets users ask questions and get cited, grounded answers drawn
-from those articles — not raw transcript fragments. Over time, cross-cutting entities (people,
-projects, decisions) surface knowledge that spans multiple meetings. Users can browse, edit, and
-control what gets remembered.
+After each meeting, an LLM compiles it into a structured markdown wiki article stored on disk.
+A global `_index.md` maps every article in one place. When the user asks a question, the LLM
+reads the index to orient itself, identifies relevant meetings, reads those full articles, and
+answers with citations — following structured links, not doing similarity search.
 
-Built entirely in Rust/SQLite. No new infrastructure, no backend server. Three phases:
-1. Wiki compilation + cited chat (replaces naive raw-dump chat)
-2. Entity extraction + cross-meeting knowledge
-3. Wiki browser UI + user privacy controls
+This is explicitly **not RAG**. The methodology (Karpathy / Spisak / VibeMarketer) is: flat
+markdown files + a maintained index + inter-article `[[links]]` → LLM navigates the index and
+follows relationships. No embeddings, no vector DB, no BM25 scoring. That approach is for
+enterprise scale. At personal meeting-recorder scale, a well-maintained wiki index outperforms
+chunked similarity search and produces more coherent, better-cited answers.
+
+Built Rust-native. Three phases:
+1. Wiki compilation + index navigation + cited chat
+2. Concept pages + inter-article linking (people, projects, decisions)
+3. Wiki browser UI + outputs loop + privacy controls
 
 ---
 
 ## Critical Decisions
 
-- **Rust-native, not Python backend.** The existing `chat/handler.rs` already proves the in-process
-  path works. Staying Rust avoids any backend server dependency and keeps the app self-contained.
-  The Phase 1 plan in `2026-04-06-second-brain-phase1-rag-chat.md` was written before the Rust chat
-  handler existed — that plan is superseded by this one.
+- **Rust-native, not Python backend.** The existing `chat/handler.rs` proves in-process works.
+  No server dependency. The original `2026-04-06-second-brain-phase1-rag-chat.md` plan targeted
+  the Python backend and is superseded by this plan.
 
-- **SQLite for wiki storage, not filesystem markdown.** Wiki articles live in a `wiki_articles`
-  table alongside all other app data. Consistent with existing patterns, portable, and queryable
-  without filesystem assumptions.
+- **Filesystem markdown, not SQLite blobs.** Wiki articles live as `.md` files in
+  `~/.adamant/wiki/`. This is the exact structure Karpathy describes and both writeups endorse:
+  "just a nested directory of .md files." SQLite tracks metadata only (compiled_at, is_stale,
+  is_private, file_path) — the content itself lives on disk where the LLM can navigate it.
 
-- **FTS5 for routing, not vector embeddings.** The app already has `meeting_search_fts` with BM25
-  scoring. Use it to identify the 3–5 most relevant meetings before reading their wiki articles.
-  Achieves the Karpathy routing goal with zero new dependencies. Vector embeddings can be added
-  later if scale demands it.
+- **Index navigation, not search.** The routing mechanism is: give the LLM `_index.md` (one
+  line per meeting), ask it to identify the 3–5 most relevant meetings, then read those full
+  wiki files. This is structured relationship traversal, not pattern matching on keywords.
+  VibeMarketer: "RAG finds chunks that seem similar to your query. The wiki approach follows
+  actual structured links." No FTS5 routing, no BM25 scoring, no vector embeddings — those
+  are the wrong tool at this scale.
 
-- **Structured citations returned as JSON.** The chat response becomes
-  `{ answer: string, cited_meeting_ids: string[] }`. The frontend renders cited meetings as
-  clickable cards below each assistant reply.
+- **`[[concept]]` internal links build the relationship web.** Wiki articles link to each other
+  using `[[concept-name]]` notation. This is what makes the system compound: article 20 links
+  back to concepts established by articles 1–19, creating a dense web the LLM can trace.
 
-- **LLM compiles wiki — users can override.** Articles are LLM-generated. Users can edit or
-  delete them. A `user_content` field stores overrides; if set, it replaces the LLM content in
-  chat context. A `is_private` flag excludes articles from chat entirely.
+- **`_index.md` and `_log.md` are always maintained.** Every compilation updates both files.
+  `_index.md` is a brief directory of every meeting + concept article. `_log.md` records when
+  each article was compiled or updated. These are the LLM's navigation layer.
 
-- **Phase-gated delivery.** Each phase is independently shippable. Phase 1 is the highest-value
-  change (better answers + citations). Phases 2 and 3 build on it without breaking it.
+- **Outputs loop completes the system.** Chat answers get saved to `wiki/outputs/` and
+  optionally merged back into relevant wiki articles. Spisak: "Every question makes the next
+  answer better. That's the loop."
+
+- **No vector embeddings.** This is a deliberate architecture choice, not an omission.
+  VibeMarketer: "for personal research, a second brain, a small team's knowledge hub — the wiki
+  approach handles it." Karpathy himself: "at ~100 articles and 500k words, well-maintained
+  markdown indexes just work." Add embeddings only if the meeting count exceeds ~500.
+
+- **Phase-gated delivery.** Each phase ships independently and builds on the last.
 
 ---
 
 ## End Result
 
-When all three phases are complete, the user experiences:
+When all three phases are complete:
 
-- A **Brain icon** in the sidebar that opens a **Memory** page
-- A chat input where they ask questions like "What did we decide about the API last week?" and
-  receive a grounded, well-structured answer in 2–5 seconds — entirely on-device
-- **Cited meeting cards** beneath each answer, each clickable, opening that meeting's detail page
-- Every saved meeting **auto-compiles** into a structured wiki article in the background — no user
-  action needed
-- A **wiki browser** where they can read, edit, or mark articles private
-- **Entity pages** for recurring people, projects, and decisions — showing which meetings each
-  entity appeared in
-- A **"Delete all memory"** option so users retain full control over what the system retains
-- Everything runs locally. Zero data leaves the device.
-
----
-
-## Phase 1: Wiki Compilation + Cited Chat
-
-**Goal:** Replace the current naive "dump all raw transcripts into context" chat with
-LLM-compiled wiki articles and structured citations. This alone dramatically improves answer
-quality and adds meeting traceability.
-
-### Current state (what this replaces)
-
-`chat/handler.rs` currently fetches all meeting transcripts + notes, concatenates them into a
-60k-character flat string, and sends that string as the system prompt. There is no structure,
-no routing, and no citations. The LLM reads fragmented transcript text instead of organized
-summaries.
+- A **Brain icon** in the sidebar opens the **Memory** page
+- The user types a question (e.g. "What did we decide about the API redesign?") and gets a
+  grounded, well-organized answer in 2–5 seconds — completely on-device
+- **Cited meeting cards** appear below each answer — each clickable, linking to that meeting's
+  detail page
+- Every meeting **auto-compiles** into a structured wiki article after it saves — no user action
+- A global `_index.md` maps all articles; `_log.md` tracks every update
+- Articles **link to each other** via `[[concept]]` notation — the web compounds over time
+- **Concept pages** surface recurring people, projects, and decisions across meetings
+- **Saved outputs** feed back into the wiki — each answer makes the next one sharper
+- Users can read, edit, or mark any article private in the wiki browser
+- A **"Delete all memory"** button gives full control
+- Zero data leaves the device
 
 ---
 
-- [ ] 🟥 **Step 1: Add `wiki_articles` migration**
+## Wiki Folder Structure
 
-  **File:** `frontend/src-tauri/migrations/{timestamp}_add_wiki_articles.sql`
+```
+~/.adamant/wiki/
+├── _index.md          ← auto-maintained: one-line summary per article
+├── _log.md            ← auto-maintained: update history
+├── meetings/          ← one file per meeting
+│   ├── {meeting_id}.md
+│   └── ...
+├── concepts/          ← Phase 2: people, projects, decisions, recurring topics
+│   ├── alice-chen.md
+│   ├── q3-launch.md
+│   └── ...
+└── outputs/           ← Phase 3: saved chat answers
+    └── {date}-{slug}.md
+```
+
+---
+
+## Phase 1: Wiki Compilation + Index Navigation + Cited Chat
+
+**Goal:** Replace the current naive raw-transcript dump with filesystem wiki articles,
+index-based routing, and structured citations. The LLM navigates the index like a table of
+contents — it does not search.
+
+### What this replaces
+
+`chat/handler.rs` currently concatenates all meeting transcripts + notes into a 60k-character
+flat string and sends it as the system prompt. There is no structure, no routing, no citations,
+and no way for the LLM to trace which meeting an answer came from.
+
+---
+
+- [ ] 🟥 **Step 1: Add `wiki_metadata` table migration**
+
+  SQLite tracks metadata only. Article content lives on disk.
+
+  **File:** `frontend/src-tauri/migrations/{timestamp}_add_wiki_metadata.sql`
 
   ```sql
-  CREATE TABLE IF NOT EXISTS wiki_articles (
-      id            TEXT PRIMARY KEY,
-      meeting_id    TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-      content       TEXT NOT NULL,           -- LLM-compiled markdown article
-      user_content  TEXT,                    -- User override; if set, used instead of content
-      is_private    INTEGER NOT NULL DEFAULT 0,
-      is_stale      INTEGER NOT NULL DEFAULT 0,
-      compiled_at   DATETIME NOT NULL DEFAULT (datetime('now')),
-      updated_at    DATETIME NOT NULL DEFAULT (datetime('now'))
+  CREATE TABLE IF NOT EXISTS wiki_metadata (
+      meeting_id   TEXT PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE,
+      file_path    TEXT NOT NULL,          -- absolute path to the .md file on disk
+      is_private   INTEGER NOT NULL DEFAULT 0,
+      is_stale     INTEGER NOT NULL DEFAULT 0,
+      compiled_at  DATETIME NOT NULL DEFAULT (datetime('now')),
+      updated_at   DATETIME NOT NULL DEFAULT (datetime('now'))
   );
-
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_wiki_articles_meeting
-      ON wiki_articles(meeting_id);
   ```
 
-  - [ ] 🟥 Create the migration file with a timestamp greater than the latest existing migration
-  - [ ] 🟥 Verify `sqlx::migrate!()` picks it up on next app start (`cargo check`)
+  - [ ] 🟥 Create the migration file (timestamp > latest existing migration)
+  - [ ] 🟥 Verify `sqlx::migrate!()` picks it up (`cargo check`)
 
 ---
 
-- [ ] 🟥 **Step 2: Add `WikiRepository` to the database layer**
+- [ ] 🟥 **Step 2: Add `WikiMetadataRepository` to the database layer**
 
   **File:** `frontend/src-tauri/src/database/repositories/wiki.rs`
 
-  Methods to implement (all `async`, take `&Pool<Sqlite>`):
-
   | Method | Purpose |
   |--------|---------|
-  | `upsert_article(pool, meeting_id, content)` | Insert or replace LLM content |
-  | `get_article(pool, meeting_id)` | Fetch article for one meeting |
-  | `get_all_articles(pool)` | Fetch all non-private articles |
-  | `save_user_edit(pool, meeting_id, user_content)` | Store user override |
+  | `upsert(pool, meeting_id, file_path)` | Record that an article exists at this path |
+  | `get(pool, meeting_id)` | Fetch metadata row for one meeting |
+  | `list_all(pool)` | All non-private metadata rows |
   | `mark_stale(pool, meeting_id)` | Set `is_stale = 1` |
   | `mark_private(pool, meeting_id, private: bool)` | Toggle privacy |
-  | `delete_article(pool, meeting_id)` | Hard delete |
+  | `delete(pool, meeting_id)` | Remove metadata row (caller deletes file) |
 
   - [ ] 🟥 Create `wiki.rs` with all methods
-  - [ ] 🟥 Export from `repositories/mod.rs`: `pub mod wiki;`
+  - [ ] 🟥 Export from `repositories/mod.rs`
 
 ---
 
-- [ ] 🟥 **Step 3: Build the wiki compiler**
+- [ ] 🟥 **Step 3: Set up wiki folder structure on first run**
+
+  **File:** `frontend/src-tauri/src/chat/wiki_fs.rs`
+
+  On app start (or lazily on first compilation), ensure these exist:
+  ```
+  ~/.adamant/wiki/
+  ~/.adamant/wiki/meetings/
+  ~/.adamant/wiki/concepts/
+  ~/.adamant/wiki/outputs/
+  ```
+
+  Also create stub `_index.md` and `_log.md` if missing:
+  - `_index.md`: `# Adamant Wiki Index\n\n*No articles yet.*`
+  - `_log.md`: `# Wiki Update Log\n\n`
+
+  Functions:
+  - `wiki_dir(app_data_dir) -> PathBuf` — returns `~/.adamant/wiki/`
+  - `ensure_wiki_dirs(app_data_dir) -> Result<()>` — creates dirs + stub files
+  - `index_path(app_data_dir) -> PathBuf`
+  - `log_path(app_data_dir) -> PathBuf`
+  - `meeting_article_path(app_data_dir, meeting_id) -> PathBuf`
+  - `concept_article_path(app_data_dir, slug) -> PathBuf`
+  - `output_path(app_data_dir, slug) -> PathBuf`
+
+  - [ ] 🟥 Create `wiki_fs.rs` with all path helpers and `ensure_wiki_dirs`
+  - [ ] 🟥 Call `ensure_wiki_dirs` during app startup (in `lib.rs` setup)
+  - [ ] 🟥 Export from `chat/mod.rs`
+
+---
+
+- [ ] 🟥 **Step 4: Build the wiki compiler**
 
   **File:** `frontend/src-tauri/src/chat/wiki_compiler.rs`
 
-  Core function signature:
   ```rust
   pub async fn compile_meeting_to_wiki(
       pool: &Pool<Sqlite>,
-      app_data_dir: Option<PathBuf>,
+      app_data_dir: PathBuf,
       meeting_id: &str,
-  ) -> Result<String, String>
+  ) -> Result<(), String>
   ```
 
-  Compilation steps inside:
-  1. Fetch meeting title + transcripts + notes from DB
-  2. Build a tightly-scoped system prompt (see below)
-  3. Call `generate_summary` (already used by summary engine)
-  4. Store result via `WikiRepository::upsert_article`
-  5. Return the compiled markdown
+  Steps inside:
+  1. Fetch meeting title + date + transcripts + notes from DB
+  2. Call LLM with compilation prompt (see below)
+  3. Write result to `wiki/meetings/{meeting_id}.md`
+  4. Update `WikiMetadataRepository` with file path
+  5. Regenerate `_index.md` (call `update_index`)
+  6. Append to `_log.md` (call `append_log`)
 
-  **System prompt for wiki compilation:**
-  ```
-  You are a meeting editor. From the raw meeting transcript and notes below,
-  produce a structured markdown wiki article with these exact sections:
+  **Wiki article format:**
+  ```markdown
+  # {Meeting Title}
+  **Date:** {date}
 
   ## Summary
   One paragraph. What was this meeting about?
 
   ## Key Decisions
-  Bullet list. Only decisions explicitly made — never inferred.
+  - Only decisions explicitly made. Never inferred.
+  - If none: *None recorded.*
 
   ## Action Items
-  Bullet list. Each item: who is responsible and what they committed to.
-  If none, write: - None recorded.
+  - Who committed to what. Include names.
+  - If none: *None recorded.*
 
-  ## People Mentioned
-  Bullet list of names and their role or affiliation if stated.
+  ## People
+  - [[Alice Chen]] — product lead
+  - [[Bob Kim]] — engineering
 
-  ## Topics Discussed
-  Bullet list of main topics, with a one-line description each.
+  ## Topics
+  - [[API Redesign]] — discussed new endpoint structure
+  - [[Q3 Launch]] — timeline reviewed
 
   ## Important Details
-  Any specific numbers, dates, links, or technical terms worth preserving.
-
-  Rules: Use only information from the source. Never invent. Bullet points only — no tables.
+  Specific numbers, dates, links, or technical terms worth preserving.
   ```
 
-  - [ ] 🟥 Create `wiki_compiler.rs` with `compile_meeting_to_wiki`
+  Note the `[[Name]]` links — these create the relationship web that compounds over time.
+  Even if concept pages don't exist yet (Phase 2), the links are written now.
+
+  **`update_index` function:**
+  - Read all `wiki_metadata` rows from SQLite
+  - For each, read the first line (title) of its `.md` file
+  - Rewrite `_index.md` as a sorted list: `- [[{title}]](meetings/{id}.md) — {summary line}`
+  - Keep index concise: one line per article
+
+  **`append_log` function:**
+  - Append: `- {ISO datetime} | compiled | {meeting_title} ({meeting_id})`
+
+  - [ ] 🟥 Create `wiki_compiler.rs` with `compile_meeting_to_wiki`, `update_index`, `append_log`
+  - [ ] 🟥 Handle notes-only meetings (no transcript) gracefully
   - [ ] 🟥 Export from `chat/mod.rs`
-  - [ ] 🟥 Handle missing transcript gracefully (notes-only meetings should still compile)
 
 ---
 
-- [ ] 🟥 **Step 4: Auto-trigger wiki compilation after meeting content saves**
+- [ ] 🟥 **Step 5: Auto-trigger wiki compilation after meeting saves**
 
-  **Files to modify:**
-  - Identify the Tauri command that is called when a meeting's transcript or notes finish saving
-    (likely in `recording_commands.rs` end-of-recording path, or the notes autosave path in the
-    summary module)
-  - After the save completes, spawn a background tokio task:
+  After a meeting's transcript or notes finish saving, spawn a background task:
 
   ```rust
   let pool_clone = pool.clone();
@@ -203,48 +272,53 @@ summaries.
   });
   ```
 
-  - [ ] 🟥 Locate the correct save hook point
-  - [ ] 🟥 Add background spawn (non-blocking — never blocks the UI)
-  - [ ] 🟥 Emit `"wiki-article-ready"` Tauri event to frontend on success, with `{ meeting_id }`
+  - [ ] 🟥 Identify the correct save hook (end-of-recording path in `recording_commands.rs`,
+        or the notes autosave path in the summary module)
+  - [ ] 🟥 Add background spawn (non-blocking — never delays the UI)
+  - [ ] 🟥 Emit `"wiki-article-ready"` Tauri event on success: `{ meeting_id, title }`
 
 ---
 
-- [ ] 🟥 **Step 5: Upgrade chat handler to wiki-first context**
+- [ ] 🟥 **Step 6: Replace chat handler with index-navigation approach**
 
   **File:** `frontend/src-tauri/src/chat/handler.rs`
 
-  Replace the current raw-transcript approach with:
+  Replace the current raw-transcript dump with:
 
-  1. **FTS routing** — run BM25 query against `meeting_search_fts` to find top-5 relevant meetings:
-     ```sql
-     SELECT meeting_id, bm25(meeting_search_fts) AS score
-     FROM meeting_search_fts
-     WHERE meeting_search_fts MATCH ?
-     ORDER BY score
-     LIMIT 5
-     ```
-     If the FTS query is empty or fails, fall back to most-recent 5 meetings.
+  **Step A — Give LLM the index:**
+  Read `_index.md` in full. This is small (one line per meeting) and fits in context easily.
+  Include it in the system prompt as the navigation layer.
 
-  2. **Wiki read** — for each routed meeting, fetch its wiki article via `WikiRepository::get_article`.
-     If no article exists yet (not yet compiled), fall back to raw transcript snippet for that meeting.
+  **Step B — Ask LLM to identify relevant meetings:**
+  Run a first LLM pass (lightweight, fast) with a focused prompt:
+  ```
+  The user asked: "{query}"
+  Based on this index of available meeting articles, list the IDs of the 3-5 most relevant
+  meetings. Return ONLY a JSON array of meeting IDs: ["id1", "id2", ...]
+  ```
 
-  3. **Build context** — combine wiki articles within `MAX_CONTEXT_CHARS` budget.
-     Wiki articles are ~5–10x more information-dense than raw transcripts, so the budget goes further.
+  **Step C — Read those full wiki articles:**
+  For each returned ID, read the full `.md` file from `wiki/meetings/{id}.md`.
+  If no article exists for a meeting yet, fall back to a short raw transcript excerpt.
 
-  4. **Retain existing multi-provider LLM call** — no changes to the `generate_summary` call itself.
+  **Step D — Final LLM call with full context:**
+  Send the full wiki articles as context for the actual answer.
 
-  - [ ] 🟥 Add FTS routing query
-  - [ ] 🟥 Read wiki articles for routed meetings
-  - [ ] 🟥 Fall back gracefully when articles are missing
-  - [ ] 🟥 Remove old flat-concatenation approach
+  This is index navigation, not search. The LLM reasons over the index the same way a human
+  reads a table of contents to decide which chapter to open.
+
+  - [ ] 🟥 Read `_index.md` and include in system prompt
+  - [ ] 🟥 First LLM pass: get relevant meeting IDs
+  - [ ] 🟥 Read wiki `.md` files for those meetings
+  - [ ] 🟥 Second LLM pass: full answer with article context
+  - [ ] 🟥 Remove the old flat-concatenation approach entirely
 
 ---
 
-- [ ] 🟥 **Step 6: Add structured citations to chat responses**
+- [ ] 🟥 **Step 7: Add structured citations to chat responses**
 
   **File:** `frontend/src-tauri/src/chat/handler.rs`
 
-  Add `ChatResponse` struct:
   ```rust
   #[derive(Debug, Serialize, Deserialize)]
   pub struct ChatResponse {
@@ -253,252 +327,237 @@ summaries.
   }
   ```
 
-  In the system prompt, instruct the LLM:
+  In the final answer prompt, instruct the LLM:
   ```
-  At the very end of your response, on a new line, write exactly:
-  SOURCES: meeting_id_1, meeting_id_2
-  Only list meeting IDs you actually drew from. Omit if not applicable.
+  End your response with exactly:
+  SOURCES: id1, id2
+  Only list meeting IDs you actually drew from.
   ```
 
-  After receiving the LLM response:
-  1. Parse out the `SOURCES:` line
-  2. Validate that each ID exists in the meetings we injected
-  3. Strip the `SOURCES:` line from `answer`
-  4. Return `ChatResponse { answer, cited_meeting_ids }`
+  Parse out the `SOURCES:` line, validate IDs against what was loaded, strip from answer,
+  return `ChatResponse`. Update the Tauri command return type accordingly.
 
-  Update the Tauri command in `lib.rs` to return `ChatResponse` instead of `String`.
-
-  - [ ] 🟥 Define `ChatResponse` struct
-  - [ ] 🟥 Add SOURCES instruction to system prompt
-  - [ ] 🟥 Parse and validate cited IDs
-  - [ ] 🟥 Update Tauri command return type
+  - [ ] 🟥 Define `ChatResponse`
+  - [ ] 🟥 Add SOURCES instruction to answer prompt
+  - [ ] 🟥 Parse, validate, strip cited IDs
+  - [ ] 🟥 Update Tauri command signature in `lib.rs`
 
 ---
 
-- [ ] 🟥 **Step 7: Memory page — frontend**
+- [ ] 🟥 **Step 8: Memory page + Brain icon in sidebar**
 
   **Files to create:**
-  - `frontend/src/app/memory/page.tsx` — page layout and route
-  - `frontend/src/components/MemoryChat/index.tsx` — chat message list + text input
-  - `frontend/src/components/MemoryChat/CitationCard.tsx` — per-meeting citation card
+  - `frontend/src/app/memory/page.tsx` — Memory page layout
+  - `frontend/src/components/MemoryChat/index.tsx` — chat messages + text input
+  - `frontend/src/components/MemoryChat/CitationCard.tsx` — clickable meeting citation card
 
-  **`MemoryChat` component behavior:**
+  **MemoryChat behavior:**
   - Text input at bottom, send on Enter or button click
-  - Messages list above, scrolls to bottom on new message
-  - Assistant turns show answer text + `CitationCard` list below
-  - Loading state while waiting for LLM response
-  - Invokes `api_chat_with_meetings` via Tauri `invoke`
+  - Messages scroll; assistant turns show answer + citation cards below
+  - Loading indicator while waiting for LLM
 
-  **`CitationCard` component:**
-  - Shows meeting title + date
-  - Clicking navigates to `/meeting-details?id={meeting_id}`
-  - Visually distinct from chat bubbles (e.g. a small chip or card below the answer)
+  **CitationCard:** meeting title + date, clicking opens `/meeting-details?id={id}`
+
+  **Sidebar:** Add `Brain` icon from `lucide-react`, navigates to `/memory`, active state
+  on any `/memory/*` route.
+
+  **"Re-compile all" button on Memory page:**
+  - New Tauri command `recompile_all_wiki_articles`: iterates all meetings sequentially,
+    calls `compile_meeting_to_wiki` for each, emits `wiki-article-ready` events
+  - Frontend shows progress count
 
   - [ ] 🟥 Create `memory/page.tsx`
   - [ ] 🟥 Create `MemoryChat/index.tsx`
   - [ ] 🟥 Create `MemoryChat/CitationCard.tsx`
-  - [ ] 🟥 Wire Tauri invoke + handle loading/error states
-  - [ ] 🟥 Render citation cards from `cited_meeting_ids`
-
----
-
-- [ ] 🟥 **Step 8: Add Brain icon + Memory nav to sidebar**
-
-  **File:** `frontend/src/components/Sidebar/index.tsx`
-
-  - Add `Brain` icon from `lucide-react` to the sidebar nav (below the Home/Meetings button)
-  - Navigates to `/memory` on click
-  - Active state highlight when on any `/memory/*` route
-
-  **On Memory page, add a "Re-compile all" button:**
-  - Calls a new Tauri command `recompile_all_wiki_articles`
-  - Triggers `compile_meeting_to_wiki` for every meeting sequentially in background
-  - Shows progress via `wiki-article-ready` events
-
   - [ ] 🟥 Add Brain nav item to sidebar
-  - [ ] 🟥 Add `recompile_all_wiki_articles` Tauri command
-  - [ ] 🟥 Register command in `lib.rs`
-  - [ ] 🟥 Add Re-compile button + progress indicator on Memory page
+  - [ ] 🟥 Add `recompile_all_wiki_articles` Tauri command + register in `lib.rs`
+  - [ ] 🟥 Wire Tauri invoke, loading/error states, citation rendering
 
 ---
 
-## Phase 2: Entity Extraction + Cross-Meeting Knowledge
+## Phase 2: Concept Pages + Inter-Article Linking
 
-**Goal:** Extract named entities (people, projects, decisions, concepts) from wiki articles and
-build entity pages — knowledge that spans multiple meetings and surfaces connections the user
-didn't explicitly organize.
-
----
-
-- [ ] 🟥 **Step 9: Add `wiki_entities` and `wiki_entity_mentions` tables**
-
-  ```sql
-  CREATE TABLE IF NOT EXISTS wiki_entities (
-      id          TEXT PRIMARY KEY,
-      name        TEXT NOT NULL,
-      type        TEXT NOT NULL CHECK(type IN ('person','project','concept','decision')),
-      description TEXT,
-      created_at  DATETIME NOT NULL DEFAULT (datetime('now')),
-      updated_at  DATETIME NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_wiki_entities_name_type
-      ON wiki_entities(name, type);
-
-  CREATE TABLE IF NOT EXISTS wiki_entity_mentions (
-      id              TEXT PRIMARY KEY,
-      entity_id       TEXT NOT NULL REFERENCES wiki_entities(id) ON DELETE CASCADE,
-      meeting_id      TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-      context_snippet TEXT,
-      mentioned_at    DATETIME NOT NULL DEFAULT (datetime('now'))
-  );
-  ```
-
-  - [ ] 🟥 Create migration file
-  - [ ] 🟥 Add `EntityRepository` with: `upsert_entity`, `add_mention`, `get_entity_meetings`,
-        `get_meeting_entities`, `list_all_entities`
+**Goal:** Extract recurring people, projects, and decisions as their own concept pages in
+`wiki/concepts/`. Articles already link to these via `[[concept]]` notation from Phase 1.
+Phase 2 creates the pages those links point to.
 
 ---
 
-- [ ] 🟥 **Step 10: Build entity extractor**
+- [ ] 🟥 **Step 9: Concept page extractor**
 
-  **File:** `frontend/src-tauri/src/chat/entity_extractor.rs`
+  **File:** `frontend/src-tauri/src/chat/concept_extractor.rs`
+
+  After each meeting compiles, run a second LLM pass to extract concepts:
 
   ```rust
-  pub async fn extract_entities(
-      pool: &Pool<Sqlite>,
-      app_data_dir: Option<PathBuf>,
+  pub async fn extract_concepts(
+      app_data_dir: PathBuf,
       meeting_id: &str,
-  ) -> Result<Vec<ExtractedEntity>, String>
+      article_content: &str,
+  ) -> Result<(), String>
   ```
 
-  LLM system prompt instructs the model to return **only** a JSON array:
+  LLM returns a JSON array:
   ```json
   [
-    { "name": "Alice Chen", "type": "person", "context": "Product lead, discussed roadmap" },
-    { "name": "Q3 Launch", "type": "project", "context": "Target: July 15" }
+    { "name": "Alice Chen", "type": "person", "slug": "alice-chen",
+      "summary": "Product lead. Owns the roadmap.", "context": "Discussed API timeline." },
+    { "name": "Q3 Launch", "type": "project", "slug": "q3-launch",
+      "summary": "Target release: July 15.", "context": "Timeline reviewed in this meeting." }
   ]
   ```
 
-  After receiving the response:
-  1. Parse JSON
-  2. Upsert each entity (merge by `name + type`)
-  3. Insert `wiki_entity_mentions` rows
+  For each extracted concept:
+  1. If `wiki/concepts/{slug}.md` doesn't exist → create it with a starter template
+  2. If it exists → append a new "## Seen in: {Meeting Title}" section with the context snippet
+  3. Update `_index.md` to include concept pages (clearly labelled as `[concept]`)
+  4. Append to `_log.md`
 
-  Run this **after** wiki compilation in the same background pipeline (Step 4).
+  **Concept page format:**
+  ```markdown
+  # Alice Chen
+  **Type:** Person
+  {summary paragraph}
 
-  - [ ] 🟥 Create `entity_extractor.rs`
-  - [ ] 🟥 Parse LLM JSON response safely (handle malformed output)
-  - [ ] 🟥 Upsert entities and mentions
-  - [ ] 🟥 Chain after wiki compilation in the background task
+  ## Appearances
+  - [[{Meeting Title}]](../meetings/{id}.md) — {context snippet}
+  ```
+
+  - [ ] 🟥 Create `concept_extractor.rs`
+  - [ ] 🟥 Create or update concept `.md` file per extracted concept
+  - [ ] 🟥 Update `_index.md` with concept entries
+  - [ ] 🟥 Chain after `compile_meeting_to_wiki` in the background pipeline (Step 5)
 
 ---
 
-- [ ] 🟥 **Step 11: Entity-aware chat context**
+- [ ] 🟥 **Step 10: Concept-aware chat routing**
 
   **File:** `frontend/src-tauri/src/chat/handler.rs`
 
-  Before the FTS routing step, scan the user's query for known entity names
-  (simple substring match against `EntityRepository::list_all_entities`).
-
-  For matched entities, fetch their associated meeting IDs and **union** them with the
-  FTS routing results — ensuring meetings where that person/project appears are always
-  included in context.
-
-  Add `mentioned_entities` to `ChatResponse`:
-  ```rust
-  pub struct ChatResponse {
-      pub answer: String,
-      pub cited_meeting_ids: Vec<String>,
-      pub mentioned_entities: Vec<EntitySummary>, // name, type, meeting_count
-  }
+  When the LLM reads `_index.md` (Step 6A), the index now includes concept pages too.
+  The first LLM routing pass can return both meeting IDs and concept slugs:
+  ```json
+  { "meetings": ["id1", "id2"], "concepts": ["alice-chen", "q3-launch"] }
   ```
 
-  - [ ] 🟥 Entity name scan on incoming query
-  - [ ] 🟥 Union entity meeting IDs with FTS results
-  - [ ] 🟥 Add `mentioned_entities` to response struct
+  Read the relevant concept `.md` files alongside meeting articles for the final answer pass.
+  This surfaces cross-meeting knowledge without any search infrastructure.
+
+  - [ ] 🟥 Update index routing prompt to accept both meetings and concepts
+  - [ ] 🟥 Read concept `.md` files for returned slugs
+  - [ ] 🟥 Include concept content in final answer context
 
 ---
 
-- [ ] 🟥 **Step 12: Entity pages — frontend**
+- [ ] 🟥 **Step 11: Concept pages in Memory UI**
 
   **Files:**
-  - `frontend/src/app/memory/entities/page.tsx` — list all entities grouped by type
-  - `frontend/src/app/memory/entities/[id]/page.tsx` — single entity detail
+  - `frontend/src/app/memory/concepts/page.tsx` — list all concept pages, grouped by type
+  - `frontend/src/app/memory/concepts/[slug]/page.tsx` — single concept with appearance list
 
-  **Entity detail page shows:**
-  - Entity name, type badge, description
-  - List of all meetings where this entity appears, with the context snippet
-  - Each meeting is a clickable link to the meeting detail page
+  Add a "Concepts" tab or sub-nav on the Memory page alongside Chat.
 
-  **On Memory page:** add an "Entities" section or tab alongside Chat.
+  New Tauri commands: `list_concept_files`, `get_concept_file` — read from `wiki/concepts/`.
 
-  - [ ] 🟥 Create entity list page
-  - [ ] 🟥 Create entity detail page
-  - [ ] 🟥 Add Tauri commands: `get_all_entities`, `get_entity_detail`
-  - [ ] 🟥 Wire entity mentions in Memory page UI
+  - [ ] 🟥 Create concept list page
+  - [ ] 🟥 Create concept detail page
+  - [ ] 🟥 Add Tauri commands + register in `lib.rs`
+  - [ ] 🟥 Add "Concepts" tab on Memory page
 
 ---
 
-## Phase 3: Wiki Browser + User Privacy Controls
+## Phase 3: Wiki Browser + Outputs Loop + Privacy Controls
 
-**Goal:** Give users full visibility and control over what the system remembers. Users can read,
-edit, and delete wiki articles, mark them private, and clear all memory data.
+**Goal:** Users can see and edit all wiki content. Answers get saved back into the wiki.
+Periodic health checks catch errors before they compound.
 
 ---
 
-- [ ] 🟥 **Step 13: Wiki browser page**
+- [ ] 🟥 **Step 12: Wiki browser page**
 
   **Files:**
-  - `frontend/src/app/memory/wiki/page.tsx` — list of all compiled articles
-  - `frontend/src/app/memory/wiki/[meeting_id]/page.tsx` — single article view + edit
+  - `frontend/src/app/memory/wiki/page.tsx` — list all articles (meetings + concepts)
+  - `frontend/src/app/memory/wiki/[...slug]/page.tsx` — article detail + edit
 
   **Article list page:**
-  - Table/card list: meeting title, compilation date, stale indicator, private badge
-  - "Re-compile" button per row
-  - "Mark private" / "Make public" toggle per row
-  - Sort by date, filter by private/stale
+  - Rows: title, type (meeting/concept), compiled date, stale badge, private badge
+  - "Re-compile" button per meeting row
+  - "Mark private / public" toggle per row
 
   **Article detail page:**
-  - Render compiled markdown (or user override if set)
-  - "Edit" button opens a textarea pre-filled with current content
-  - Save stores to `user_content` column
-  - "Reset to AI version" button clears `user_content`
-  - "Mark private" toggle
+  - Render the `.md` file content as formatted markdown
+  - "Edit" opens a textarea pre-filled with the file content
+  - Save writes back to disk (`fs::write`)
+  - "Reset to AI version" re-triggers `compile_meeting_to_wiki` for that meeting
+
+  New Tauri commands: `list_wiki_files`, `get_wiki_file`, `save_wiki_file`,
+  `toggle_wiki_private`, `recompile_single_article`
 
   - [ ] 🟥 Create wiki list page
-  - [ ] 🟥 Create wiki article detail + edit page
-  - [ ] 🟥 Add Tauri commands: `get_wiki_articles`, `get_wiki_article`, `save_wiki_edit`,
-        `toggle_wiki_private`, `recompile_wiki_article`
-  - [ ] 🟥 Register all commands in `lib.rs`
+  - [ ] 🟥 Create article detail + edit page
+  - [ ] 🟥 Add Tauri commands + register in `lib.rs`
+  - [ ] 🟥 Add "Wiki" tab on Memory page
 
 ---
 
-- [ ] 🟥 **Step 14: Add wiki browser nav to Memory page**
+- [ ] 🟥 **Step 13: Outputs loop — save answers back into the wiki**
 
-  - [ ] 🟥 Add "Wiki" tab or sub-nav on Memory page alongside "Chat" and "Entities"
-  - [ ] 🟥 Brain icon in sidebar now covers all three sub-sections
+  After each chat answer, offer a "Save to wiki" button in the Memory chat UI.
+  Saving writes the answer to `wiki/outputs/{date}-{first-words-of-query}.md`:
+
+  ```markdown
+  # {Query}
+  **Date:** {date}
+  **Sources:** [[{Meeting 1}]], [[{Meeting 2}]]
+
+  {answer text}
+  ```
+
+  Also append to `_log.md` and add an entry to `_index.md` under an `Outputs` section.
+
+  This is the compounding loop Spisak describes: "every question makes the next answer better."
+  Future chat sessions can route to saved outputs just like meeting articles.
+
+  - [ ] 🟥 Add "Save to wiki" button on assistant chat turns
+  - [ ] 🟥 New Tauri command `save_chat_output(query, answer, cited_ids)` — writes the file,
+        updates index and log
+  - [ ] 🟥 Include `wiki/outputs/` entries in `_index.md` routing
+
+---
+
+- [ ] 🟥 **Step 14: Health check command**
+
+  Spisak: "Tell your AI: review the entire wiki. Flag contradictions. Find topics mentioned
+  but never explained. List unsourced claims."
+
+  New Tauri command `run_wiki_health_check`:
+  - Read all wiki files
+  - Ask LLM: flag contradictions between articles, find broken `[[links]]` (concepts mentioned
+    but no concept page exists), list any claims that appear only once with no corroboration
+  - Return findings as a structured report
+  - Display in Memory page as a "Health" tab with actionable items
+
+  - [ ] 🟥 Add `run_wiki_health_check` Tauri command
+  - [ ] 🟥 Register in `lib.rs`
+  - [ ] 🟥 Add "Health" tab on Memory page to display findings
 
 ---
 
 - [ ] 🟥 **Step 15: Privacy controls + data management**
 
-  **Chat handler changes:**
-  - Skip articles where `is_private = 1` when building LLM context
-  - Skip private meetings in entity extraction pipeline
+  **Chat handler:** skip articles where `is_private = 1` (metadata in SQLite) when building
+  context. Skip private meetings in concept extractor.
 
   **Settings page — new "Memory" section:**
-  - Toggle: "Auto-compile wiki articles" (default on)
-    - When off, skip the background compilation task entirely
+  - Toggle: "Auto-compile wiki after meetings" (default on) — stored in settings table
   - Button: "Re-compile all articles"
-  - Button: "Delete all memory data" — `DELETE FROM wiki_articles; DELETE FROM wiki_entities;`
-    with a confirmation dialog
+  - Button: "Delete all memory data" — deletes `~/.adamant/wiki/` directory entirely +
+    truncates `wiki_metadata` table. Requires a confirmation dialog.
 
-  - [ ] 🟥 Enforce `is_private` filter in `chat/handler.rs`
-  - [ ] 🟥 Enforce `is_private` filter in `entity_extractor.rs`
-  - [ ] 🟥 Add "Memory" section to `settings/page.tsx`
-  - [ ] 🟥 Add `delete_all_memory` Tauri command with confirmation from frontend
-  - [ ] 🟥 Store auto-compile preference in settings table
+  - [ ] 🟥 Enforce `is_private` in chat handler and concept extractor
+  - [ ] 🟥 Add Memory section to `settings/page.tsx`
+  - [ ] 🟥 Add `delete_all_memory` Tauri command (deletes files + DB rows) + confirmation dialog
+  - [ ] 🟥 Store auto-compile toggle in settings table
 
 ---
 
@@ -512,13 +571,10 @@ Update the overall progress percentage and step statuses as work progresses.
 
 ---
 
-## Implementation Order Recommendation
+## Implementation Order
 
-Ship Phase 1 first — it delivers the biggest user-visible improvement (cited answers, better
-quality) and builds the wiki foundation that Phases 2 and 3 depend on.
-
-1. Steps 1–4: data layer + compiler (pure Rust, no UI)
-2. Steps 5–6: upgrade chat handler (visible improvement to existing chat)
-3. Steps 7–8: Memory page + sidebar nav (new UI surface)
-4. Step 9–12: entity extraction (Phase 2, adds depth)
-5. Steps 13–15: wiki browser + privacy controls (Phase 3, adds user control)
+1. Steps 1–5: filesystem structure + wiki compiler + auto-trigger (no UI changes)
+2. Steps 6–7: replace chat handler with index navigation + citations
+3. Step 8: Memory page + Brain sidebar icon
+4. Steps 9–11: concept pages + Phase 2 entity linking
+5. Steps 12–15: wiki browser, outputs loop, health check, privacy controls
