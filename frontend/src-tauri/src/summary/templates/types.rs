@@ -113,7 +113,8 @@ impl Template {
 
     /// Generates a clean markdown template structure
     pub fn to_markdown_structure(&self) -> String {
-        let mut markdown = String::from("# <Add Title here>\n\n");
+        // No title line — the meeting/notes title is set by the user and must not be overwritten.
+        let mut markdown = String::new();
 
         for section in &self.sections {
             markdown.push_str(&format!("**{}**\n\n", section.title));
@@ -124,11 +125,16 @@ impl Template {
 
     /// Generates section-specific instructions for the LLM
     pub fn to_section_instructions(&self) -> String {
-        let mut instructions = String::from(
-            "- **For the main title (`# [AI-Generated Title]`):** Analyze the entire transcript and create a concise, descriptive title for the meeting.\n"
+        // No title instruction — AI must not generate or change the document title.
+        let mut instructions = String::new();
+        instructions.push_str(
+            "- **Formatting rule for all sections:** Never use markdown tables. Use bullet points for every section, including overview sections.\n"
         );
         instructions.push_str(
-            "- **Formatting rule for all sections:** Never use markdown tables. Use paragraphs or bullet lists only.\n"
+            "- **Global cleanup rule:** This output must be a complete cleanup, not a short summary. Preserve all material details from the transcript and user notes.\n"
+        );
+        instructions.push_str(
+            "- **No invention rule:** Never invent action items, decisions, recommendations, relationships between topics, or missing details. If something is not explicit in the source, omit it or write `None noted in this section.`\n"
         );
 
         for section in &self.sections {

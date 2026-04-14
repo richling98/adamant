@@ -372,6 +372,52 @@ async fn start_recording_with_devices_and_meeting<R: Runtime>(
     }
 }
 
+// Clipboard write command — uses platform clipboard API to bypass WKWebView restrictions
+#[tauri::command]
+async fn write_to_clipboard(text: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new("pbcopy")
+            .stdin(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to start pbcopy: {}", e))?;
+        if let Some(stdin) = child.stdin.as_mut() {
+            stdin
+                .write_all(text.as_bytes())
+                .map_err(|e| format!("Failed to write to pbcopy: {}", e))?;
+        }
+        child
+            .wait()
+            .map_err(|e| format!("pbcopy wait failed: {}", e))?;
+        return Ok(());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new("clip")
+            .stdin(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to start clip: {}", e))?;
+        if let Some(stdin) = child.stdin.as_mut() {
+            stdin
+                .write_all(text.as_bytes())
+                .map_err(|e| format!("Failed to write to clip: {}", e))?;
+        }
+        child
+            .wait()
+            .map_err(|e| format!("clip wait failed: {}", e))?;
+        return Ok(());
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = text;
+        Err("Clipboard write not supported on this platform".to_string())
+    }
+}
+
 // Language preference commands
 #[tauri::command]
 async fn get_language_preference() -> Result<String, String> {
@@ -560,6 +606,7 @@ pub fn run() {
             start_recording,
             stop_recording,
             is_recording,
+            audio::recording_commands::update_silence_settings,
             get_transcription_status,
             save_transcript,
             analytics::commands::init_analytics,
@@ -774,6 +821,7 @@ pub fn run() {
             // System settings commands
             #[cfg(target_os = "macos")]
             utils::open_system_settings,
+            write_to_clipboard,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

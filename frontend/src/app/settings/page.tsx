@@ -130,7 +130,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="border-t border-white/10 pt-8">
-                  <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">AI Summary</h3>
+                  <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">AI Cleanup</h3>
                   <SummaryModelSettings />
                 </div>
               </div>

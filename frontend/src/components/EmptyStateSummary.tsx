@@ -19,10 +19,10 @@ export function EmptyStateSummary({ onGenerate, hasModel, isGenerating = false }
     >
       <FileQuestion className="w-16 h-16 text-foreground/30 mb-4" />
       <h3 className="text-lg font-semibold text-foreground mb-2">
-        No Summary Generated Yet
+        No AI Cleanup Yet
       </h3>
       <p className="text-sm text-foreground/60 mb-6 max-w-md">
-        Generate an AI-powered summary of your meeting transcript to get key points, action items, and decisions.
+        Generate an AI cleanup from your transcript and notes to get a complete, cohesive writeup of the meeting.
       </p>
 
       {!hasModel && (

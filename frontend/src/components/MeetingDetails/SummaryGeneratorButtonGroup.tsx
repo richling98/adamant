@@ -17,7 +17,7 @@ interface SummaryGeneratorButtonGroupProps {
   onStopGeneration: () => void;
   customPrompt: string;
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
-  hasTranscripts?: boolean;
+  hasSourceContent?: boolean;
 }
 
 export function SummaryGeneratorButtonGroup({
@@ -26,11 +26,11 @@ export function SummaryGeneratorButtonGroup({
   onStopGeneration,
   customPrompt,
   summaryStatus,
-  hasTranscripts = true,
+  hasSourceContent = true,
 }: SummaryGeneratorButtonGroupProps) {
   const [isCheckingModels, setIsCheckingModels] = useState(false);
 
-  if (!hasTranscripts) {
+  if (!hasSourceContent) {
     return null;
   }
 
@@ -196,7 +196,7 @@ export function SummaryGeneratorButtonGroup({
             checkOllamaModelsAndGenerate();
           }}
           disabled={isCheckingModels}
-          title={isCheckingModels ? 'Checking models...' : 'Generate AI Summary'}
+          title={isCheckingModels ? 'Checking models...' : 'Generate AI Cleanup'}
         >
           {isCheckingModels ? (
             <>
@@ -206,7 +206,7 @@ export function SummaryGeneratorButtonGroup({
           ) : (
             <>
               <Sparkles className="lg:mr-2" size={16} />
-              <span className="hidden lg:inline">Generate Summary</span>
+              <span className="hidden lg:inline">Generate AI Cleanup</span>
             </>
           )}
         </Button>

@@ -76,9 +76,9 @@ pub fn get_available_models() -> Vec<ModelDef> {
             context_size: 32768, 
             layer_count: 26,     
             sampling: SamplingParams {
-                temperature: 1.0,
-                top_k: 64,
-                top_p: 0.95,
+                temperature: 0.2,
+                top_k: 40,
+                top_p: 0.9,
                 stop_tokens: vec!["<end_of_turn>".to_string()],
             },
             description: "Fastest model. Runs on any hardware with ~1GB RAM. Good for quick summaries.".to_string(),
@@ -93,9 +93,9 @@ pub fn get_available_models() -> Vec<ModelDef> {
             context_size: 32768, // Supports 128k, but 32k is good for local·
             layer_count: 35,
             sampling: SamplingParams {
-                temperature: 1.0,
-                top_k: 64,
-                top_p: 0.95,
+                temperature: 0.2,
+                top_k: 40,
+                top_p: 0.9,
                 stop_tokens: vec!["<end_of_turn>".to_string()],
             },
             description: "Balanced model. Great quality/speed trade-off. Requires ~3.5GB RAM.".to_string(),

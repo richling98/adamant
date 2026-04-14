@@ -113,7 +113,25 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     }
   };
 
-  /** Persist the silence auto-stop enabled flag. */
+  /**
+   * Notify the Rust backend of the new silence settings so a running recording
+   * monitor is restarted (or stopped) immediately.  The store is always written
+   * first so the preference is durable; the Tauri command then applies it live.
+   */
+  const applyLiveSilenceSettings = async (enabled: boolean, secs: number) => {
+    try {
+      await invoke('update_silence_settings', {
+        enabled,
+        timeoutSecs: secs,
+      });
+    } catch (error) {
+      // Non-fatal: the preference was already saved; the new value will take
+      // effect on the next recording start even if the live update fails.
+      console.warn('Failed to apply silence settings to running recording:', error);
+    }
+  };
+
+  /** Persist the silence auto-stop enabled flag and apply to any active recording. */
   const handleSilenceToggle = async (enabled: boolean) => {
     try {
       setSilenceAutoStopEnabled(enabled);
@@ -121,6 +139,8 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       const store = await Store.load('preferences.json');
       await store.set('silence_auto_stop_enabled', enabled);
       await store.save();
+      // Apply immediately to any currently-running recording
+      await applyLiveSilenceSettings(enabled, silenceTimeoutSecs);
       toast.success('Preference saved');
     } catch (error) {
       console.error('Failed to save silence preference:', error);
@@ -128,7 +148,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     }
   };
 
-  /** Persist the chosen silence duration. */
+  /** Persist the chosen silence duration and apply to any active recording. */
   const handleSilenceDurationChange = async (secs: number) => {
     try {
       setSilenceTimeoutSecs(secs);
@@ -136,6 +156,8 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       const store = await Store.load('preferences.json');
       await store.set('silence_auto_stop_duration_secs', secs);
       await store.save();
+      // Apply immediately to any currently-running recording
+      await applyLiveSilenceSettings(silenceAutoStopEnabled, secs);
       toast.success('Preference saved');
     } catch (error) {
       console.error('Failed to save silence duration:', error);

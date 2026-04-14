@@ -601,7 +601,7 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${currentSummary.title || 'ai-summary'}.md`;
+    a.download = `${currentSummary.title || 'ai-cleanup'}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -612,7 +612,7 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
     <div className="w-full p-4 bg-red-50 border border-red-200 rounded-lg">
       <div className="flex items-center mb-2">
         <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-2" />
-        <h3 className="text-red-700 font-medium">Error Generating Summary</h3>
+        <h3 className="text-red-700 font-medium">Error Generating AI Cleanup</h3>
       </div>
       <p className="text-red-600 text-sm">{error}</p>
       <p className="text-red-500 text-xs mt-2">Please check your model configuration and API keys, or try again.</p>
@@ -625,12 +625,12 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
         <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent"></div>
         <div>
           <h3 className="text-blue-700 font-medium">
-            {status === 'processing' ? 'Processing Transcript' : 'Generating Summary'}
+            {status === 'processing' ? 'Processing Transcript' : 'Generating AI Cleanup'}
           </h3>
           <p className="text-blue-600 text-sm">
             {status === 'processing' 
               ? 'Analyzing your transcript...' 
-              : 'Creating a detailed summary of your meeting...'}
+              : 'Creating a complete AI cleanup of your meeting...'}
           </p>
         </div>
       </div>
@@ -652,8 +652,8 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
   if (!hasContent && status === 'completed') {
     return (
       <div className="w-full p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
-        <p className="text-gray-600">No summary content available.</p>
-        <p className="text-gray-500 text-sm mt-1">Try generating a new summary.</p>
+        <p className="text-gray-600">No AI cleanup content available.</p>
+        <p className="text-gray-500 text-sm mt-1">Try generating a new AI cleanup.</p>
       </div>
     );
   }

@@ -240,10 +240,11 @@ impl RecordingState {
     // Silence auto-stop tracking
     // -------------------------------------------------------------------------
 
-    /// Called by the audio pipeline whenever the VAD confirms a speech segment.
-    /// Records the current wall-clock time (UNIX millis) and marks that voice
-    /// has been heard at least once this session.
-    pub fn update_voice_activity(&self) {
+    /// Called by the audio pipeline whenever recent audio windows indicate
+    /// live speech presence. This is intentionally decoupled from transcript
+    /// segment emission so continuous speech keeps the silence timer fresh even
+    /// if no chunk boundary has been emitted yet.
+    pub fn update_speech_presence(&self) {
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -263,7 +264,13 @@ impl RecordingState {
         }
     }
 
-    /// Returns the UNIX timestamp (ms) of the last VAD-confirmed speech event.
+    /// Backwards-compatible alias for older call sites that still refer to
+    /// voice activity. The underlying meaning is now live speech presence.
+    pub fn update_voice_activity(&self) {
+        self.update_speech_presence();
+    }
+
+    /// Returns the UNIX timestamp (ms) of the last VAD-confirmed live speech event.
     /// Returns 0 if no voice has been detected yet this session.
     pub fn last_voice_activity_ms(&self) -> u64 {
         self.last_voice_activity_ms.load(Ordering::SeqCst)
@@ -504,5 +511,27 @@ impl Clone for RecordingStats {
             total_duration: self.total_duration,
             last_activity: self.last_activity,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RecordingState;
+
+    #[test]
+    fn speech_presence_gate_opens_after_three_detections() {
+        let state = RecordingState::default();
+
+        assert!(!state.voice_ever_detected());
+
+        state.update_speech_presence();
+        assert!(!state.voice_ever_detected());
+
+        state.update_speech_presence();
+        assert!(!state.voice_ever_detected());
+
+        state.update_speech_presence();
+        assert!(state.voice_ever_detected());
+        assert!(state.last_voice_activity_ms() > 0);
     }
 }

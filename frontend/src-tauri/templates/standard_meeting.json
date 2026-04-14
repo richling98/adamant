@@ -3,18 +3,18 @@
   "description": "A comprehensive meeting record covering all topics discussed and action items.",
   "sections": [
     {
-      "title": "TLDR",
-      "instruction": "Summarize the entire meeting in no more than 5 bullet points. Each bullet must capture a distinct key takeaway, outcome, or decision. Be specific — no generic filler.",
+      "title": "Complete Overview",
+      "instruction": "Write a cohesive, cleaned-up overview of the entire meeting using both transcript content and user notes. Preserve all substantive details, decisions, questions, context, examples, and corrections. This is not a summary — do not condense or omit information. Format the entire overview as bullet points. If the notes and transcript cover unrelated subjects, keep them as separate bullets instead of forcing them into one narrative.",
       "format": "list"
     },
     {
       "title": "Topics Covered",
-      "instruction": "For EACH distinct topic that received any discussion, create a sub-heading with the topic name, followed by a complete, detailed record of everything said about that topic — every point raised, every opinion shared, every question asked, every answer given, every piece of context, every specific number or name mentioned. This is a verbatim record, not a summary. Nothing should be omitted or compressed. A longer, more complete record is always preferred over a shorter one.",
+      "instruction": "For EACH distinct topic that received any discussion, create bullet points using concrete topic names taken from the source material itself. Under each topic, capture every point raised, every opinion shared, every question asked, every answer given, every piece of context, and every specific number or name mentioned. If the transcript and notes contain unrelated topics, preserve them as separate topics. Do not invent umbrella categories or merge unrelated material together.",
       "format": "list"
     },
     {
       "title": "Next Steps & Action Items",
-      "instruction": "List every next step and action item identified in the meeting. For each, describe the action clearly and specifically. Include any deadline or timeline mentioned. Do NOT try to assign owners — focus entirely on what needs to be done, not who should do it.",
+      "instruction": "List only the next steps and action items that were explicitly identified in the transcript or notes. For each, describe the action clearly and specifically and include any deadline or timeline that was actually mentioned. Do NOT assign owners. Do NOT invent recommendations or suggested next steps. If no explicit action items were stated, write a single bullet saying that none were explicitly stated.",
       "format": "list"
     }
   ]

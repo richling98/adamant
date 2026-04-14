@@ -594,6 +594,65 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
 }
 
 // =============================================================================
+// LIVE SILENCE SETTINGS UPDATE
+// =============================================================================
+
+/// Apply new silence auto-stop settings while a recording is already in progress.
+///
+/// Called by the frontend whenever the user changes the silence toggle or duration
+/// in Settings *during* an active recording.  If no recording is running the call
+/// is a harmless no-op — the updated values are already in `preferences.json` and
+/// will be picked up the next time recording starts.
+///
+/// Behaviour:
+/// - If `enabled` is false, or there is no active recording: abort the running
+///   monitor (if any) and do not start a new one.
+/// - If `enabled` is true and a recording is active: abort the old monitor and
+///   spawn a fresh one with the new `timeout_secs` value.
+#[tauri::command]
+pub async fn update_silence_settings<R: Runtime>(
+    app: AppHandle<R>,
+    enabled: bool,
+    timeout_secs: u64,
+) -> Result<(), String> {
+    // Abort whatever monitor is currently running (may be None).
+    {
+        let mut global_monitor = SILENCE_MONITOR_TASK.lock().unwrap();
+        if let Some(handle) = global_monitor.take() {
+            handle.abort();
+            info!("🔇 update_silence_settings: old monitor aborted");
+        }
+    }
+
+    // Nothing more to do when recording is not active or the feature was disabled.
+    if !IS_RECORDING.load(Ordering::SeqCst) || !enabled {
+        info!("🔇 update_silence_settings: recording not active or feature disabled — monitor not restarted");
+        return Ok(());
+    }
+
+    // Retrieve the shared RecordingState so the new monitor can observe voice activity.
+    let recording_state = {
+        let global_manager = RECORDING_MANAGER.lock().unwrap();
+        match global_manager.as_ref() {
+            Some(m) => m.get_state().clone(),
+            None => {
+                info!("🔇 update_silence_settings: no active RecordingManager — monitor not restarted");
+                return Ok(());
+            }
+        }
+    };
+
+    let handle = spawn_silence_monitor(app, recording_state, timeout_secs);
+    {
+        let mut global_monitor = SILENCE_MONITOR_TASK.lock().unwrap();
+        *global_monitor = Some(handle);
+    }
+    info!("🔇 update_silence_settings: new monitor started (timeout: {}s)", timeout_secs);
+
+    Ok(())
+}
+
+// =============================================================================
 // SILENCE AUTO-STOP MONITOR
 // =============================================================================
 
@@ -614,6 +673,7 @@ fn spawn_silence_monitor<R: Runtime>(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         use std::time::{SystemTime, UNIX_EPOCH};
+        const SPEECH_RECENCY_WINDOW_MS: u64 = 3_000;
 
         // How many seconds of accumulated silence before auto-stop.
         // We count in 1-second ticks, skipping ticks while paused.
@@ -634,7 +694,7 @@ fn spawn_silence_monitor<R: Runtime>(
                 continue;
             }
 
-            // Wait until VAD has confirmed at least one speech segment.
+            // Wait until live speech presence has been observed a few times.
             // This prevents the timer from triggering on a quiet room immediately
             // after recording starts — the user must speak at least once before
             // the silence counter begins decrementing.
@@ -642,10 +702,9 @@ fn spawn_silence_monitor<R: Runtime>(
                 continue;
             }
 
-            // Determine whether voice is currently "recent" by comparing the last
-            // VAD timestamp against the current wall-clock time.
-            // We use a 2-second recency window to account for VAD redemption
-            // time (~800 ms) and avoid false positives on natural speech pauses.
+            // Determine whether speech is currently "recent" by comparing the
+            // last live speech-presence refresh against the current wall-clock time.
+            // This is intentionally separate from transcript chunk boundaries.
             let now_ms = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
@@ -660,8 +719,8 @@ fn spawn_silence_monitor<R: Runtime>(
                     silence_ticks, ms_since_voice, timeout_secs);
             }
 
-            if ms_since_voice < 8000 {
-                // Voice was recent — reset counter and clear warning flag
+            if ms_since_voice < SPEECH_RECENCY_WINDOW_MS {
+                // Speech was recent — reset counter and clear warning flag
                 silence_ticks = 0;
                 warning_sent = false;
                 continue;

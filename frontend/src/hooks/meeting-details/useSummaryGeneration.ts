@@ -22,6 +22,7 @@ interface UseSummaryGenerationProps {
   updateMeetingTitle: (title: string) => void;
   setAiSummary: (summary: Summary | null) => void;
   onOpenModelSettings?: () => void;
+  liveNotesMarkdown?: string;
 }
 
 export function useSummaryGeneration({
@@ -35,10 +36,12 @@ export function useSummaryGeneration({
   updateMeetingTitle,
   setAiSummary,
   onOpenModelSettings,
+  liveNotesMarkdown = '',
 }: UseSummaryGenerationProps) {
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>('idle');
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [originalTranscript, setOriginalTranscript] = useState<string>('');
+  const [originalNotes, setOriginalNotes] = useState<string>('');
 
   const { startSummaryPolling, stopSummaryPolling } = useSidebar();
 
@@ -71,13 +74,13 @@ export function useSummaryGeneration({
       case 'processing':
         return 'Processing transcript...';
       case 'summarizing':
-        return 'Generating summary...';
+        return 'Generating AI Cleanup...';
       case 'regenerating':
-        return 'Regenerating summary...';
+        return 'Regenerating AI Cleanup...';
       case 'completed':
-        return 'Summary completed';
+        return 'AI Cleanup completed';
       case 'error':
-        return 'Error generating summary';
+        return 'Error generating AI Cleanup';
       default:
         return '';
     }
@@ -99,12 +102,13 @@ export function useSummaryGeneration({
     setSummaryError(null);
 
     try {
-      if (!transcriptText.trim()) {
-        throw new Error('No transcript text available. Please add some text first.');
+      if (!transcriptText.trim() && !notesMarkdown.trim()) {
+        throw new Error('No transcript or notes available. Please add some content first.');
       }
 
       if (!isRegeneration) {
         setOriginalTranscript(transcriptText);
+        setOriginalNotes(notesMarkdown);
       }
 
       console.debug('Processing transcript with template:', selectedTemplate);
@@ -135,7 +139,7 @@ export function useSummaryGeneration({
       }
 
       // Show toast notification for generation start
-      toast.info(`${isRegeneration ? 'Regenerating' : 'Generating'} summary...`, {
+      toast.info(`${isRegeneration ? 'Regenerating' : 'Generating'} AI Cleanup...`, {
         description: `Using ${modelConfig.provider}/${modelConfig.model}`,
         duration: 3000,
       });
@@ -233,7 +237,7 @@ export function useSummaryGeneration({
             errorMessage.toLowerCase().includes('model') && errorMessage.toLowerCase().includes('required');
 
           // Show error toast
-          toast.error(`Failed to ${isRegeneration ? 'regenerate' : 'generate'} summary`, {
+          toast.error(`Failed to ${isRegeneration ? 'regenerate' : 'generate'} AI Cleanup`, {
             description: errorMessage.includes('Connection refused')
               ? 'Could not connect to LLM service. Please ensure Ollama or your configured LLM provider is running.'
               : errorMessage,
@@ -266,9 +270,9 @@ export function useSummaryGeneration({
           }
 
           if (!summaryData) {
-            setSummaryError('Summary completed but result is not available yet. Please try again.');
+            setSummaryError('AI cleanup completed but result is not available yet. Please try again.');
             setSummaryStatus('error');
-            toast.error('Failed to load completed summary', {
+            toast.error('Failed to load completed AI cleanup', {
               description: 'Please try generating again.',
             });
             return;
@@ -294,8 +298,8 @@ export function useSummaryGeneration({
             }
 
             // Show success toast
-            toast.success('Summary generated successfully!', {
-              description: 'Your meeting summary is ready',
+            toast.success('AI Cleanup generated successfully!', {
+              description: 'Your AI cleanup is ready',
               duration: 4000,
             });
 
@@ -313,7 +317,7 @@ export function useSummaryGeneration({
 
           if (allEmpty) {
             console.error('Summary completed but all sections empty');
-            setSummaryError('Summary generation completed but returned empty content.');
+            setSummaryError('AI cleanup completed but returned empty content.');
             setSummaryStatus('error');
 
             await Analytics.trackSummaryGenerationCompleted(
@@ -374,8 +378,8 @@ export function useSummaryGeneration({
           }
 
           // Show success toast
-          toast.success('Summary generated successfully!', {
-            description: 'Your meeting summary is ready',
+          toast.success('AI Cleanup generated successfully!', {
+            description: 'Your AI cleanup is ready',
             duration: 4000,
           });
 
@@ -388,13 +392,13 @@ export function useSummaryGeneration({
         }
       });
     } catch (error) {
-      console.error(`Failed to ${isRegeneration ? 'regenerate' : 'generate'} summary:`, error);
+      console.error(`Failed to ${isRegeneration ? 'regenerate' : 'generate'} AI cleanup:`, error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setSummaryError(errorMessage);
       setSummaryStatus('error');
       // Note: We don't clear the summary here because the backend has already restored from backup
 
-      toast.error(`Failed to ${isRegeneration ? 'regenerate' : 'generate'} summary`, {
+      toast.error(`Failed to ${isRegeneration ? 'regenerate' : 'generate'} AI Cleanup`, {
         description: errorMessage,
       });
 
@@ -467,14 +471,26 @@ export function useSummaryGeneration({
     console.debug('📊 Fetching all transcripts for summary generation...');
     const allTranscripts = await fetchAllTranscripts(meeting.id);
 
-    if (!allTranscripts.length) {
-      const error_msg = 'No transcripts available for summary';
+    // Prefer live in-editor notes so cleanup works even before autosave finishes.
+    let notesMarkdown = liveNotesMarkdown.trim();
+    try {
+      const noteData = await invokeTauri('api_get_note', { meetingId: meeting.id }) as any;
+      const persistedNotes = noteData?.content_markdown?.trim() ?? '';
+      if (!notesMarkdown) {
+        notesMarkdown = persistedNotes;
+      }
+    } catch {
+      // Notes are optional — silently fall back to current live editor state
+    }
+
+    if (!allTranscripts.length && !notesMarkdown.trim()) {
+      const error_msg = 'No transcript or notes available for AI Cleanup';
       console.debug(error_msg);
       toast.error(error_msg);
       return;
     }
 
-    console.debug(`✅ Proceeding with ${allTranscripts.length} transcripts`);
+    console.debug(`✅ Proceeding with ${allTranscripts.length} transcripts and ${notesMarkdown.length} note characters`);
 
     console.debug('🚀 Starting summary generation with config:', {
       provider: modelConfig.provider,
@@ -626,30 +642,22 @@ export function useSummaryGeneration({
       .map(t => `${formatTime(t.audio_start_time, t.timestamp)} ${t.text}`)
       .join('\n');
 
-    // Fetch user-typed notes to include alongside transcript
-    let notesMarkdown = '';
-    try {
-      const noteData = await invokeTauri('api_get_note', { meetingId: meeting.id }) as any;
-      notesMarkdown = noteData?.content_markdown?.trim() ?? '';
-    } catch {
-      // Notes are optional — silently skip if fetch fails
-    }
-
     await processSummary({ transcriptText: fullTranscript, customPrompt, notesMarkdown });
-  }, [meeting.id, fetchAllTranscripts, processSummary, modelConfig, isModelConfigLoading, selectedTemplate]);
+  }, [meeting.id, fetchAllTranscripts, processSummary, modelConfig, isModelConfigLoading, selectedTemplate, liveNotesMarkdown]);
 
   // Public API: Regenerate summary from original transcript
   const handleRegenerateSummary = useCallback(async () => {
-    if (!originalTranscript.trim()) {
-      console.error('No original transcript available for regeneration');
+    if (!originalTranscript.trim() && !originalNotes.trim()) {
+      console.error('No original transcript or notes available for regeneration');
       return;
     }
 
     await processSummary({
       transcriptText: originalTranscript,
-      isRegeneration: true
+      isRegeneration: true,
+      notesMarkdown: originalNotes,
     });
-  }, [originalTranscript, processSummary]);
+  }, [originalTranscript, originalNotes, processSummary]);
 
   // Public API: Stop ongoing summary generation
   const handleStopGeneration = useCallback(async () => {
@@ -674,8 +682,8 @@ export function useSummaryGeneration({
     setSummaryError(null);
 
     // Show toast notification
-    toast.info('Summary generation stopped', {
-      description: 'You can generate a new summary anytime',
+    toast.info('AI Cleanup stopped', {
+      description: 'You can generate a new AI cleanup anytime',
       duration: 3000,
     });
   }, [meeting.id, stopSummaryPolling]);

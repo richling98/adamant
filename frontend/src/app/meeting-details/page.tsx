@@ -87,6 +87,9 @@ function MeetingDetailsContent() {
     segments,
     transcripts,
     isLoading: isLoadingTranscripts,
+    // isRefetching is true only during a background refresh (data already on screen).
+    // It must NOT be used to show a full-page spinner — panels must stay mounted.
+    isRefetching: isRefetchingTranscripts,
     isLoadingMore,
     hasMore,
     totalCount,
@@ -459,7 +462,11 @@ function MeetingDetailsContent() {
 
   // Show loading spinner while initial data loads (skip transcript loading check for new notes)
   const isNewNoteTransition = meetingId === justCreatedMeetingIdRef.current && meetingDetails !== null;
-  if (!isNewNoteTransition && ((isLoading || (!isNewNote && isLoadingTranscripts)) || !meetingDetails)) {
+  // Only block rendering on isLoadingTranscripts during the true initial load
+  // (when the hook has not yet delivered data for this meeting). Background
+  // refetches are indicated by isRefetchingTranscripts, which must never cause
+  // a spinner — doing so would unmount NotesPanel and wipe unsaved user edits.
+  if (!isNewNoteTransition && ((isLoading || (!isNewNote && isLoadingTranscripts && !isRefetchingTranscripts)) || !meetingDetails)) {
     return <div className="flex items-center justify-center h-screen">
       <LoaderIcon className="animate-spin size-6 " />
     </div>;

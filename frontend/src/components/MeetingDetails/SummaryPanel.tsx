@@ -45,6 +45,7 @@ interface SummaryPanelProps {
   onGenerateSummary: (customPrompt: string) => Promise<void>;
   onStopGeneration: () => void;
   customPrompt: string;
+  hasCleanupSourceContent: boolean;
 }
 
 export function SummaryPanel({
@@ -67,6 +68,7 @@ export function SummaryPanel({
   onGenerateSummary,
   onStopGeneration,
   customPrompt,
+  hasCleanupSourceContent,
 }: SummaryPanelProps) {
   const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
   const isSummaryCompleted = summaryStatus === 'completed';
@@ -116,7 +118,7 @@ export function SummaryPanel({
       {/* Title area — header button toggles between Generate and Copy */}
       <div className={MEETING_PANE_HEADER_CLASS}>
         <div className={MEETING_PANE_HEADER_ROW_CLASS}>
-          <h2 className={MEETING_PANE_TITLE_CLASS}>AI notes</h2>
+          <h2 className={MEETING_PANE_TITLE_CLASS}>AI Cleanup</h2>
           {/* Show Copy when summary exists and not actively generating;
               otherwise show Generate/Stop via SummaryGeneratorButtonGroup. */}
           {hasExistingSummary && !isSummaryLoading ? (
@@ -128,7 +130,7 @@ export function SummaryPanel({
                 Analytics.trackButtonClick('copy_summary', 'meeting_details');
                 onCopySummary();
               }}
-              title="Copy AI summary"
+              title="Copy AI cleanup"
             >
               <Copy className="lg:mr-2" size={16} />
               <span className="hidden lg:inline">Copy</span>
@@ -140,7 +142,7 @@ export function SummaryPanel({
               onStopGeneration={onStopGeneration}
               customPrompt={customPrompt}
               summaryStatus={summaryStatus}
-              hasTranscripts={transcripts.length > 0}
+              hasSourceContent={hasCleanupSourceContent}
             />
           )}
         </div>
@@ -152,7 +154,7 @@ export function SummaryPanel({
           <div className="flex items-center justify-center flex-1">
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-400 mb-4"></div>
-              <p className="text-foreground/70">Generating AI Summary...</p>
+              <p className="text-foreground/70">Generating AI Cleanup...</p>
             </div>
           </div>
         </div>

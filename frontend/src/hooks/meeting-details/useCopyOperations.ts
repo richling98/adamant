@@ -58,7 +58,6 @@ export function useCopyOperations({
 
   // Copy transcript to clipboard
   const handleCopyTranscript = useCallback(async () => {
-    // CHANGE: Fetch ALL transcripts from database, not from pagination state
     console.debug('📊 Fetching all transcripts for copying...');
     const allTranscripts = await fetchAllTranscripts(meeting.id);
 
@@ -71,10 +70,8 @@ export function useCopyOperations({
 
     console.debug(`✅ Copying ${allTranscripts.length} transcripts to clipboard`);
 
-    // Format timestamps as recording-relative [MM:SS] instead of wall-clock time
     const formatTime = (seconds: number | undefined, fallbackTimestamp: string): string => {
       if (seconds === undefined) {
-        // For old transcripts without audio_start_time, use wall-clock time
         return fallbackTimestamp;
       }
       const totalSecs = Math.floor(seconds);
@@ -88,20 +85,34 @@ export function useCopyOperations({
     const fullTranscript = allTranscripts
       .map(t => `${formatTime(t.audio_start_time, t.timestamp)} ${t.text}`)
       .join('\n');
+    const text = header + date + fullTranscript;
 
-    await navigator.clipboard.writeText(header + date + fullTranscript);
-    toast.success("Transcript copied to clipboard");
+    // navigator.clipboard.writeText requires a live user-activation context that expires
+    // after async boundaries in WKWebView. execCommand('copy') is also blocked by Apple.
+    // Use a Tauri command that calls pbcopy/clip directly from Rust — no browser
+    // permission required.
+    let copied = false;
+    try {
+      await invokeTauri('write_to_clipboard', { text });
+      copied = true;
+    } catch (err) {
+      console.error('❌ Tauri write_to_clipboard failed:', err);
+    }
 
-    // Track copy analytics
-    const wordCount = allTranscripts
-      .map(t => t.text.split(/\s+/).length)
-      .reduce((a, b) => a + b, 0);
-
-    await Analytics.trackCopy('transcript', {
-      meeting_id: meeting.id,
-      transcript_length: allTranscripts.length.toString(),
-      word_count: wordCount.toString()
-    });
+    if (copied) {
+      toast.success("Transcript copied to clipboard");
+      const wordCount = allTranscripts
+        .map(t => t.text.split(/\s+/).length)
+        .reduce((a, b) => a + b, 0);
+      await Analytics.trackCopy('transcript', {
+        meeting_id: meeting.id,
+        transcript_length: allTranscripts.length.toString(),
+        word_count: wordCount.toString()
+      });
+    } else {
+      console.error('❌ Failed to copy transcript to clipboard');
+      toast.error("Failed to copy transcript");
+    }
   }, [meeting, meetingTitle, fetchAllTranscripts]);
 
   // Copy summary to clipboard

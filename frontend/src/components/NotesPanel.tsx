@@ -22,6 +22,8 @@ interface NotesPanelProps {
   isNewNote: boolean;
   draftMeetingId: string | null;
   onMeetingCreated?: (actualMeetingId: string) => void;
+  onContentPresenceChange?: (hasContent: boolean) => void;
+  onMarkdownChange?: (markdown: string) => void;
 }
 
 // Helper to format timestamp as "just now", "2 minutes ago", etc.
@@ -46,7 +48,9 @@ export function NotesPanel({
   meetingId,
   isNewNote,
   draftMeetingId,
-  onMeetingCreated
+  onMeetingCreated,
+  onContentPresenceChange,
+  onMarkdownChange,
 }: NotesPanelProps) {
   const renderCount = useRef(0);
   renderCount.current += 1;
@@ -87,7 +91,7 @@ export function NotesPanel({
   }, [meetingId, isNewNote, actualMeetingId]);
 
   // Convert blocks to markdown
-  const blocksToMarkdown = async (blocks: Block[]): Promise<string> => {
+  const blocksToMarkdownSync = (blocks: Block[]): string => {
     // Simple markdown conversion - BlockNote's built-in method is more robust
     return blocks.map((block: any) => {
       if (block.type === 'heading') {
@@ -97,6 +101,8 @@ export function NotesPanel({
       return block.content?.[0]?.text || '';
     }).join('\n\n');
   };
+
+  const blocksToMarkdown = async (blocks: Block[]): Promise<string> => blocksToMarkdownSync(blocks);
 
   // Save note function
   const saveNote = useCallback(async (blocks: Block[]) => {
@@ -218,6 +224,14 @@ export function NotesPanel({
     }, 2000)
   ).current;
 
+  // Safety net: if the component unmounts while a debounced save is still pending
+  // (e.g. user navigates away mid-typing), flush it immediately so no edits are lost.
+  useEffect(() => {
+    return () => {
+      debouncedSave.flush();
+    };
+  }, [debouncedSave]);
+
   // Track if there are unsaved changes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
@@ -300,9 +314,16 @@ export function NotesPanel({
     setNoteContent(blocks);
     editorContentRef.current = blocks; // Preserve content in ref for recovery after prop changes
     setHasUnsavedChanges(true);
+    const markdown = blocksToMarkdownSync(blocks);
+    const hasContent = blocks.some((block: any) => {
+      if (!Array.isArray(block?.content)) return false;
+      return block.content.some((item: any) => typeof item?.text === 'string' && item.text.trim().length > 0);
+    });
+    onContentPresenceChange?.(hasContent);
+    onMarkdownChange?.(markdown);
     // Trigger debounced autosave
     debouncedSave(blocks);
-  }, [debouncedSave]);
+  }, [debouncedSave, onContentPresenceChange, onMarkdownChange]);
 
   useEffect(() => {
     if (!handleEditorChange) return;
@@ -335,6 +356,8 @@ export function NotesPanel({
         }
         setNoteContent(null);
         editorContentRef.current = null;
+        onContentPresenceChange?.(false);
+        onMarkdownChange?.('');
         setIsEditorReady(true);
         return;
       }
@@ -353,6 +376,12 @@ export function NotesPanel({
           setTimeout(() => { isRestoringContent.current = false; }, 0);
           console.debug('✅ Content restored from ref:', editorContentRef.current.length, 'blocks');
         }
+        const restoredHasContent = (editorContentRef.current || []).some((block: any) =>
+          Array.isArray(block?.content) &&
+          block.content.some((item: any) => typeof item?.text === 'string' && item.text.trim().length > 0)
+        );
+        onContentPresenceChange?.(restoredHasContent);
+        onMarkdownChange?.(blocksToMarkdownSync(editorContentRef.current || []));
         setIsEditorReady(true);
         return;
       }
@@ -380,6 +409,12 @@ export function NotesPanel({
           editorContentRef.current = content; // Keep ref in sync with database content
           setNoteVersion(data.version || 1);
           setLastSaved(data.updated_at ? new Date(data.updated_at) : null);
+          const hasLoadedContent = (content || []).some((block: any) =>
+            Array.isArray(block?.content) &&
+            block.content.some((item: any) => typeof item?.text === 'string' && item.text.trim().length > 0)
+          );
+          onContentPresenceChange?.(hasLoadedContent);
+          onMarkdownChange?.(blocksToMarkdownSync(content || []));
 
           // Push loaded content into the editor. useCreateBlockNote() only uses
           // initialContent at creation time — it does NOT react to subsequent state
@@ -396,6 +431,8 @@ export function NotesPanel({
           // No note exists yet - start with empty
           console.debug('⚠️ DEBUG Setting noteContent to null (no data from DB)');
           setNoteContent(null);
+          onContentPresenceChange?.(false);
+          onMarkdownChange?.('');
           console.debug('ℹ️ NotesPanel: No existing note found');
         }
       } catch (err) {
@@ -408,7 +445,7 @@ export function NotesPanel({
     };
 
     loadNote();
-  }, [meetingId, isNewNote]);
+  }, [meetingId, isNewNote, editor, onContentPresenceChange, onMarkdownChange]);
 
   return (
     <div className={MEETING_PANE_CONTAINER_CLASS}>

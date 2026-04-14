@@ -69,6 +69,8 @@ export default function PageContent({
   const [summaryResponse] = useState<SummaryResponse | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('standard_meeting');
   const [isTemplateLoading, setIsTemplateLoading] = useState(true);
+  const [hasNotesContent, setHasNotesContent] = useState(false);
+  const [liveNotesMarkdown, setLiveNotesMarkdown] = useState('');
   // Snapshot of live transcripts captured when "End Recording" is pressed.
   // Holds the panel content stable while the API refetch completes (prevents flash).
   const [postRecordingSnapshot, setPostRecordingSnapshot] = useState<Transcript[]>([]);
@@ -108,6 +110,7 @@ export default function PageContent({
     onSummaryUpdated,
     updateMeetingTitle: meetingData.updateMeetingTitle,
     setAiSummary: meetingData.setAiSummary,
+    liveNotesMarkdown,
   });
 
   const copyOperations = useCopyOperations({
@@ -139,6 +142,20 @@ export default function PageContent({
 
     return Object.keys(summary).length > 0;
   }, [meetingData.aiSummary]);
+
+  const hasTranscriptContent = useMemo(() => {
+    const transcriptSource = isRecording
+      ? liveTranscripts
+      : postRecordingSnapshot.length > 0
+        ? postRecordingSnapshot
+        : meetingData.transcripts;
+
+    return transcriptSource.some(
+      (segment: Transcript) => typeof segment.text === 'string' && segment.text.trim().length > 0
+    );
+  }, [isRecording, liveTranscripts, postRecordingSnapshot, meetingData.transcripts]);
+
+  const hasCleanupSourceContent = hasTranscriptContent || hasNotesContent;
 
   // Handle the "Start Recording" action on this page.
   // If the meeting hasn't been persisted yet (id==='new'), we create it first so
@@ -347,6 +364,8 @@ export default function PageContent({
           isNewNote={isNewNote}
           draftMeetingId={draftMeetingId}
           onMeetingCreated={onMeetingCreated}
+          onContentPresenceChange={setHasNotesContent}
+          onMarkdownChange={setLiveNotesMarkdown}
         />
         <TranscriptPanel
           transcripts={
@@ -396,6 +415,7 @@ export default function PageContent({
           onGenerateSummary={handleGenerateSummary}
           onStopGeneration={summaryGeneration.handleStopGeneration}
           customPrompt=""
+          hasCleanupSourceContent={hasCleanupSourceContent}
         />
       </div>
     </motion.div>

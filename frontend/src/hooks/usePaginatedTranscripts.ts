@@ -15,6 +15,10 @@ interface UsePaginatedTranscriptsReturn {
     segments: TranscriptSegmentData[];
     transcripts: Transcript[];
     isLoading: boolean;
+    /** True only during a background refetch (data already on screen). Unlike
+     *  isLoading, this does NOT indicate that the UI has nothing to show yet —
+     *  callers must NOT show a full-page spinner or unmount panels on this flag. */
+    isRefetching: boolean;
     isLoadingMore: boolean;
     hasMore: boolean;
     totalCount: number;
@@ -48,6 +52,9 @@ export function usePaginatedTranscripts({
     const [transcripts, setTranscripts] = useState<Transcript[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
+    // Separate flag for background refetches so callers can distinguish
+    // "first load — nothing to show yet" from "refreshing data already on screen".
+    const [isRefetching, setIsRefetching] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -152,7 +159,9 @@ export function usePaginatedTranscripts({
         }
     }, [hasMore, meetingId, loadTranscriptsAtOffset, isLoading]);
 
-    // Force refetch for current meeting ID (used when transcripts are appended after save)
+    // Force refetch for current meeting ID (used when transcripts are appended after save).
+    // Uses isRefetching (not isLoading) so the UI is never torn down while data is
+    // already on screen — panels stay mounted and in-flight editor edits are preserved.
     const refetch = useCallback(async () => {
         if (!meetingId) return;
 
@@ -162,12 +171,12 @@ export function usePaginatedTranscripts({
         offsetRef.current = 0;
         isLoadingRef.current = false;
 
-        setIsLoading(true);
+        setIsRefetching(true);
         try {
             await loadMetadata();
             await loadTranscriptsAtOffset(0, false);
         } finally {
-            setIsLoading(false);
+            setIsRefetching(false);
         }
     }, [meetingId, loadMetadata, loadTranscriptsAtOffset]);
 
@@ -208,6 +217,7 @@ export function usePaginatedTranscripts({
         segments,
         transcripts,
         isLoading,
+        isRefetching,
         isLoadingMore,
         hasMore,
         totalCount,
