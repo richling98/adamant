@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Summary, SummaryResponse, Transcript } from '@/types';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
@@ -88,7 +88,20 @@ export default function PageContent({
 
   // Global recording state (synced with backend via events)
   const recordingState = useRecordingState();
-  const { isRecording } = recordingState;
+  const { isRecording, setRecordingMeetingId } = recordingState;
+
+  // True only when a recording is active AND it belongs to this specific meeting.
+  // isRecording (global) stays true for "is anything recording?" checks elsewhere.
+  const isRecordingForThisMeeting =
+    isRecording && recordingState.recordingMeetingId === meeting.id;
+  const isStoppingForThisMeeting =
+    recordingState.isStopping && recordingState.recordingMeetingId === meeting.id;
+
+  // Always-current ref to recording ownership — readable inside stale closures
+  const recordingMeetingIdRef = useRef<string | null>(recordingState.recordingMeetingId);
+  useEffect(() => {
+    recordingMeetingIdRef.current = recordingState.recordingMeetingId;
+  }, [recordingState.recordingMeetingId]);
 
   // Transcript context — live transcripts for real-time streaming + session management
   const { setPendingMeetingId, transcripts: liveTranscripts, clearTranscripts } = useTranscripts();
@@ -144,7 +157,7 @@ export default function PageContent({
   }, [meetingData.aiSummary]);
 
   const hasTranscriptContent = useMemo(() => {
-    const transcriptSource = isRecording
+    const transcriptSource = isRecordingForThisMeeting
       ? liveTranscripts
       : postRecordingSnapshot.length > 0
         ? postRecordingSnapshot
@@ -153,7 +166,7 @@ export default function PageContent({
     return transcriptSource.some(
       (segment: Transcript) => typeof segment.text === 'string' && segment.text.trim().length > 0
     );
-  }, [isRecording, liveTranscripts, postRecordingSnapshot, meetingData.transcripts]);
+  }, [isRecordingForThisMeeting, liveTranscripts, postRecordingSnapshot, meetingData.transcripts]);
 
   const hasCleanupSourceContent = hasTranscriptContent || hasNotesContent;
 
@@ -182,18 +195,32 @@ export default function PageContent({
 
     // Pre-seed the meeting ID: recording stop will attach transcripts here
     setPendingMeetingId(meetingIdToUse);
+
+    // Claim ownership of this recording for this meeting BEFORE starting
+    setRecordingMeetingId(meetingIdToUse);
+
     await handleRecordingStart();
-  }, [meeting.id, onMeetingCreated, setPendingMeetingId, clearTranscripts, handleRecordingStart]);
+  }, [meeting.id, onMeetingCreated, setPendingMeetingId, clearTranscripts, handleRecordingStart, setRecordingMeetingId]);
 
   // Stop recording — delegates to useRecordingStop (mirrors sidebar behaviour)
   const handleStopRecordingOnPage = useCallback(() => {
+    // Guard: only the meeting that owns the recording can stop it.
+    if (recordingState.recordingMeetingId !== meeting.id) {
+      console.warn(
+        '[Recording] Ignoring stop request: recording belongs to meeting %s, currently viewing %s',
+        recordingState.recordingMeetingId,
+        meeting.id,
+      );
+      return;
+    }
+
     // Capture snapshot before clearTranscripts() runs internally, so the panel
     // stays populated during the ~1s gap while the API refetches.
     setPostRecordingSnapshot([...liveTranscripts]);
     toast.loading('Saving transcript...', { id: 'transcript-save' });
     handleRecordingStop({ source: 'ui', callApi: true });
     Analytics.trackButtonClick('stop_recording', 'meeting_details_transcript_header');
-  }, [handleRecordingStop, meetingData.transcripts, liveTranscripts]);
+  }, [handleRecordingStop, liveTranscripts, recordingState.recordingMeetingId, meeting.id]);
 
   // Pause / Resume — delegates directly to Tauri commands (backend already supports these)
   const handlePauseRecordingOnPage = useCallback(async () => {
@@ -238,10 +265,11 @@ export default function PageContent({
     let unlistenStopped: (() => void) | null = null;
 
     const setup = async () => {
-      // 10-second pre-stop warning toast
+      // 10-second pre-stop warning toast — only show on the meeting that owns the recording
       unlistenWarning = await listen<{ secondsRemaining: number }>(
         'recording-silence-warning',
         (event) => {
+          if (recordingMeetingIdRef.current !== meeting.id) return;
           const secs = event.payload.secondsRemaining;
           toast.warning(
             `No voice detected — recording will auto-stop in ${secs} second${secs !== 1 ? 's' : ''}`,
@@ -256,6 +284,15 @@ export default function PageContent({
       // Recording was stopped by the silence monitor — trigger the same
       // frontend teardown as a manual "End Recording" press.
       unlistenStopped = await listen('recording-auto-stopped', () => {
+        // Guard: only handle auto-stop if this page owns the recording
+        if (recordingMeetingIdRef.current !== meeting.id) {
+          console.warn(
+            '[Auto-stop] Ignoring: recording belongs to meeting %s, currently viewing %s',
+            recordingMeetingIdRef.current,
+            meeting.id,
+          );
+          return;
+        }
         toast.dismiss('silence-warning');
         toast.info('Recording automatically stopped after silence', {
           duration: 5000,
@@ -369,7 +406,7 @@ export default function PageContent({
         />
         <TranscriptPanel
           transcripts={
-            isRecording
+            isRecordingForThisMeeting
               ? liveTranscripts
               : postRecordingSnapshot.length > 0
                 ? postRecordingSnapshot
@@ -378,16 +415,16 @@ export default function PageContent({
           onCopyTranscript={copyOperations.handleCopyTranscript}
           onStartRecording={handleStartRecordingOnPage}
           onStopRecording={handleStopRecordingOnPage}
-          isRecording={isRecording}
-          isStopping={recordingState.isStopping}
+          isRecording={isRecordingForThisMeeting}
+          isStopping={isStoppingForThisMeeting}
           isPaused={recordingState.isPaused}
           onPauseRecording={handlePauseRecordingOnPage}
           onResumeRecording={handleResumeRecordingOnPage}
-          disableAutoScroll={!isRecording}
+          disableAutoScroll={!isRecordingForThisMeeting}
           // During recording or snapshot: bypass pagination and render directly.
           // After recording and API refetch: switch back to paginated data.
-          usePagination={!isRecording && postRecordingSnapshot.length === 0}
-          segments={(!isRecording && postRecordingSnapshot.length === 0) ? segments : undefined}
+          usePagination={!isRecordingForThisMeeting && postRecordingSnapshot.length === 0}
+          segments={(!isRecordingForThisMeeting && postRecordingSnapshot.length === 0) ? segments : undefined}
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}
           totalCount={totalCount}

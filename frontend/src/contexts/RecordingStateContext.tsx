@@ -34,11 +34,15 @@ interface RecordingState {
   // NEW: Lifecycle status
   status: RecordingStatus;
   statusMessage?: string;  // Optional message for current status
+
+  // Which meeting owns the current recording (null when idle)
+  recordingMeetingId: string | null;
 }
 
 interface RecordingStateContextType extends RecordingState {
   // NEW: Setters for status management
   setStatus: (status: RecordingStatus, message?: string) => void;
+  setRecordingMeetingId: (id: string | null) => void;
 
   // Computed helpers (derived from status)
   isStopping: boolean;
@@ -65,9 +69,14 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
     activeDuration: null,
     status: RecordingStatus.IDLE,  // NEW: Initialize with IDLE status
     statusMessage: undefined,       // NEW: No message initially
+    recordingMeetingId: null,
   });
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const setRecordingMeetingId = useCallback((id: string | null) => {
+    setState(prev => ({ ...prev, recordingMeetingId: id }));
+  }, []);
 
   // NEW: Status setter with logging
   const setStatus = useCallback((status: RecordingStatus, message?: string) => {
@@ -173,6 +182,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
               isActive: false,
               recordingDuration: null,
               activeDuration: null,
+              recordingMeetingId: null,
             };
           });
           stopPolling();
@@ -229,10 +239,11 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
   const contextValue = useMemo(() => ({
     ...state,
     setStatus,
+    setRecordingMeetingId,
     isStopping: state.status === RecordingStatus.STOPPING,
     isProcessing: state.status === RecordingStatus.PROCESSING_TRANSCRIPTS,
     isSaving: state.status === RecordingStatus.SAVING,
-  }), [state, setStatus]);
+  }), [state, setStatus, setRecordingMeetingId]);
 
   return (
     <RecordingStateContext.Provider value={contextValue}>
