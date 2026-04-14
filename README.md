@@ -63,7 +63,7 @@ pnpm install
 pnpm run tauri:dev
 ```
 
-Requires Rust and Node.js. See [BUILDING.md](docs/BUILDING.md) for full instructions including GPU build flags.
+Requires Rust and Node.js. See [BUILDING.md](docs/guides/BUILDING.md) for full instructions including GPU build flags.
 
 ## Architecture
 
