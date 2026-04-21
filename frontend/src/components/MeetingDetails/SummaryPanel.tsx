@@ -119,23 +119,23 @@ export function SummaryPanel({
       <div className={MEETING_PANE_HEADER_CLASS}>
         <div className={MEETING_PANE_HEADER_ROW_CLASS}>
           <h2 className={MEETING_PANE_TITLE_CLASS}>AI Cleanup</h2>
-          {/* Show Copy when summary exists and not actively generating;
-              otherwise show Generate/Stop via SummaryGeneratorButtonGroup. */}
-          {hasExistingSummary && !isSummaryLoading ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              onClick={() => {
-                Analytics.trackButtonClick('copy_summary', 'meeting_details');
-                onCopySummary();
-              }}
-              title="Copy AI cleanup"
-            >
-              <Copy className="lg:mr-2" size={16} />
-              <span className="hidden lg:inline">Copy</span>
-            </Button>
-          ) : (
+          {/* Always show Generate/Stop; add Copy alongside it when a summary exists. */}
+          <div className="flex items-center gap-2">
+            {hasExistingSummary && !isSummaryLoading && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  Analytics.trackButtonClick('copy_summary', 'meeting_details');
+                  onCopySummary();
+                }}
+                title="Copy AI cleanup"
+              >
+                <Copy className="lg:mr-2" size={16} />
+                <span className="hidden lg:inline">Copy</span>
+              </Button>
+            )}
             <SummaryGeneratorButtonGroup
               modelConfig={modelConfig}
               onGenerateSummary={onGenerateSummary}
@@ -144,7 +144,7 @@ export function SummaryPanel({
               summaryStatus={summaryStatus}
               hasSourceContent={hasCleanupSourceContent}
             />
-          )}
+          </div>
         </div>
       </div>
 

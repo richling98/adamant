@@ -279,6 +279,8 @@ pub async fn generate_meeting_summary(
     app_data_dir: Option<&PathBuf>,
     cancellation_token: Option<&CancellationToken>,
     notes_markdown: Option<&str>,
+    meeting_title: Option<&str>,
+    meeting_date: Option<&str>,
 ) -> Result<(String, i64), String> {
     // Check cancellation at the start
     if let Some(token) = cancellation_token {
@@ -461,12 +463,17 @@ RULES:\n\
 - Output ONLY the meeting document. No preamble, no meta-commentary, no sign-off.\
 ".to_string();
 
+    let title = meeting_title.unwrap_or("Not provided");
+    let date = meeting_date.unwrap_or("Not provided");
+
     // Build user message: content FIRST, then the template to fill.
     // This ordering helps small models: they read the source material before
     // encountering the output structure, so they fill from what they just read.
     let mut final_user_prompt = format!(
-        "=== TRANSCRIPT ===\n{}\n=== END TRANSCRIPT ===",
-        content_to_summarize
+        "=== MEETING METADATA ===\nTitle: {title}\nDate: {date}\n=== END MEETING METADATA ===\n\n=== TRANSCRIPT ===\n{transcript}\n=== END TRANSCRIPT ===",
+        title = title,
+        date = date,
+        transcript = content_to_summarize,
     );
 
     if let Some(notes) = notes_markdown {

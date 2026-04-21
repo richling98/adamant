@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Git worktrees (isolated workspaces for feature branches)
+.worktrees/
+
 /experiments
 
 # dependencies

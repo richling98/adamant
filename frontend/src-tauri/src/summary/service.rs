@@ -220,6 +220,12 @@ impl SummaryService {
         // Get app data directory for BuiltInAI provider
         let app_data_dir = _app.path().app_data_dir().ok();
 
+        // Fetch meeting metadata for the prompt header
+        let meeting_model = MeetingsRepository::get_meeting_metadata(&pool, &meeting_id).await.ok().flatten();
+        let meeting_title = meeting_model.as_ref().map(|m| m.title.as_str());
+        let meeting_date_str = meeting_model.as_ref().map(|m| m.created_at.0.format("%Y-%m-%d").to_string());
+        let meeting_date = meeting_date_str.as_deref();
+
         // Generate summary
         let client = reqwest::Client::new();
         let result = generate_meeting_summary(
@@ -239,6 +245,8 @@ impl SummaryService {
             app_data_dir.as_ref(),
             Some(&cancellation_token),
             notes_markdown.as_deref(),
+            meeting_title,
+            meeting_date,
         )
         .await;
 
