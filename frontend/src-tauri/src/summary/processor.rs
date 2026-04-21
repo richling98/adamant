@@ -423,23 +423,42 @@ pub async fn generate_meeting_summary(
     let clean_template_markdown = template.to_markdown_structure();
     let section_instructions = template.to_section_instructions();
 
-    // Keep the system prompt short and universal — works with small local models
-    // (Gemma, Mistral, etc.) and large cloud models equally.
-    // Template + section instructions go into the USER message so the model reads
-    // the transcript content first, THEN sees what structure to fill — matching how
-    // humans fill out forms (read notes → fill form, not the reverse).
     let final_system_prompt = "\
-You are an expert meeting editor. Your job is to produce a polished, organized cleanup \
-from a raw meeting transcript and optional user notes. A cleanup is NOT a summary — \
-it is an edited, organized version of what was actually said and written.\n\
+You are an expert meeting scribe and editor. Your job is to produce a single, comprehensive, \
+highly organized meeting document from a raw transcript and optional handwritten notes.\n\
 \n\
-Rules:\n\
-- Use ONLY information present in the transcript and notes. Never invent anything.\n\
-- Remove filler words (\"um\", \"uh\", \"you know\") and fix broken speech into clean prose.\n\
-- Preserve every substantive topic, decision, name, number, question, and detail.\n\
-- Bullet points only — never use tables.\n\
-- If a section has no relevant content, write exactly: `- None noted.`\n\
-- Output ONLY the filled-in template. No preamble, no commentary.\
+This is NOT a brief summary. It is a complete, detailed record of everything discussed — \
+written in clean, professional prose with no filler words, no broken speech, and no repetition.\n\
+\n\
+STEP 1 — UNDERSTAND BEFORE YOU WRITE:\n\
+Before organizing anything, read the entire transcript and all notes carefully. Build a complete \
+mental picture of what this meeting was about:\n\
+- What were the main subjects and goals of the meeting?\n\
+- Which parts of the notes directly relate to the transcript, and which parts are independent?\n\
+- Where do the notes add context, correct, or expand on what was said in the transcript?\n\
+- Where are the notes about something entirely separate from the transcript?\n\
+Do not start writing the document until you have a full understanding of how everything fits together.\n\
+\n\
+STEP 2 — WRITE THE DOCUMENT:\n\
+Organize everything into a cohesive, topic-driven document using this structure:\n\
+\n\
+- Identify all major topics discussed across both the transcript and the notes.\n\
+- For each topic, create a bold heading (e.g., **Topic Name**).\n\
+- Under each heading, write detailed bullet points covering everything said or noted about that topic.\n\
+  - Sub-bullets are encouraged for nested detail (decisions, specifics, open questions).\n\
+- Where the transcript and notes cover the same topic, merge them into one cohesive set of bullets — never repeat the same point twice.\n\
+- Where notes are about something not in the transcript, include them as their own topic section.\n\
+- End with a **Action Items** section listing any tasks, owners, or next steps mentioned.\n\
+- End with an **Open Questions** section for anything unresolved or flagged for follow-up.\n\
+\n\
+RULES:\n\
+- Use ONLY information present in the transcript and notes. Never invent or infer anything.\n\
+- Treat handwritten notes as authoritative context from the participant.\n\
+- Remove all filler words (\"um\", \"uh\", \"you know\", \"like\") and clean up broken speech into readable prose.\n\
+- Preserve every substantive topic, decision, name, number, date, question, and detail — even if it seems minor.\n\
+- Bullet points only — never use markdown tables.\n\
+- If a topic or section has no relevant content, omit it entirely.\n\
+- Output ONLY the meeting document. No preamble, no meta-commentary, no sign-off.\
 ".to_string();
 
     // Build user message: content FIRST, then the template to fill.
