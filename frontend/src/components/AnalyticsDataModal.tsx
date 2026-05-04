@@ -122,7 +122,7 @@ export default function AnalyticsDataModal({ isOpen, onClose, onConfirmDisable }
             <pre className="text-xs text-zinc-400 overflow-x-auto">
               {`{
   "event": "meeting_ended",
-  "app_version": "0.2.0",
+  "app_version": "0.5.2",
   "transcription_provider": "parakeet",
   "transcription_model": "parakeet-tdt-0.6b-v3-int8",
   "summary_provider": "ollama",

@@ -6,9 +6,10 @@ A modern desktop application for recording, transcribing, and analyzing meetings
 
 - Real-time audio recording from both microphone and system audio
 - Live transcription using Whisper ASR (locally running)
+- AI Cleanup generation from transcripts and user-typed `My Notes`
 - Native desktop integration using Tauri
 - Speaker diarization support
-- Rich text editor for note-taking
+- Rich BlockNote editor with autosave and explicit save-before-recording/cleanup/navigation safeguards
 - Privacy-focused: All processing happens locally
 
 ## Prerequisites
@@ -65,8 +66,8 @@ A modern desktop application for recording, transcribing, and analyzing meetings
 
 2. Clone the repository and navigate to the frontend directory:
    ```bash
-   git clone https://github.com/Zackriya-Solutions/meeting-minutes
-   cd meeting-minutes/frontend
+   git clone https://github.com/richling98/adamant
+   cd adamant/frontend
    ```
   
 
@@ -85,8 +86,8 @@ A modern desktop application for recording, transcribing, and analyzing meetings
 
 2. Clone the repository and navigate to the frontend directory:
    ```cmd
-   git clone https://github.com/Zackriya-Solutions/meeting-minutes
-   cd meeting-minutes/frontend
+   git clone https://github.com/richling98/adamant
+   cd adamant\frontend
    ```
 
 3. Install dependencies:
@@ -102,6 +103,8 @@ Use the provided script to run the app in development mode:
 ```bash
 ./clean_run.sh
 ```
+
+The script builds the debug Tauri app, signs it as `Adamant Dev`, and launches that `.app` bundle. This is the preferred macOS path because microphone permissions are tied to the launched app identity.
 
 To build a production version:
 ```bash
@@ -152,7 +155,8 @@ The server will be available at http://localhost:8178
 ### Backend (Tauri)
 - The Rust backend is in the `src-tauri/` directory
 - Handles audio capture, file system access, and native integrations
-- To run only the Tauri development server: `pnpm run tauri dev`
+- To run only the Tauri development server: `pnpm run tauri:dev`
+- On macOS, prefer `./clean_run.sh` for interactive recording tests so TCC microphone permissions attach to `Adamant Dev.app`
 
 ## Troubleshooting
 
@@ -161,7 +165,7 @@ The server will be available at http://localhost:8178
   ```bash
   chmod +x clean_run.sh clean_build.sh whisper-server-package/run-server.sh
   ```
-- For microphone access issues, ensure the app has microphone permissions in System Preferences
+- For microphone access issues, use `./clean_run.sh` and grant microphone access to `Adamant Dev` in System Settings > Privacy & Security > Microphone
 - If the Whisper server fails to start, check if port 8178 is already in use
 
 ### Common Issues on Windows

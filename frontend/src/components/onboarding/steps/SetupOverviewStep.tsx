@@ -115,7 +115,7 @@ export function SetupOverviewStep() {
           </Button>
           <div className="text-center">
             <a
-              href="https://github.com/Zackriya-Solutions/meeting-minutes"
+              href="https://github.com/richling98/adamant"
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-zinc-500 hover:underline"

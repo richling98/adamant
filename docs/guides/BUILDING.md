@@ -59,7 +59,7 @@ The build scripts (`dev-gpu.sh` and `build-gpu.sh`) orchestrate the entire build
 2.  **Auto-detect GPU:** Run `scripts/auto-detect-gpu.js` (or use `TAURI_GPU_FEATURE` if set)
 3.  **Build Sidecar:** Build `llama-helper` with the detected feature (debug or release)
 4.  **Copy Binary:** Copy the built sidecar to `src-tauri/binaries` with the target triple
-5.  **Run Tauri:** Call `npm run tauri:dev` or `tauri:build` with the feature flag passed via env var
+5.  **Run Tauri:** Call `pnpm run tauri:dev` or `pnpm run tauri:build` with the feature flag passed via env var
 
 #### Detection Priority
 
@@ -281,14 +281,17 @@ brew install cmake node pnpm
 ### 2. Build and Run
 
 ```bash
-# Development mode (with hot reload)
-pnpm tauri:dev
+# Recommended macOS development mode; builds/signs/launches Adamant Dev.app
+./clean_run.sh
+
+# Manual development mode (with hot reload)
+pnpm run tauri:dev
 
 # Production build
-pnpm tauri:build
+pnpm run tauri:build
 ```
 
-The application will be built with Metal GPU acceleration automatically.
+The application will be built with Metal GPU acceleration automatically. For interactive microphone testing on macOS, prefer `./clean_run.sh` so microphone permissions attach to `Adamant Dev.app`.
 
 </details>
 
@@ -308,10 +311,10 @@ The application will be built with Metal GPU acceleration automatically.
 
 ```powershell
 # Development mode (with hot reload)
-pnpm tauri:dev
+pnpm run tauri:dev
 
 # Production build
-pnpm tauri:build
+pnpm run tauri:build
 ```
 
 By default, the application will be built with CPU-only processing. To enable GPU acceleration, see the [GPU Acceleration Guide](GPU_ACCELERATION.md).

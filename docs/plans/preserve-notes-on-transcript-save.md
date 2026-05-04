@@ -1,10 +1,10 @@
 # Feature Implementation Plan: Preserve My Notes on Transcript Save / Refresh
 
-**Overall Progress:** `80%` (Steps 1–4 complete; Step 5 is manual smoke test)
+**Overall Progress:** `100%`
 
 ## TLDR
 
-When a recording stops and transcripts are saved, the UI triggers a full re-mount of `PageContent` (including `NotesPanel`) by showing a loading spinner. This destroys any unsaved in-editor note content and reloads the editor from the database — wiping whatever the user typed within the 2-second autosave debounce window. The fix is to make transcript re-fetches incremental (background) rather than destructive (full re-mount), and to add a flush-on-unmount safety net in `NotesPanel`.
+When a recording stops, transcripts are saved, or AI Cleanup runs, the UI can cross several async boundaries while `My Notes` still has in-editor content that has not reached the database yet. The fix now has layered protection: transcript refetches stay non-destructive, `NotesPanel` exposes an explicit `flushNotes()` method, critical workflows flush notes before continuing, stale note loads are ignored, and the Tauri note API refuses to overwrite existing non-empty notes with an empty payload.
 
 ---
 
@@ -22,7 +22,7 @@ When a recording stops and transcripts are saved, the UI triggers a full re-moun
    }
    ```
    Because `isLoadingTranscripts` is `true`, the spinner is returned — **`PageContent` and `NotesPanel` are unmounted**.
-5. The pending debounced autosave in `NotesPanel` is silently cancelled (the component is gone). Any content typed in the last ≤ 2 seconds is lost.
+5. The pending debounced autosave in `NotesPanel` is silently cancelled (the component is gone). Any content typed in the last <= 2 seconds is lost.
 6. When the refetch completes, `isLoadingTranscripts` returns to `false`, `PageContent` remounts, and `NotesPanel` fetches fresh content from the DB — without the last few seconds of typing.
 
 ### Why `isLoading` is the wrong flag for refetch
@@ -38,7 +38,9 @@ After this fix:
 - **The user's notes are never wiped by a transcript save.** Whatever they have typed — even content that hasn't yet hit the 2-second autosave — stays in the editor.
 - **Transcript refreshes are invisible.** The transcript panel updates in the background; no spinner appears, no panels flash.
 - **The editor does not remount** on transcript save, recording stop, or any `onMeetingUpdated` callback.
-- **As a safety net**, if `NotesPanel` ever does unmount (e.g. navigating away), the debounced save is flushed synchronously so the last edits reach the DB.
+- **Recording and AI Cleanup workflows flush notes first.** Starting a recording after a new-note creation, stopping a recording, and generating AI Cleanup all call the notes flush path before they proceed.
+- **As a safety net**, if `NotesPanel` ever does unmount (e.g. navigating away), the debounced save is flushed so the last edits reach the DB.
+- **The persistence API rejects destructive empty overwrites.** If a non-empty note already exists, an accidental empty save is ignored rather than replacing user content.
 
 ---
 
@@ -46,8 +48,10 @@ After this fix:
 
 - **Add `isRefetching` (not reuse `isLoading`) in `usePaginatedTranscripts`:** `isLoading` must remain `true` only while there is no data and the UI has nothing to show. Background refetches use a separate flag so the loading guard is never triggered.
 - **Change the loading guard in `page.tsx` to exclude `isRefetching`:** The spinner condition should only fire on initial load (when `metadata === null`), not on subsequent background refreshes.
-- **Flush debounced save on `NotesPanel` unmount:** This is a defensive safeguard for edge cases (navigating away mid-typing). It does not fix the root cause but prevents data loss in any scenario that does cause unmount.
-- **No changes to the DB schema or Tauri commands:** The note persistence layer is already correct. This is purely a frontend state/render lifecycle fix.
+- **Expose imperative `flushNotes()` from `NotesPanel`:** Parent workflows can force the editor's current document into persistence before navigation, recording state changes, or AI Cleanup generation.
+- **Read from `editor.document` during flush:** The flush path uses the editor's live document rather than only React state, so it captures the newest typed content.
+- **Ignore stale note load responses:** If a user navigates between meetings while note loads are in flight, late responses cannot replace the current editor content.
+- **Protect the persistence boundary:** `api_save_note` now refuses to overwrite an existing non-empty note with an empty payload, and `api_get_note` returns `content_markdown` for generation flows.
 
 ---
 
@@ -82,13 +86,24 @@ After this fix:
   - [x] 🟩 `fetchMeetingDetails` direct call — non-destructive via Steps 1 & 2.
   - [x] 🟩 `onSummaryUpdated` → `refetchSummaryForMeeting` — does not touch `usePaginatedTranscripts`, no change needed.
 
-- [ ] 🟥 **Step 5: Manual smoke test**
+- [x] 🟩 **Step 5: Add explicit notes flush boundaries**
 
-  - [ ] 🟥 Open a meeting with existing transcripts. Type several words into `My Notes` — do **not** pause for 2 seconds (stay within the debounce window).
-  - [ ] 🟥 Trigger a transcript save (start + stop a short recording on the same meeting). Confirm the typed notes are still visible in the editor after the recording stops.
-  - [ ] 🟥 Type in notes while a recording is live. Confirm the notes persist after the recording stops and the transcript panel refreshes.
-  - [ ] 🟥 Open a brand-new meeting (`?id=new`). Confirm the spinner still appears during the initial load (the loading guard is not broken for first visits).
-  - [ ] 🟥 Navigate away from a meeting while typing (before the 2-second autosave fires). Confirm the note is saved to the DB (flush-on-unmount). Navigate back and confirm the content is there.
+  - [x] 🟩 `NotesPanel` exposes `flushNotes()` through a ref.
+  - [x] 🟩 Start-recording flow flushes notes after a new note receives its real meeting ID.
+  - [x] 🟩 Stop-recording flow flushes notes before transcript save/refresh events continue.
+  - [x] 🟩 AI Cleanup flow flushes notes before collecting transcript and notes inputs.
+
+- [x] 🟩 **Step 6: Harden note load/save races**
+
+  - [x] 🟩 Ignore stale note load results when the selected meeting changes.
+  - [x] 🟩 Preserve in-editor content when the DB returns no note for the selected meeting.
+  - [x] 🟩 Prevent empty saves from overwriting existing non-empty notes in `api_save_note`.
+  - [x] 🟩 Return `content_markdown` from `api_get_note` so AI Cleanup uses the persisted Markdown form.
+
+- [x] 🟩 **Step 7: Manual smoke test**
+
+  - [x] 🟩 Start a meeting recording, type in `My Notes`, end recording, generate AI Cleanup, navigate away, return to the original meeting, and confirm typed notes persist.
+  - [x] 🟩 User confirmed the reproduced failure case no longer deletes `My Notes`.
 
 ---
 

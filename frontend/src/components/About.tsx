@@ -9,7 +9,7 @@ import { CheckCircle2, Shield, Cpu, CircleDollarSign, Globe } from 'lucide-react
 
 
 export function About() {
-    const [currentVersion, setCurrentVersion] = useState<string>('0.2.0');
+    const [currentVersion, setCurrentVersion] = useState<string>('0.5.2');
     const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
     const [showUpdateDialog, setShowUpdateDialog] = useState(false);
 

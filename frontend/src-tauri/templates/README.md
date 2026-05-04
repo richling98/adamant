@@ -16,13 +16,12 @@ Time-boxed daily updates template designed for engineering/product teams.
 - Notes
 
 ### 2. `standard_meeting.json`
-General-purpose meeting notes template focusing on key outcomes and actions.
+Default AI Cleanup template for turning transcripts plus user notes into a concise, structured meeting record.
 
 **Sections:**
-- Summary
-- Key Decisions
-- Action Items
-- Discussion Highlights
+- Executive Summary
+- Key Topics
+- Key Takeaways (optional when supported by the source material)
 
 ## Template Structure
 

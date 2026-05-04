@@ -1,6 +1,6 @@
 # Feature Implementation Plan: Turn AI Summary Into Comprehensive AI Cleanup
 
-**Overall Progress:** `58%`
+**Overall Progress:** `72%`
 
 ## TLDR
 
@@ -8,13 +8,16 @@ This feature is partially already implemented, but not fully aligned with the de
 
 What is already true in the code today:
 - `My Notes` are already fetched in `frontend/src/hooks/meeting-details/useSummaryGeneration.ts` and passed into `api_process_transcript`.
+- The page flushes pending `My Notes` edits before AI Cleanup starts, so generation reads the latest typed content.
 - `notes_markdown` is already threaded through the Rust summary pipeline.
 - The final prompt in `frontend/src-tauri/src/summary/processor.rs` already injects `<user_notes>` and instructs the model to produce a complete record rather than a short summary.
+- The default `standard_meeting` template is now cleanup-oriented: `Executive Summary`, `Key Topics`, and optional `Key Takeaways`.
 
 What is still not fully true:
 - The product is still named and presented as a "summary" throughout the UI and code paths.
-- The template system still contains summary-oriented naming and section semantics.
-- There is not yet an explicit end-to-end guarantee that the generated output is a comprehensive cleanup of both transcript and notes without omitting details.
+- Some internal code paths and storage names still use summary terminology for compatibility.
+- The token-budget/repetition failure mode is tracked separately in `docs/plans/ai-cleanup-repetition-fix.md`.
+- There is not yet an automated end-to-end guarantee that the generated output is a comprehensive cleanup of both transcript and notes without omitting details.
 
 This plan focuses only on the remaining work: verify the current behavior, tighten the prompt/template contract, and shift the feature from "summary" semantics to "comprehensive AI cleanup" semantics.
 
@@ -76,13 +79,14 @@ So the "include My Notes" part is already done.
   - [x] 🟩 In `frontend/src-tauri/src/summary/processor.rs`, replace remaining summary-oriented framing in the final-generation path with explicit "comprehensive cleanup" language.
   - [x] 🟩 Make the instructions unambiguous that the model must preserve all material details from both `<transcript_chunks>` and `<user_notes>`.
   - [x] 🟩 Add explicit guidance that the output should read as a cohesive cleaned-up writeup, while still retaining all decisions, action items, questions, corrections, and context.
-  - [ ] 🟥 Review the chunk-combine prompt so it also preserves the "do not summarize or compress" contract before the final cleanup stage.
+  - [x] 🟩 Review the chunk-combine prompt so it also preserves the "do not summarize or compress" contract before the final cleanup stage.
 
 - [x] 🟩 **Step 3: Align the template system with comprehensive-record behavior**
   - [x] 🟩 Audit the built-in templates and their section instructions to find summary-oriented sections or wording that encourage compression.
   - [x] 🟩 In `frontend/src-tauri/src/summary/templates/types.rs`, update generated section guidance so it consistently asks for full capture rather than summary extraction.
   - [x] 🟩 Review bundled templates such as `standard_meeting` and `daily_standup` to ensure their sections support a complete record instead of an executive summary.
   - [x] 🟩 Decide whether a new cleanup-oriented default template is needed, or whether the existing templates can be safely reworded in place.
+  - [x] 🟩 Update `standard_meeting.json` to produce `Executive Summary`, `Key Topics`, and optional `Key Takeaways` instead of action-item-centric summary sections.
 
 - [x] 🟩 **Step 4: Align the frontend UX with the new product intent**
   - [x] 🟩 Audit the meeting-details UI for copy such as "Generate Summary", "summary is ready", and other summary-oriented labels.
@@ -92,12 +96,13 @@ So the "include My Notes" part is already done.
   - [x] 🟩 Ensure notes-only meetings can trigger AI Cleanup without requiring transcript content first.
   - [x] 🟩 Update user-facing descriptions so expectations match the new output style: complete writeup, not condensed summary.
   - [x] 🟩 Ensure loading, empty, success, and regenerate states all use consistent `AI Cleanup` language.
+  - [x] 🟩 Keep the AI Cleanup action visible while transcripts are still finalizing, with a saving state instead of hiding the control.
 
 - [ ] 🟨 **Step 5: Verify notes-plus-transcript behavior explicitly**
   - [ ] 🟥 Add or update a regression check that confirms `My Notes` are still included in the final generation path.
   - [ ] 🟥 Verify that the AI Cleanup button appears when only `My Notes` has content.
-  - [ ] 🟥 Verify that the AI Cleanup button appears when only transcript content exists.
-  - [ ] 🟥 Verify that the AI Cleanup button appears when both sources have content.
+  - [x] 🟩 Verify that the AI Cleanup button appears when only transcript content exists.
+  - [x] 🟩 Verify that the AI Cleanup button appears when both sources have content.
   - [ ] 🟥 Verify that the AI Cleanup button stays hidden only when both transcript and `My Notes` are empty.
   - [ ] 🟥 Verify behavior when notes add context not present in the transcript.
   - [ ] 🟥 Verify behavior when notes overlap with transcript content, ensuring the output is cohesive rather than duplicative.

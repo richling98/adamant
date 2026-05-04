@@ -6,10 +6,10 @@ This document captures the product and quality improvements requested for Adaman
 
 | Date Added | Feature | Summary | Plan |
 | --- | --- | --- | --- |
-| 2026-04-06 | Improve silence detection during transcription | Redesign silence auto-stop so continuous speech is not mistaken for silence, and long speech still flushes transcript chunks. | Done. See [improve-silence-detection.md](/Users/richardling/Documents/Documents%20-%20Updated/Projects/adamant/docs/plans/improve-silence-detection.md) |
-| 2026-04-06 | Preserve `My Notes` when transcripts save or refresh | Transcript and meeting refreshes must never wipe the user's personal notes. | Done. See [preserve-notes-on-transcript-save.md](/Users/richardling/Documents/Documents%20-%20Updated/Projects/adamant/docs/plans/preserve-notes-on-transcript-save.md) |
+| 2026-04-06 | Improve silence detection during transcription | Redesign silence auto-stop so continuous speech is not mistaken for silence, and long speech still flushes transcript chunks. | Done. See [improve-silence-detection.md](improve-silence-detection.md) |
+| 2026-04-06 | Preserve `My Notes` when transcripts save or refresh | Transcript and meeting refreshes must never wipe the user's personal notes. | Done. See [preserve-notes-on-transcript-save.md](preserve-notes-on-transcript-save.md) |
 | 2026-04-06 | Apply silence settings live during active recordings | Changing the silence auto-stop duration or toggling it off in Settings should take effect immediately without restarting the recording. | Done. No separate plan (3-file change: new `update_silence_settings` Tauri command, registered in `lib.rs`, invoked from `RecordingSettings.tsx`). |
-| 2026-04-06 | Turn AI Summary into AI Cleanup | Rename the frontend feature to `AI Cleanup`, make it use transcript and notes together, and allow notes-only cleanup generation. | In progress. See [comprehensive-ai-cleanup.md](/Users/richardling/Documents/Documents%20-%20Updated/Projects/adamant/docs/plans/comprehensive-ai-cleanup.md) |
+| 2026-04-06 | Turn AI Summary into AI Cleanup | Rename the frontend feature to `AI Cleanup`, make it use transcript and notes together, and harden cleanup generation around pending note edits. | In progress. See [comprehensive-ai-cleanup.md](comprehensive-ai-cleanup.md) |
 | 2026-04-06 | Turn Adamant into a "second brain" | Build a personal wiki and knowledge base that the user can chat with over time. | Not yet split into its own plan |
 | 2026-04-06 | Keep meeting titles strictly user-driven | The app must never overwrite or reset a meeting title, including resetting it to `Add title here` after transcript save or AI note generation. | Not yet split into its own plan |
 
@@ -26,7 +26,7 @@ Adamant should stop ending transcript segments too early when a speaker is still
 - Fewer prematurely truncated transcript segments
 - More natural transcript chunking during live capture
 
-**Plan:** Completed. See [improve-silence-detection.md](/Users/richardling/Documents/Documents%20-%20Updated/Projects/adamant/docs/plans/improve-silence-detection.md)
+**Plan:** Completed. See [improve-silence-detection.md](improve-silence-detection.md)
 
 ### 2. Preserve `My Notes` when transcripts save or refresh
 
@@ -39,7 +39,7 @@ When the transcript saves, the UI currently refreshes too aggressively and wipes
 - Refresh behavior is incremental instead of destructive
 - Notes remain stable while recording and after autosaves
 
-**Plan:** Completed. See [preserve-notes-on-transcript-save.md](/Users/richardling/Documents/Documents%20-%20Updated/Projects/adamant/docs/plans/preserve-notes-on-transcript-save.md)
+**Plan:** Completed. See [preserve-notes-on-transcript-save.md](preserve-notes-on-transcript-save.md)
 
 ### 2b. Apply silence settings live during active recordings
 
@@ -68,10 +68,10 @@ The end-of-meeting AI feature should act like a comprehensive cleanup rather tha
 - Notes are already passed into the generation path alongside transcript content
 - The frontend has been renamed from `AI Summary` to `AI Cleanup` in the main meeting flow
 - The generate button now appears when transcript content and/or `My Notes` content exists
-- Notes-only cleanup generation now works by using live editor content instead of waiting for autosave
+- Cleanup generation now flushes live editor content before reading notes, so it is not limited by autosave timing
 - The default cleanup template and backend prompt have been tightened to push the output toward a complete cleanup instead of a short summary
 
-**Plan:** In progress. See [comprehensive-ai-cleanup.md](/Users/richardling/Documents/Documents%20-%20Updated/Projects/adamant/docs/plans/comprehensive-ai-cleanup.md)
+**Plan:** In progress. See [comprehensive-ai-cleanup.md](comprehensive-ai-cleanup.md)
 
 ### 4. Turn Adamant into a "second brain"
 

@@ -20,7 +20,7 @@
 
 ## What is Adamant?
 
-Adamant is a privacy-first AI meeting assistant built as a self-contained desktop app. It records your microphone and system audio, transcribes speech in real-time using on-device Whisper models, and generates AI-powered summaries using your choice of local or external LLM — all without sending a single byte of your conversation to a third-party server.
+Adamant is a privacy-first AI meeting assistant built as a self-contained desktop app. It records your microphone and system audio, transcribes speech in real-time using on-device Whisper models, and generates AI Cleanup notes from your transcript plus your own typed notes using your choice of local or external LLM — all without sending a single byte of your conversation to a third-party server.
 
 ## Why Adamant?
 
@@ -33,9 +33,9 @@ Adamant is a privacy-first AI meeting assistant built as a self-contained deskto
 ## Features
 
 - Real-time transcription via local Whisper or Parakeet models
-- AI-generated meeting summaries with customizable templates
+- AI Cleanup that combines the transcript and your typed notes into structured meeting notes
 - Sidebar folders to organize meeting notes
-- Rich notes panel with autosave and BlockNote editor
+- Rich `My Notes` panel with BlockNote editing, autosave, and save-before-recording/cleanup/navigation safeguards
 - GPU acceleration — Metal (Apple Silicon), CUDA (NVIDIA), Vulkan (AMD/Intel)
 - Professional audio mixing — mic + system audio with intelligent ducking
 - Flexible AI provider support — Ollama, Claude, Groq, OpenRouter, or custom endpoint
@@ -60,10 +60,10 @@ Adamant is a privacy-first AI meeting assistant built as a self-contained deskto
 git clone https://github.com/richling98/adamant
 cd adamant/frontend
 pnpm install
-pnpm run tauri:dev
+./clean_run.sh
 ```
 
-Requires Rust and Node.js. See [BUILDING.md](docs/guides/BUILDING.md) for full instructions including GPU build flags.
+Requires Rust and Node.js. On macOS, `./clean_run.sh` builds, signs, and launches the development app bundle so microphone permissions attach to the correct `Adamant Dev` app. See [BUILDING.md](docs/guides/BUILDING.md) for full instructions including GPU build flags.
 
 ## Architecture
 
@@ -86,7 +86,10 @@ GPU acceleration is enabled at build time automatically:
 ```bash
 cd frontend
 
-# Run development build
+# macOS development build with the signed Adamant Dev app bundle
+./clean_run.sh
+
+# Manual Tauri development mode
 pnpm run tauri:dev
 
 # macOS Metal GPU
