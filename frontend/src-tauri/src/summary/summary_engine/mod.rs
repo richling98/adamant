@@ -9,14 +9,7 @@ pub mod sidecar;
 
 // Re-export commonly used types
 pub use client::{generate_with_builtin, is_sidecar_healthy, shutdown_sidecar_gracefully, force_shutdown_sidecar};
-pub use commands::{
-    __tauri_command_name_builtin_ai_cancel_download, __tauri_command_name_builtin_ai_delete_model,
-    __tauri_command_name_builtin_ai_download_model, __tauri_command_name_builtin_ai_get_available_summary_model,
-    __tauri_command_name_builtin_ai_get_model_info, __tauri_command_name_builtin_ai_get_recommended_model,
-    __tauri_command_name_builtin_ai_is_model_ready, __tauri_command_name_builtin_ai_list_models,
-    builtin_ai_cancel_download, builtin_ai_delete_model, builtin_ai_download_model,
-    builtin_ai_get_available_summary_model, builtin_ai_get_model_info, builtin_ai_get_recommended_model,
-    builtin_ai_is_model_ready, builtin_ai_list_models, init_model_manager, ModelManagerState,
-};
+// Re-export all Tauri commands (wildcard picks up internal __cmd__/__tauri_command_name__ symbols regardless of Tauri version)
+pub use commands::*;
 pub use model_manager::{ModelInfo, ModelStatus};
 pub use models::{get_available_models, get_default_model, get_model_by_name, ModelDef};
