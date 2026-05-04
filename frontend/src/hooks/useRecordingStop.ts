@@ -196,6 +196,12 @@ export function useRecordingStop(
           const message = stopError instanceof Error ? stopError.message : 'Failed to stop recording';
           setStatus(RecordingStatus.ERROR, message);
           toast.error('Failed to stop recording', { description: message });
+          window.dispatchEvent(new CustomEvent('recording-save-failed', {
+            detail: {
+              meetingId: pendingMeetingId ?? undefined,
+              error: message,
+            },
+          }));
           return;
         }
 
@@ -401,6 +407,12 @@ export function useRecordingStop(
               description: `${freshTranscripts.length} transcript segments added to this meeting.`,
               duration: 5000,
             });
+            window.dispatchEvent(new CustomEvent('recording-save-complete', {
+              detail: {
+                meetingId,
+                transcriptCount: freshTranscripts.length,
+              },
+            }));
             clearTranscripts();
             setStatus(RecordingStatus.IDLE);
           } else {
@@ -417,6 +429,12 @@ export function useRecordingStop(
               },
               duration: 10000,
             });
+            window.dispatchEvent(new CustomEvent('recording-save-complete', {
+              detail: {
+                meetingId,
+                transcriptCount: freshTranscripts.length,
+              },
+            }));
 
             // Auto-navigate after a short delay with source parameter
             setTimeout(() => {
@@ -485,9 +503,16 @@ export function useRecordingStop(
           if (pendingFolderId) {
             setPendingFolderId(null);
           }
-          setStatus(RecordingStatus.ERROR, saveError instanceof Error ? saveError.message : 'Unknown error');
+          const errorMessage = saveError instanceof Error ? saveError.message : 'Unknown error';
+          setStatus(RecordingStatus.ERROR, errorMessage);
+          window.dispatchEvent(new CustomEvent('recording-save-failed', {
+            detail: {
+              meetingId: existingMeetingId,
+              error: errorMessage,
+            },
+          }));
           toast.error('Failed to save meeting', {
-            description: saveError instanceof Error ? saveError.message : 'Unknown error'
+            description: errorMessage
           });
           throw saveError;
         }
@@ -500,7 +525,14 @@ export function useRecordingStop(
       setIsRecording(false);
     } catch (error) {
       console.error('Error in handleRecordingStop:', error);
-      setStatus(RecordingStatus.ERROR, error instanceof Error ? error.message : 'Unknown error');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setStatus(RecordingStatus.ERROR, errorMessage);
+      window.dispatchEvent(new CustomEvent('recording-save-failed', {
+        detail: {
+          meetingId: pendingMeetingId ?? undefined,
+          error: errorMessage,
+        },
+      }));
     } finally {
       // Always reset the guard flag when done
       setIsRecordingDisabled(false);

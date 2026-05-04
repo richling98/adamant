@@ -2,11 +2,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Summary, SummaryResponse, Transcript } from '@/types';
+import { Block } from '@blocknote/core';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import Analytics from '@/lib/analytics';
 import { TranscriptPanel } from '@/components/MeetingDetails/TranscriptPanel';
 import { SummaryPanel } from '@/components/MeetingDetails/SummaryPanel';
-import { NotesPanel } from '@/components/NotesPanel';
+import { NotesPanel, type NotesPanelRef } from '@/components/NotesPanel';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -71,9 +72,12 @@ export default function PageContent({
   const [isTemplateLoading, setIsTemplateLoading] = useState(true);
   const [hasNotesContent, setHasNotesContent] = useState(false);
   const [liveNotesMarkdown, setLiveNotesMarkdown] = useState('');
+  const [liveNotesBlocks, setLiveNotesBlocks] = useState<Block[] | null>(null);
   // Snapshot of live transcripts captured when "End Recording" is pressed.
   // Holds the panel content stable while the API refetch completes (prevents flash).
   const [postRecordingSnapshot, setPostRecordingSnapshot] = useState<Transcript[]>([]);
+  const [isTranscriptFinalizing, setIsTranscriptFinalizing] = useState(false);
+  const notesPanelRef = useRef<NotesPanelRef>(null);
 
   // Local recording state — tracks start/stop locally for useRecordingStart guard.
   // Global RecordingStateContext is the source of truth for all UI.
@@ -170,6 +174,19 @@ export default function PageContent({
 
   const hasCleanupSourceContent = hasTranscriptContent || hasNotesContent;
 
+  const persistLiveNotesToMeeting = useCallback(async (targetMeetingId: string) => {
+    if (!liveNotesBlocks || !hasNotesContent) {
+      return;
+    }
+
+    await invoke('api_save_note', {
+      meetingId: targetMeetingId,
+      contentJson: JSON.stringify(liveNotesBlocks),
+      contentMarkdown: liveNotesMarkdown,
+      version: null,
+    });
+  }, [hasNotesContent, liveNotesBlocks, liveNotesMarkdown]);
+
   // Handle the "Start Recording" action on this page.
   // If the meeting hasn't been persisted yet (id==='new'), we create it first so
   // we have a real ID to attach the recording to. Titles are auto-named by timestamp
@@ -185,6 +202,11 @@ export default function PageContent({
         title: `Meeting ${timestamp}`,
       }) as { id: string; title: string; created_at: string; updated_at: string };
       meetingIdToUse = meetingData.id;
+      if (notesPanelRef.current) {
+        await notesPanelRef.current.flushNotes(meetingIdToUse);
+      } else {
+        await persistLiveNotesToMeeting(meetingIdToUse);
+      }
       // Update the URL and sidebar so the page re-renders with the new ID
       onMeetingCreated?.(meetingIdToUse);
     }
@@ -200,10 +222,10 @@ export default function PageContent({
     setRecordingMeetingId(meetingIdToUse);
 
     await handleRecordingStart();
-  }, [meeting.id, onMeetingCreated, setPendingMeetingId, clearTranscripts, handleRecordingStart, setRecordingMeetingId]);
+  }, [meeting.id, onMeetingCreated, persistLiveNotesToMeeting, setPendingMeetingId, clearTranscripts, handleRecordingStart, setRecordingMeetingId]);
 
   // Stop recording — delegates to useRecordingStop (mirrors sidebar behaviour)
-  const handleStopRecordingOnPage = useCallback(() => {
+  const handleStopRecordingOnPage = useCallback(async () => {
     // Guard: only the meeting that owns the recording can stop it.
     if (recordingState.recordingMeetingId !== meeting.id) {
       console.warn(
@@ -216,10 +238,16 @@ export default function PageContent({
 
     // Capture snapshot before clearTranscripts() runs internally, so the panel
     // stays populated during the ~1s gap while the API refetches.
+    await notesPanelRef.current?.flushNotes(recordingState.recordingMeetingId || meeting.id);
     setPostRecordingSnapshot([...liveTranscripts]);
+    setIsTranscriptFinalizing(true);
     toast.loading('Saving transcript...', { id: 'transcript-save' });
-    handleRecordingStop({ source: 'ui', callApi: true });
     Analytics.trackButtonClick('stop_recording', 'meeting_details_transcript_header');
+    handleRecordingStop({ source: 'ui', callApi: true }).catch((error) => {
+      console.error('Failed to stop recording:', error);
+      setIsTranscriptFinalizing(false);
+      toast.dismiss('transcript-save');
+    });
   }, [handleRecordingStop, liveTranscripts, recordingState.recordingMeetingId, meeting.id]);
 
   // Pause / Resume — delegates directly to Tauri commands (backend already supports these)
@@ -248,10 +276,40 @@ export default function PageContent({
 
   // Dismiss the "Saving transcript..." loading toast once the stop flow completes.
   useEffect(() => {
-    if (!recordingState.isStopping) {
+    if (!isTranscriptFinalizing) {
       toast.dismiss('transcript-save');
     }
-  }, [recordingState.isStopping]);
+  }, [isTranscriptFinalizing]);
+
+  useEffect(() => {
+    const handleRecordingSaveComplete = (event: Event) => {
+      const customEvent = event as CustomEvent<{ meetingId?: string }>;
+
+      if (customEvent.detail?.meetingId !== meeting.id) {
+        return;
+      }
+
+      setIsTranscriptFinalizing(false);
+      toast.dismiss('transcript-save');
+    };
+    const handleRecordingSaveFailed = (event: Event) => {
+      const customEvent = event as CustomEvent<{ meetingId?: string }>;
+
+      if (customEvent.detail?.meetingId && customEvent.detail.meetingId !== meeting.id) {
+        return;
+      }
+
+      setIsTranscriptFinalizing(false);
+      toast.dismiss('transcript-save');
+    };
+
+    window.addEventListener('recording-save-complete', handleRecordingSaveComplete);
+    window.addEventListener('recording-save-failed', handleRecordingSaveFailed);
+    return () => {
+      window.removeEventListener('recording-save-complete', handleRecordingSaveComplete);
+      window.removeEventListener('recording-save-failed', handleRecordingSaveFailed);
+    };
+  }, [meeting.id]);
 
   // Track page view
   useEffect(() => {
@@ -355,13 +413,19 @@ export default function PageContent({
 
   // Accept an optional customPrompt to match SummaryGeneratorButtonGroup's call signature
   const handleGenerateSummary = useCallback(async (customPrompt: string = '') => {
+    if (isTranscriptFinalizing) {
+      toast.info('Transcript is still saving. AI Cleanup will be available shortly.');
+      return;
+    }
+
     if (isTemplateLoading) {
       toast.info('Loading summary template, please try again in a moment.');
       return;
     }
 
+    await notesPanelRef.current?.flushNotes(meeting.id);
     await summaryGeneration.handleGenerateSummary(customPrompt);
-  }, [isTemplateLoading, summaryGeneration]);
+  }, [isTemplateLoading, isTranscriptFinalizing, meeting.id, summaryGeneration]);
 
   // Auto-generate summary when flag is set
   useEffect(() => {
@@ -397,12 +461,14 @@ export default function PageContent({
       <div className="flex flex-1 min-h-0 overflow-y-hidden overflow-x-hidden flex-col xl:grid xl:grid-cols-3">
         {/* Three-panel layout: Notes | Transcripts | Summary */}
         <NotesPanel
+          ref={notesPanelRef}
           meetingId={meeting.id}
           isNewNote={isNewNote}
           draftMeetingId={draftMeetingId}
           onMeetingCreated={onMeetingCreated}
           onContentPresenceChange={setHasNotesContent}
           onMarkdownChange={setLiveNotesMarkdown}
+          onBlocksChange={setLiveNotesBlocks}
         />
         <TranscriptPanel
           transcripts={
@@ -453,6 +519,7 @@ export default function PageContent({
           onStopGeneration={summaryGeneration.handleStopGeneration}
           customPrompt=""
           hasCleanupSourceContent={hasCleanupSourceContent}
+          isTranscriptFinalizing={isTranscriptFinalizing}
         />
       </div>
     </motion.div>

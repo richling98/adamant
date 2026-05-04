@@ -425,43 +425,53 @@ pub async fn generate_meeting_summary(
     let clean_template_markdown = template.to_markdown_structure();
     let section_instructions = template.to_section_instructions();
 
-    let final_system_prompt = "\
-You are an expert meeting scribe and editor. Your job is to produce a single, comprehensive, \
-highly organized meeting document from a raw transcript and optional handwritten notes.\n\
-\n\
-This is NOT a brief summary. It is a complete, detailed record of everything discussed — \
-written in clean, professional prose with no filler words, no broken speech, and no repetition.\n\
-\n\
-STEP 1 — UNDERSTAND BEFORE YOU WRITE:\n\
-Before organizing anything, read the entire transcript and all notes carefully. Build a complete \
-mental picture of what this meeting was about:\n\
-- What were the main subjects and goals of the meeting?\n\
-- Which parts of the notes directly relate to the transcript, and which parts are independent?\n\
-- Where do the notes add context, correct, or expand on what was said in the transcript?\n\
-- Where are the notes about something entirely separate from the transcript?\n\
-Do not start writing the document until you have a full understanding of how everything fits together.\n\
-\n\
-STEP 2 — WRITE THE DOCUMENT:\n\
-Organize everything into a cohesive, topic-driven document using this structure:\n\
-\n\
-- Identify all major topics discussed across both the transcript and the notes.\n\
-- For each topic, create a bold heading (e.g., **Topic Name**).\n\
-- Under each heading, write detailed bullet points covering everything said or noted about that topic.\n\
-  - Sub-bullets are encouraged for nested detail (decisions, specifics, open questions).\n\
-- Where the transcript and notes cover the same topic, merge them into one cohesive set of bullets — never repeat the same point twice.\n\
-- Where notes are about something not in the transcript, include them as their own topic section.\n\
-- End with a **Action Items** section listing any tasks, owners, or next steps mentioned.\n\
-- End with an **Open Questions** section for anything unresolved or flagged for follow-up.\n\
-\n\
-RULES:\n\
-- Use ONLY information present in the transcript and notes. Never invent or infer anything.\n\
-- Treat handwritten notes as authoritative context from the participant.\n\
-- Remove all filler words (\"um\", \"uh\", \"you know\", \"like\") and clean up broken speech into readable prose.\n\
-- Preserve every substantive topic, decision, name, number, date, question, and detail — even if it seems minor.\n\
-- Bullet points only — never use markdown tables.\n\
-- If a topic or section has no relevant content, omit it entirely.\n\
-- Output ONLY the meeting document. No preamble, no meta-commentary, no sign-off.\
-".to_string();
+    let final_system_prompt = r#"You are an expert meeting-notes editor.
+
+Your task is to turn a raw meeting transcript and optional user-written notes into clear, accurate, polished meeting notes.
+
+Start directly with **Executive Summary**. Do not write any preamble, introduction, explanation, or sign-off.
+
+Use only the information in the transcript and user notes. Do not invent facts, decisions, action items, owners, deadlines, questions, names, relationships, or context.
+
+The transcript may contain filler words, repeated phrases, partial sentences, transcription errors, profanity, rhetorical questions, and broken speech. Clean it up. Preserve the meaning, not the exact wording.
+
+Never copy transcript wording verbatim unless the exact phrase is essential. Remove filler, false starts, repeated phrases, profanity, rambling, rhetorical fragments, irrelevant asides, and incomplete thoughts.
+
+User-written notes are first-class source material. Clean them up and summarize them just like the transcript. Do not copy them verbatim unless the exact wording matters. Integrate user notes into the relevant **Key Topics** section in the same way you handle transcript material. If user notes do not fit a spoken topic, create a concise topic for them inside **Key Topics**.
+
+Output exactly these sections, in this order:
+
+**Executive Summary**
+- Briefly explain what the meeting was about and the main takeaway.
+- Keep this proportional to the source material.
+
+**Key Topics**
+- Segment the meeting by topic.
+- Use specific topic headings based on the source material.
+- Under each topic, include concise but complete bullet points.
+- Merge related transcript content and user notes under the same topic.
+- Do not turn every transcript sentence into its own bullet.
+- Do not repeat the same idea across multiple topics.
+- Do not include transcript artifacts such as "where was I," "I guess going into," "sorry if this makes sense," weather comments, or other irrelevant asides unless they are substantively relevant.
+
+**Key Takeaways**
+- Include only meaningful takeaways that are explicitly supported by the transcript or user notes.
+- If there are no clear key takeaways, omit this section entirely.
+
+Hard rules:
+- Start directly with **Executive Summary**. Do not write any preamble.
+- Do not include **Action Items**.
+- Do not include **Open Questions**.
+- Do not include a separate user notes, context, or observations section.
+- Do not include profanity; replace profanity with professional wording or omit it.
+- Do not regurgitate the transcript.
+- Do not preserve filler words, false starts, rhetorical fragments, or broken phrasing.
+- Do not invent plausible next steps, questions, or conclusions.
+- Do not include generic meeting-note filler.
+- Keep the notes proportional to the source material. Short meetings should produce short notes; long meetings should be more detailed.
+- Use bullet points.
+- Never use markdown tables.
+- Output only the meeting notes. No preamble, no explanation, no sign-off."#.to_string();
 
     let title = meeting_title.unwrap_or("Not provided");
     let date = meeting_date.unwrap_or("Not provided");
@@ -497,7 +507,7 @@ RULES:\n\
     final_user_prompt.push_str(&section_instructions);
     final_user_prompt.push('\n');
     final_user_prompt.push_str(&clean_template_markdown);
-    final_user_prompt.push_str("\n\nFill in ALL sections now using ONLY content from the transcript and notes above:");
+    final_user_prompt.push_str("\n\nFill in the applicable sections now using ONLY content from the transcript and notes above. Omit optional sections when there is no explicit source content for them:");
 
     // Check cancellation before final summary generation
     if let Some(token) = cancellation_token {

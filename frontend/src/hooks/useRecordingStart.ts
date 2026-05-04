@@ -24,6 +24,18 @@ async function loadSilenceTimeout(): Promise<number | null> {
   }
 }
 
+async function openMicrophoneSettings() {
+  try {
+    await invoke('open_system_settings', { preferencePane: 'Privacy_Microphone' });
+  } catch (error) {
+    console.error('Failed to open microphone settings:', error);
+    toast.error('Unable to open System Settings', {
+      description: 'Open System Settings → Privacy & Security → Microphone and enable Adamant Dev.',
+      duration: 8000,
+    });
+  }
+}
+
 interface UseRecordingStartReturn {
   handleRecordingStart: () => Promise<void>;
   isAutoStarting: boolean;
@@ -97,7 +109,27 @@ export function useRecordingStart(
   // Handle manual recording start (from button click)
   const handleRecordingStart = useCallback(async () => {
     try {
-      console.debug('handleRecordingStart called - checking Parakeet model status');
+      console.debug('handleRecordingStart called - checking microphone permission');
+
+      // Check microphone permission first (fast, no dialog, no delay)
+      const hasMicPermission = await invoke<boolean>('check_microphone_permission_status');
+      if (!hasMicPermission) {
+        // Permission not yet granted — trigger the macOS dialog
+        const granted = await invoke<boolean>('trigger_microphone_permission');
+        if (!granted) {
+          toast.error('Microphone access required', {
+            description: 'Please grant microphone access to Adamant Dev in System Settings → Privacy & Security → Microphone, then try again.',
+            action: {
+              label: 'Open Settings',
+              onClick: openMicrophoneSettings,
+            },
+            duration: 8000,
+          });
+          return;
+        }
+      }
+
+      console.debug('Microphone permission confirmed - checking Parakeet model status');
 
       // Check if Parakeet transcription model is ready before starting
       const parakeetReady = await checkParakeetReady();

@@ -493,6 +493,21 @@ function MeetingDetailsContent() {
       // Mark this ID as a new-note autosave transition so the recording bar
       // stays visible when the URL changes from ?id=new to ?id=<actualMeetingId>.
       justCreatedMeetingIdRef.current = actualMeetingId;
+      // Keep child props aligned with the real persisted row immediately. Waiting for
+      // the pagination hook to hydrate metadata leaves NotesPanel briefly targeting
+      // "new", which can save typed notes under the wrong id during recording startup.
+      setMeetingDetails(prev => {
+        if (!prev || prev.id !== 'new') {
+          return prev;
+        }
+
+        const now = new Date().toISOString();
+        return {
+          ...prev,
+          id: actualMeetingId,
+          updated_at: now,
+        };
+      });
       // Update URL to actual meeting ID
       router.replace(`/meeting-details?id=${actualMeetingId}`);
 

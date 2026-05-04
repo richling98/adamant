@@ -53,7 +53,7 @@ pub mod tray;
 pub mod utils;
 pub mod whisper_engine;
 
-use audio::{list_audio_devices, AudioDevice, trigger_audio_permission};
+use audio::{list_audio_devices, AudioDevice, trigger_audio_permission, check_microphone_permission};
 use log::{error as log_error, info as log_info};
 use notifications::commands::NotificationManagerState;
 use std::sync::Arc;
@@ -289,6 +289,12 @@ async fn get_audio_devices() -> Result<Vec<AudioDevice>, String> {
 async fn trigger_microphone_permission() -> Result<bool, String> {
     trigger_audio_permission()
         .map_err(|e| format!("Failed to trigger microphone permission: {}", e))
+}
+
+#[tauri::command]
+async fn check_microphone_permission_status() -> Result<bool, String> {
+    check_microphone_permission()
+        .map_err(|e| format!("Failed to check microphone permission: {}", e))
 }
 
 #[tauri::command]
@@ -675,6 +681,7 @@ pub fn run() {
             whisper_engine::parallel_commands::test_parallel_processing_setup,
             get_audio_devices,
             trigger_microphone_permission,
+            check_microphone_permission_status,
             start_recording_with_devices,
             start_recording_with_devices_and_meeting,
             start_audio_level_monitoring,

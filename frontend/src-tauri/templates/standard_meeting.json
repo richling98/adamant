@@ -1,20 +1,20 @@
 {
   "name": "Standard Meeting Notes",
-  "description": "A comprehensive meeting record covering all topics discussed and action items.",
+  "description": "Clean meeting notes with an executive summary, topic-based key points, and optional takeaways.",
   "sections": [
     {
-      "title": "Complete Overview",
-      "instruction": "Write a cohesive, cleaned-up overview of the entire meeting using both transcript content and user notes. Preserve all substantive details, decisions, questions, context, examples, and corrections. This is not a summary — do not condense or omit information. Format the entire overview as bullet points. If the notes and transcript cover unrelated subjects, keep them as separate bullets instead of forcing them into one narrative.",
+      "title": "Executive Summary",
+      "instruction": "Briefly explain what the meeting was about and the main takeaway. Keep this proportional to the source material: short meetings should have a short summary.",
       "format": "list"
     },
     {
-      "title": "Topics Covered",
-      "instruction": "For EACH distinct topic that received any discussion, create bullet points using concrete topic names taken from the source material itself. Under each topic, capture every point raised, every opinion shared, every question asked, every answer given, every piece of context, and every specific number or name mentioned. If the transcript and notes contain unrelated topics, preserve them as separate topics. Do not invent umbrella categories or merge unrelated material together.",
+      "title": "Key Topics",
+      "instruction": "Segment the transcript and user notes by topic. Use specific topic headings based on the source material. Under each topic, include concise but complete bullet points. Merge related transcript content and user notes under the same topic. If user notes do not fit a spoken topic, create a concise topic for those notes inside this section. Do not create a separate user notes, context, or observations section. Do not turn every transcript sentence into its own bullet. Do not repeat the same idea across multiple topics.",
       "format": "list"
     },
     {
-      "title": "Next Steps & Action Items",
-      "instruction": "List only the next steps and action items that were explicitly identified in the transcript or notes. For each, describe the action clearly and specifically and include any deadline or timeline that was actually mentioned. Do NOT assign owners. Do NOT invent recommendations or suggested next steps. If no explicit action items were stated, write a single bullet saying that none were explicitly stated.",
+      "title": "Key Takeaways",
+      "instruction": "Include only meaningful takeaways that are explicitly supported by the transcript or user notes. Do not invent takeaways. If there are no clear key takeaways, omit this section entirely.",
       "format": "list"
     }
   ]

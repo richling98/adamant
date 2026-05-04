@@ -131,10 +131,10 @@ impl Template {
             "- **Formatting rule for all sections:** Never use markdown tables. Use bullet points for every section, including overview sections.\n"
         );
         instructions.push_str(
-            "- **Global cleanup rule:** This output must be a complete cleanup, not a short summary. Preserve all material details from the transcript and user notes.\n"
+            "- **Global cleanup rule:** Preserve the meaning of the transcript and user notes, not the exact wording. Clean up filler, repeated fragments, and broken speech. Keep the output proportional to the amount of source material.\n"
         );
         instructions.push_str(
-            "- **No invention rule:** Never invent action items, decisions, recommendations, relationships between topics, or missing details. If something is not explicit in the source, omit it or write `None noted in this section.`\n"
+            "- **No invention rule:** Never invent action items, decisions, recommendations, relationships between topics, open questions, or missing details. If something is not explicit in the source, omit it.\n"
         );
 
         for section in &self.sections {

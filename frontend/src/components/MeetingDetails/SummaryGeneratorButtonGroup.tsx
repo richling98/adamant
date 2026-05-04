@@ -18,6 +18,7 @@ interface SummaryGeneratorButtonGroupProps {
   customPrompt: string;
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
   hasSourceContent?: boolean;
+  isTranscriptFinalizing?: boolean;
 }
 
 export function SummaryGeneratorButtonGroup({
@@ -27,10 +28,11 @@ export function SummaryGeneratorButtonGroup({
   customPrompt,
   summaryStatus,
   hasSourceContent = true,
+  isTranscriptFinalizing = false,
 }: SummaryGeneratorButtonGroupProps) {
   const [isCheckingModels, setIsCheckingModels] = useState(false);
 
-  if (!hasSourceContent) {
+  if (!hasSourceContent && !isTranscriptFinalizing) {
     return null;
   }
 
@@ -186,6 +188,17 @@ export function SummaryGeneratorButtonGroup({
         >
           <Square className="lg:mr-2" size={16} fill="currentColor" />
           <span className="hidden lg:inline">Stop</span>
+        </Button>
+      ) : isTranscriptFinalizing ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled
+          title="Saving transcript before AI Cleanup"
+          className="cursor-wait"
+        >
+          <Loader2 className="animate-spin lg:mr-2" size={16} />
+          <span className="hidden lg:inline">Saving transcript...</span>
         </Button>
       ) : (
         <Button

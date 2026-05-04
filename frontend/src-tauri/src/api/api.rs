@@ -1647,6 +1647,43 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
 
 // ===== Note Management Commands =====
 
+fn inline_content_has_text(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::String(text) => !text.trim().is_empty(),
+        serde_json::Value::Array(items) => items.iter().any(inline_content_has_text),
+        serde_json::Value::Object(map) => map
+            .get("text")
+            .and_then(|text| text.as_str())
+            .map(|text| !text.trim().is_empty())
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+fn blocknote_value_has_text(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Array(items) => items.iter().any(blocknote_value_has_text),
+        serde_json::Value::Object(map) => {
+            map.get("content").map(inline_content_has_text).unwrap_or(false)
+                || map
+                    .get("children")
+                    .map(blocknote_value_has_text)
+                    .unwrap_or(false)
+        }
+        _ => false,
+    }
+}
+
+fn blocknote_json_has_text(raw_json: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(raw_json)
+        .map(|value| blocknote_value_has_text(&value))
+        .unwrap_or(false)
+}
+
+fn note_payload_has_content(content_json: &str, content_markdown: &str) -> bool {
+    !content_markdown.trim().is_empty() || blocknote_json_has_text(content_json)
+}
+
 /// Creates a new empty meeting for note-taking
 #[tauri::command]
 pub async fn api_create_meeting<R: Runtime>(
@@ -1694,17 +1731,19 @@ pub async fn api_get_note<R: Runtime>(
 
     let pool = state.db_manager.pool();
 
-    let note: Option<(String, String)> = sqlx::query_as::<_, (String, String)>(
-        "SELECT notes_json, updated_at FROM meeting_notes WHERE meeting_id = ?",
-    )
-    .bind(&meeting_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch note: {}", e))?;
+    let note: Option<(String, Option<String>, String)> =
+        sqlx::query_as::<_, (String, Option<String>, String)>(
+            "SELECT notes_json, notes_markdown, updated_at FROM meeting_notes WHERE meeting_id = ?",
+        )
+        .bind(&meeting_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| format!("Failed to fetch note: {}", e))?;
 
-    if let Some((notes_json, updated_at)) = note {
+    if let Some((notes_json, notes_markdown, updated_at)) = note {
         Ok(Some(serde_json::json!({
             "content_json": notes_json,
+            "content_markdown": notes_markdown.unwrap_or_default(),
             "format": "blocknote",
             "version": 1,
             "updated_at": updated_at,
@@ -1866,6 +1905,37 @@ pub async fn api_save_note<R: Runtime>(
 
     let pool = state.db_manager.pool();
     let now = chrono::Utc::now();
+
+    let incoming_has_content = note_payload_has_content(&content_json, &content_markdown);
+    if !incoming_has_content {
+        let existing_note: Option<(Option<String>, Option<String>, String)> =
+            sqlx::query_as::<_, (Option<String>, Option<String>, String)>(
+                "SELECT notes_json, notes_markdown, updated_at FROM meeting_notes WHERE meeting_id = ?",
+            )
+            .bind(&meeting_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| format!("Failed to check existing note: {}", e))?;
+
+        if let Some((existing_json, existing_markdown, updated_at)) = existing_note {
+            let existing_has_content = note_payload_has_content(
+                existing_json.as_deref().unwrap_or_default(),
+                existing_markdown.as_deref().unwrap_or_default(),
+            );
+
+            if existing_has_content {
+                log_warn!(
+                    "Ignored empty note overwrite for meeting {} to preserve existing notes",
+                    meeting_id
+                );
+                return Ok(serde_json::json!({
+                    "version": 1,
+                    "updated_at": updated_at,
+                    "ignored_empty_overwrite": true,
+                }));
+            }
+        }
+    }
 
     // Use UPSERT (INSERT OR REPLACE) to handle both create and update
     sqlx::query::<sqlx::Sqlite>(

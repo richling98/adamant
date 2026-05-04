@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { forwardRef, useState, useEffect, useCallback, useRef, useImperativeHandle } from 'react';
 import { Block } from '@blocknote/core';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
@@ -24,6 +24,34 @@ interface NotesPanelProps {
   onMeetingCreated?: (actualMeetingId: string) => void;
   onContentPresenceChange?: (hasContent: boolean) => void;
   onMarkdownChange?: (markdown: string) => void;
+  onBlocksChange?: (blocks: Block[] | null) => void;
+}
+
+export interface NotesPanelRef {
+  flushNotes: (targetMeetingId?: string) => Promise<void>;
+}
+
+function blockHasMeaningfulContent(block: any): boolean {
+  if (!block) return false;
+
+  if (Array.isArray(block.content)) {
+    const inlineHasContent = block.content.some((item: any) => {
+      if (typeof item === 'string') return item.trim().length > 0;
+      if (item && typeof item.text === 'string') return item.text.trim().length > 0;
+      return false;
+    });
+    if (inlineHasContent) return true;
+  }
+
+  if (Array.isArray(block.children)) {
+    return block.children.some((child: any) => blockHasMeaningfulContent(child));
+  }
+
+  return false;
+}
+
+function blocksHaveMeaningfulContent(blocks: Block[] | null | undefined): boolean {
+  return Array.isArray(blocks) && blocks.some((block) => blockHasMeaningfulContent(block));
 }
 
 // Helper to format timestamp as "just now", "2 minutes ago", etc.
@@ -44,14 +72,15 @@ function formatTimestamp(date: Date): string {
   return `${daysAgo}d ago`;
 }
 
-export function NotesPanel({
+export const NotesPanel = forwardRef<NotesPanelRef, NotesPanelProps>(function NotesPanel({
   meetingId,
   isNewNote,
   draftMeetingId,
   onMeetingCreated,
   onContentPresenceChange,
   onMarkdownChange,
-}: NotesPanelProps) {
+  onBlocksChange,
+}, ref) {
   const renderCount = useRef(0);
   renderCount.current += 1;
 
@@ -72,10 +101,20 @@ export function NotesPanel({
   const editorRef = useRef<any>(null);
   const justSavedRef = useRef<boolean>(false); // Track if we just saved to avoid reload
   const editorContentRef = useRef<Block[] | null>(null); // Preserve content across re-renders
+  const currentMeetingIdRef = useRef<string>(meetingId);
+  const loadSequenceRef = useRef(0);
   // Prevents editor.replaceBlocks() (used for content restoration) from
   // triggering a debounced autosave. BlockNote fires onChange synchronously
   // during replaceBlocks; we clear the flag after a microtask to be safe.
   const isRestoringContent = useRef<boolean>(false);
+  // `isNewNote` is parent state and can be stale for one render during the
+  // URL transition from ?id=new to ?id=<persisted-id>. The route id is the
+  // authoritative draft signal for save/load behavior.
+  const isDraftMeeting = !meetingId || meetingId === 'new';
+
+  useEffect(() => {
+    currentMeetingIdRef.current = meetingId;
+  }, [meetingId]);
 
   // Track component mount/unmount
   useEffect(() => {
@@ -92,25 +131,44 @@ export function NotesPanel({
 
   // Convert blocks to markdown
   const blocksToMarkdownSync = (blocks: Block[]): string => {
-    // Simple markdown conversion - BlockNote's built-in method is more robust
-    return blocks.map((block: any) => {
+    const blockToMarkdown = (block: any): string => {
+      const inlineText = Array.isArray(block.content)
+        ? block.content.map((item: any) => {
+            if (typeof item === 'string') return item;
+            if (item && typeof item.text === 'string') return item.text;
+            return '';
+          }).join('')
+        : '';
+
+      const childText = Array.isArray(block.children)
+        ? block.children.map(blockToMarkdown).filter(Boolean).join('\n')
+        : '';
+
       if (block.type === 'heading') {
         const level = block.props?.level || 1;
-        return '#'.repeat(level) + ' ' + (block.content?.[0]?.text || '');
+        return ['#'.repeat(level) + ' ' + inlineText, childText].filter(Boolean).join('\n');
       }
-      return block.content?.[0]?.text || '';
-    }).join('\n\n');
+
+      return [inlineText, childText].filter(Boolean).join('\n');
+    };
+
+    return blocks.map(blockToMarkdown).filter(Boolean).join('\n\n');
   };
 
   const blocksToMarkdown = async (blocks: Block[]): Promise<string> => blocksToMarkdownSync(blocks);
 
   // Save note function
-  const saveNote = useCallback(async (blocks: Block[]) => {
+  const saveNote = useCallback(async (
+    blocks: Block[],
+    options: { targetMeetingId?: string } = {}
+  ) => {
+    const explicitTargetMeetingId = options.targetMeetingId;
     console.debug('🔍 DEBUG saveNote called:', {
       blocksCount: blocks?.length,
       isNewNote,
       actualMeetingId,
-      meetingId
+      meetingId,
+      explicitTargetMeetingId,
     });
 
     if (!blocks || blocks.length === 0) {
@@ -118,21 +176,28 @@ export function NotesPanel({
       return;
     }
 
-    setIsSaving(true);
-    setError(null);
-
     try {
       const contentJson = JSON.stringify(blocks);
       const contentMarkdown = await blocksToMarkdown(blocks);
+      const hasMeaningfulContent = blocksHaveMeaningfulContent(blocks);
 
       console.debug('🔍 DEBUG content to save:', {
         contentJsonLength: contentJson.length,
         contentMarkdown: contentMarkdown.substring(0, 100), // First 100 chars
-        hasContent: contentMarkdown.trim().length > 0
+        hasContent: hasMeaningfulContent
       });
 
+      if (!hasMeaningfulContent) {
+        console.debug('📝 NotesPanel: Ignoring empty placeholder document save');
+        setHasUnsavedChanges(false);
+        return;
+      }
+
+      setIsSaving(true);
+      setError(null);
+
       // Scenario 1: New note - need to create meeting first
-      if (isNewNote && !actualMeetingId) {
+      if (isDraftMeeting && !actualMeetingId && !explicitTargetMeetingId) {
         console.debug('📝 NotesPanel: Creating new meeting for note...');
 
         // Create meeting using Tauri command
@@ -183,7 +248,7 @@ export function NotesPanel({
       }
       // Scenario 2: Existing note - update it
       else {
-        const targetMeetingId = actualMeetingId || meetingId;
+        const targetMeetingId = explicitTargetMeetingId || actualMeetingId || meetingId;
 
         console.debug('📝 NotesPanel: Updating note for meeting:', targetMeetingId);
 
@@ -197,6 +262,12 @@ export function NotesPanel({
         setNoteVersion(noteData.version);
         setLastSaved(new Date());
         setHasUnsavedChanges(false);
+        editorContentRef.current = blocks;
+
+        if (explicitTargetMeetingId && isDraftMeeting) {
+          setActualMeetingId(explicitTargetMeetingId);
+          justSavedRef.current = true;
+        }
 
         console.debug('✅ NotesPanel: Note updated successfully');
       }
@@ -206,7 +277,7 @@ export function NotesPanel({
     } finally {
       setIsSaving(false);
     }
-  }, [isNewNote, actualMeetingId, meetingId, noteVersion, onMeetingCreated]);
+  }, [isDraftMeeting, isNewNote, actualMeetingId, meetingId, noteVersion, onMeetingCreated]);
 
   // Keep a stable ref to the latest saveNote so the debounced wrapper (created
   // once) never calls a stale closure. Without this, debouncedSave would always
@@ -234,6 +305,11 @@ export function NotesPanel({
 
   // Track if there are unsaved changes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  const hasUnsavedChangesRef = useRef(false);
+
+  useEffect(() => {
+    hasUnsavedChangesRef.current = hasUnsavedChanges;
+  }, [hasUnsavedChanges]);
 
   // Prevent accidental navigation/close when there are unsaved changes
   useEffect(() => {
@@ -267,15 +343,16 @@ export function NotesPanel({
   }, [noteContent, saveNote, debouncedSave]);
 
   // Initialize editor with empty paragraph for new notes, or loaded content
-  const initialContent = isNewNote
+  const initialContent = isDraftMeeting
     ? [{ type: 'paragraph', content: '' }]
     : noteContent || undefined;
 
   console.debug('📝 INITIAL CONTENT computed:', {
     isNewNote,
+    isDraftMeeting,
     hasNoteContent: !!noteContent,
     noteContentBlocksCount: noteContent?.length || 0,
-    initialContentType: isNewNote ? 'empty paragraph' : (noteContent ? 'from noteContent' : 'undefined')
+    initialContentType: isDraftMeeting ? 'empty paragraph' : (noteContent ? 'from noteContent' : 'undefined')
   });
 
   // Only create editor on client side (not during SSR)
@@ -298,6 +375,22 @@ export function NotesPanel({
     isMounted
   });
 
+  useImperativeHandle(ref, () => ({
+    flushNotes: async (targetMeetingId?: string) => {
+      if (!editor) return;
+
+      const blocks = editor.document as Block[];
+      if (!blocksHaveMeaningfulContent(blocks)) {
+        debouncedSave.cancel();
+        setHasUnsavedChanges(false);
+        return;
+      }
+
+      debouncedSave.cancel();
+      await saveNote(blocks, { targetMeetingId });
+    },
+  }), [debouncedSave, editor, saveNote]);
+
   // Handle content changes
   const handleEditorChange = useCallback((blocks: Block[]) => {
     // Ignore changes triggered by editor.replaceBlocks() during content
@@ -313,17 +406,21 @@ export function NotesPanel({
     console.debug('💾 Setting noteContent state with', blocks.length, 'blocks');
     setNoteContent(blocks);
     editorContentRef.current = blocks; // Preserve content in ref for recovery after prop changes
+    onBlocksChange?.(blocks);
     setHasUnsavedChanges(true);
     const markdown = blocksToMarkdownSync(blocks);
-    const hasContent = blocks.some((block: any) => {
-      if (!Array.isArray(block?.content)) return false;
-      return block.content.some((item: any) => typeof item?.text === 'string' && item.text.trim().length > 0);
-    });
+    const hasContent = blocksHaveMeaningfulContent(blocks);
     onContentPresenceChange?.(hasContent);
     onMarkdownChange?.(markdown);
-    // Trigger debounced autosave
-    debouncedSave(blocks);
-  }, [debouncedSave, onContentPresenceChange, onMarkdownChange]);
+    // Autosave only meaningful notes. This prevents programmatic editor resets
+    // from overwriting a real saved note with BlockNote's empty paragraph.
+    if (hasContent) {
+      debouncedSave(blocks);
+    } else {
+      debouncedSave.cancel();
+      setHasUnsavedChanges(false);
+    }
+  }, [debouncedSave, onBlocksChange, onContentPresenceChange, onMarkdownChange]);
 
   useEffect(() => {
     if (!handleEditorChange) return;
@@ -342,9 +439,11 @@ export function NotesPanel({
   // Load existing note if not in new note mode
   useEffect(() => {
     console.debug('🔍 DEBUG loadNote useEffect triggered:', { meetingId, isNewNote });
+    const requestedMeetingId = meetingId;
+    const loadId = ++loadSequenceRef.current;
 
     const loadNote = async () => {
-      if (isNewNote || !meetingId || meetingId === 'new') {
+      if (isDraftMeeting) {
         console.debug('🔍 DEBUG Skipping load (new note mode or invalid ID) — clearing editor');
         // Clear any content from the previous meeting so the editor starts blank.
         // useCreateBlockNote() only uses initialContent at creation time; subsequent
@@ -358,6 +457,7 @@ export function NotesPanel({
         editorContentRef.current = null;
         onContentPresenceChange?.(false);
         onMarkdownChange?.('');
+        onBlocksChange?.(null);
         setIsEditorReady(true);
         return;
       }
@@ -376,12 +476,10 @@ export function NotesPanel({
           setTimeout(() => { isRestoringContent.current = false; }, 0);
           console.debug('✅ Content restored from ref:', editorContentRef.current.length, 'blocks');
         }
-        const restoredHasContent = (editorContentRef.current || []).some((block: any) =>
-          Array.isArray(block?.content) &&
-          block.content.some((item: any) => typeof item?.text === 'string' && item.text.trim().length > 0)
-        );
+        const restoredHasContent = blocksHaveMeaningfulContent(editorContentRef.current);
         onContentPresenceChange?.(restoredHasContent);
         onMarkdownChange?.(blocksToMarkdownSync(editorContentRef.current || []));
+        onBlocksChange?.(editorContentRef.current || null);
         setIsEditorReady(true);
         return;
       }
@@ -392,8 +490,16 @@ export function NotesPanel({
 
       try {
         const data = await invoke('api_get_note', {
-          meetingId,
+          meetingId: requestedMeetingId,
         }) as { content_json: string; format: string; version: number; updated_at: string } | null;
+
+        if (loadId !== loadSequenceRef.current || currentMeetingIdRef.current !== requestedMeetingId) {
+          console.debug('🔍 DEBUG Ignoring stale note load result:', {
+            requestedMeetingId,
+            currentMeetingId: currentMeetingIdRef.current,
+          });
+          return;
+        }
 
         console.debug('🔍 DEBUG Note data from DB:', {
           hasData: !!data,
@@ -409,12 +515,10 @@ export function NotesPanel({
           editorContentRef.current = content; // Keep ref in sync with database content
           setNoteVersion(data.version || 1);
           setLastSaved(data.updated_at ? new Date(data.updated_at) : null);
-          const hasLoadedContent = (content || []).some((block: any) =>
-            Array.isArray(block?.content) &&
-            block.content.some((item: any) => typeof item?.text === 'string' && item.text.trim().length > 0)
-          );
+          const hasLoadedContent = blocksHaveMeaningfulContent(content);
           onContentPresenceChange?.(hasLoadedContent);
           onMarkdownChange?.(blocksToMarkdownSync(content || []));
+          onBlocksChange?.(content || null);
 
           // Push loaded content into the editor. useCreateBlockNote() only uses
           // initialContent at creation time — it does NOT react to subsequent state
@@ -428,24 +532,47 @@ export function NotesPanel({
 
           console.debug('✅ NotesPanel: Loaded note', { hasContent: !!content, version: data.version });
         } else {
+          const localBlocks = ((editor?.document as Block[] | undefined) || editorContentRef.current) ?? [];
+          const hasLocalContent = blocksHaveMeaningfulContent(localBlocks);
+
+          if (hasLocalContent && hasUnsavedChangesRef.current) {
+            console.debug('📝 NotesPanel: DB has no note yet, preserving and flushing local editor content');
+            setNoteContent(localBlocks);
+            editorContentRef.current = localBlocks;
+            onContentPresenceChange?.(hasLocalContent);
+            onMarkdownChange?.(blocksToMarkdownSync(localBlocks));
+            onBlocksChange?.(localBlocks);
+            await latestSaveNote.current(localBlocks, { targetMeetingId: requestedMeetingId });
+            return;
+          }
+
           // No note exists yet - start with empty
           console.debug('⚠️ DEBUG Setting noteContent to null (no data from DB)');
           setNoteContent(null);
+          editorContentRef.current = null;
           onContentPresenceChange?.(false);
           onMarkdownChange?.('');
+          onBlocksChange?.(null);
+          if (editor) {
+            isRestoringContent.current = true;
+            editor.replaceBlocks(editor.document, [{ type: 'paragraph', content: '' } as any]);
+            setTimeout(() => { isRestoringContent.current = false; }, 0);
+          }
           console.debug('ℹ️ NotesPanel: No existing note found');
         }
       } catch (err) {
         console.error('❌ NotesPanel: Error loading note:', err);
         setError(err instanceof Error ? err.message : 'Failed to load note');
       } finally {
-        setIsLoading(false);
-        setIsEditorReady(true);
+        if (loadId === loadSequenceRef.current && currentMeetingIdRef.current === requestedMeetingId) {
+          setIsLoading(false);
+          setIsEditorReady(true);
+        }
       }
     };
 
     loadNote();
-  }, [meetingId, isNewNote, editor, onContentPresenceChange, onMarkdownChange]);
+  }, [meetingId, isNewNote, isDraftMeeting, editor, onBlocksChange, onContentPresenceChange, onMarkdownChange]);
 
   return (
     <div className={MEETING_PANE_CONTAINER_CLASS}>
@@ -521,4 +648,4 @@ export function NotesPanel({
       </div>
     </div>
   );
-}
+});

@@ -46,6 +46,7 @@ interface SummaryPanelProps {
   onStopGeneration: () => void;
   customPrompt: string;
   hasCleanupSourceContent: boolean;
+  isTranscriptFinalizing?: boolean;
 }
 
 export function SummaryPanel({
@@ -69,6 +70,7 @@ export function SummaryPanel({
   onStopGeneration,
   customPrompt,
   hasCleanupSourceContent,
+  isTranscriptFinalizing = false,
 }: SummaryPanelProps) {
   const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
   const isSummaryCompleted = summaryStatus === 'completed';
@@ -143,6 +145,7 @@ export function SummaryPanel({
               customPrompt={customPrompt}
               summaryStatus={summaryStatus}
               hasSourceContent={hasCleanupSourceContent}
+              isTranscriptFinalizing={isTranscriptFinalizing}
             />
           </div>
         </div>
