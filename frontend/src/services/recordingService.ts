@@ -65,8 +65,8 @@ export class RecordingService {
    * @param micDeviceName       - Microphone device name (null for default)
    * @param systemDeviceName    - System audio device name (null for none)
    * @param meetingName         - Meeting name/title
-   * @param silenceTimeoutSecs  - Auto-stop after this many seconds of vocal
-   *                              silence (undefined / null disables the feature)
+   * @param silenceTimeoutSecs  - Enables auto-stop with a fixed 120-second
+   *                              transcript-silence timeout. Null disables it.
    */
   async startRecordingWithDevices(
     micDeviceName: string | null,
@@ -78,7 +78,7 @@ export class RecordingService {
       mic_device_name: micDeviceName,
       system_device_name: systemDeviceName,
       meeting_name: meetingName,
-      // Pass null explicitly when disabled so Rust receives Option::None
+      // Rust ignores the duration value and enforces the fixed timeout.
       silence_timeout_secs: silenceTimeoutSecs ?? null,
     });
   }

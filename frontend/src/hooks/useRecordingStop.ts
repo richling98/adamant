@@ -219,8 +219,23 @@ export function useRecordingStop(
         } else {
           console.warn('Timed out waiting for recording-stopped metadata; proceeding without folder metadata');
         }
-      } else if (recordingStoppedDataRef.current) {
-        await recordingStoppedDataRef.current;
+      } else {
+        // Backend-owned stops (tray, shortcuts, silence auto-stop) emit
+        // recording-stopped before recording-stop-complete. Wait briefly for
+        // that metadata so folder/name data is available to the save path.
+        let waitedMs = 0;
+        const waitStepMs = 100;
+        const waitLimitMs = 3000;
+        while (!recordingStoppedDataRef.current && waitedMs < waitLimitMs) {
+          await new Promise(resolve => setTimeout(resolve, waitStepMs));
+          waitedMs += waitStepMs;
+        }
+
+        if (recordingStoppedDataRef.current) {
+          await recordingStoppedDataRef.current;
+        } else {
+          console.warn('Timed out waiting for backend stop metadata; proceeding without folder metadata');
+        }
       }
 
       // Wait for transcription to complete

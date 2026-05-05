@@ -107,8 +107,21 @@ export default function PageContent({
     recordingMeetingIdRef.current = recordingState.recordingMeetingId;
   }, [recordingState.recordingMeetingId]);
 
+  // Always-current meeting ID for long-lived Tauri event listeners.
+  const meetingIdRef = useRef<string>(meeting.id);
+  useEffect(() => {
+    meetingIdRef.current = meeting.id;
+  }, [meeting.id]);
+
   // Transcript context — live transcripts for real-time streaming + session management
   const { setPendingMeetingId, transcripts: liveTranscripts, clearTranscripts } = useTranscripts();
+
+  // Always-current live transcript list for auto-stop, without re-registering
+  // the Tauri listener on every transcript update.
+  const liveTranscriptsRef = useRef<Transcript[]>(liveTranscripts);
+  useEffect(() => {
+    liveTranscriptsRef.current = liveTranscripts;
+  }, [liveTranscripts]);
 
   // Recording hooks — start and stop are both owned here; the Transcript panel
   // header buttons call these callbacks directly (sidebar button has been removed).
@@ -330,7 +343,7 @@ export default function PageContent({
           if (recordingMeetingIdRef.current !== meeting.id) return;
           const secs = event.payload.secondsRemaining;
           toast.warning(
-            `No voice detected — recording will auto-stop in ${secs} second${secs !== 1 ? 's' : ''}`,
+            `No transcript output — recording will auto-stop in ${secs} second${secs !== 1 ? 's' : ''}`,
             {
               id: 'silence-warning',
               duration: 12000, // stays visible until auto-stop fires
@@ -339,24 +352,33 @@ export default function PageContent({
         }
       );
 
-      // Recording was stopped by the silence monitor — trigger the same
-      // frontend teardown as a manual "End Recording" press.
-      unlistenStopped = await listen('recording-auto-stopped', () => {
+      // Recording was stopped by the silence monitor. Rust owns the backend
+      // stop and emits recording-stop-complete when shutdown is done; this
+      // listener only keeps the current page visually stable while the global
+      // post-processing flow saves the transcript.
+      unlistenStopped = await listen('recording-auto-stopped', async () => {
+        const ownedMeetingId = recordingMeetingIdRef.current;
+        const currentMeetingId = meetingIdRef.current;
+
         // Guard: only handle auto-stop if this page owns the recording
-        if (recordingMeetingIdRef.current !== meeting.id) {
+        if (ownedMeetingId !== currentMeetingId) {
           console.warn(
             '[Auto-stop] Ignoring: recording belongs to meeting %s, currently viewing %s',
-            recordingMeetingIdRef.current,
-            meeting.id,
+            ownedMeetingId,
+            currentMeetingId,
           );
           return;
         }
+
+        await notesPanelRef.current?.flushNotes(ownedMeetingId || currentMeetingId);
+        setPostRecordingSnapshot([...liveTranscriptsRef.current]);
+        setIsTranscriptFinalizing(true);
+
         toast.dismiss('silence-warning');
         toast.info('Recording automatically stopped after silence', {
           duration: 5000,
         });
-        // Trigger the normal stop UI flow (snapshot, transcript save toast, etc.)
-        handleStopRecordingOnPage();
+        toast.loading('Saving transcript...', { id: 'transcript-save' });
       });
     };
 
@@ -366,7 +388,6 @@ export default function PageContent({
       unlistenWarning?.();
       unlistenStopped?.();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Resolve a valid summary template ID at runtime.

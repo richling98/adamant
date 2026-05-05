@@ -14,61 +14,68 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::task::JoinHandle;
 
 use super::{
+    default_input_device,  // Get default microphone
+    default_output_device, // Get default system audio
     parse_audio_device,
-    default_input_device,   // Get default microphone
-    default_output_device,  // Get default system audio
-    RecordingManager,
     DeviceEvent,
-    DeviceMonitorType
+    DeviceMonitorType,
+    RecordingManager,
 };
 
 // Import transcription modules
-use super::transcription::{
-    self,
-    reset_speech_detected_flag,
-};
+use super::transcription::{self, reset_speech_detected_flag};
 
 // =============================================================================
-// SILENCE PREFERENCE READER
+// SILENCE AUTO-STOP POLICY
 // =============================================================================
 
-/// Read the silence auto-stop timeout directly from the Tauri plugin-store
-/// (`preferences.json`).  Called when the frontend passes `None` for
-/// `silence_timeout_secs` — which happens when the frontend's async store read
-/// fails or when older call-sites don't forward the value.
-///
-/// Returns `Some(secs)` when the feature is enabled (default 60 s), or `None`
-/// when the user has explicitly disabled it.
-fn load_silence_timeout_from_store<R: Runtime>(app: &AppHandle<R>) -> Option<u64> {
+const FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS: u64 = 120;
+
+fn load_silence_auto_stop_enabled_from_store<R: Runtime>(app: &AppHandle<R>) -> bool {
     use tauri_plugin_store::StoreExt;
 
-    let store = match app.store("preferences.json") {
-        Ok(s) => s,
+    match app.store("preferences.json") {
+        Ok(store) => store
+            .get("silence_auto_stop_enabled")
+            .and_then(|v| serde_json::from_value::<bool>(v).ok())
+            .unwrap_or(true),
         Err(e) => {
-            warn!("🔇 Could not open preferences.json to read silence timeout ({}), defaulting to 60s", e);
-            return Some(60); // safe default: enabled, 60 seconds
+            warn!(
+                "🔇 Could not open preferences.json to read silence auto-stop setting ({}); defaulting enabled",
+                e
+            );
+            true
         }
-    };
-
-    // Key written by RecordingSettings.tsx via plugin-store.
-    // Defaults to `true` when the key has never been written.
-    let enabled: bool = store
-        .get("silence_auto_stop_enabled")
-        .and_then(|v| serde_json::from_value::<bool>(v).ok())
-        .unwrap_or(true);
-
-    if !enabled {
-        info!("🔇 Silence auto-stop disabled in preferences — skipping monitor");
-        return None;
     }
+}
 
-    let secs: u64 = store
-        .get("silence_auto_stop_duration_secs")
-        .and_then(|v| serde_json::from_value::<u64>(v).ok())
-        .unwrap_or(120); // default 2 minutes
-
-    info!("🔇 Loaded silence timeout from preferences.json: {}s", secs);
-    Some(secs)
+fn resolve_silence_timeout<R: Runtime>(
+    app: &AppHandle<R>,
+    requested_timeout_secs: Option<u64>,
+) -> Option<u64> {
+    match requested_timeout_secs {
+        Some(timeout_secs) => {
+            if timeout_secs != FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS {
+                info!(
+                    "🔇 Ignoring requested silence timeout {}s; using fixed transcript-silence timeout: {}s",
+                    timeout_secs, FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS
+                );
+            }
+            Some(FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS)
+        }
+        None => {
+            if load_silence_auto_stop_enabled_from_store(app) {
+                info!(
+                    "🔇 Silence timeout not provided; using fixed transcript-silence timeout from enabled preference: {}s",
+                    FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS
+                );
+                Some(FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS)
+            } else {
+                info!("🔇 Silence auto-stop disabled in preferences — monitor not started");
+                None
+            }
+        }
+    }
 }
 
 // Re-export TranscriptUpdate for backward compatibility
@@ -120,9 +127,9 @@ pub async fn start_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String
 /// Start recording with default devices, optional meeting name, optional meeting ID,
 /// and optional silence auto-stop timeout.
 ///
-/// `silence_timeout_secs` — when `Some(n)`, recording auto-stops after `n` consecutive
-/// seconds of no VAD-detected speech (starting only after the first speech segment).
-/// `None` disables the feature entirely.
+/// `silence_timeout_secs` controls whether auto-stop is enabled. Any provided
+/// value uses the fixed 120-second transcript-silence timeout; `None` consults
+/// the persisted enabled preference.
 pub async fn start_recording_with_meeting_name<R: Runtime>(
     app: AppHandle<R>,
     meeting_name: Option<String>,
@@ -168,12 +175,17 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     let (preferred_mic_name, preferred_system_name) =
         match super::recording_preferences::load_recording_preferences(&app).await {
             Ok(prefs) => {
-                info!("📋 Loaded recording preferences: preferred_mic={:?}, preferred_system={:?}",
-                      prefs.preferred_mic_device, prefs.preferred_system_device);
+                info!(
+                    "📋 Loaded recording preferences: preferred_mic={:?}, preferred_system={:?}",
+                    prefs.preferred_mic_device, prefs.preferred_system_device
+                );
                 (prefs.preferred_mic_device, prefs.preferred_system_device)
             }
             Err(e) => {
-                warn!("Failed to load recording preferences, using defaults: {}", e);
+                warn!(
+                    "Failed to load recording preferences, using defaults: {}",
+                    e
+                );
                 (None, None)
             }
         };
@@ -190,7 +202,10 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
                     Some(Arc::new(device))
                 }
                 Err(e) => {
-                    warn!("⚠️ Preferred microphone '{}' not available: {}", pref_name, e);
+                    warn!(
+                        "⚠️ Preferred microphone '{}' not available: {}",
+                        pref_name, e
+                    );
                     warn!("   Falling back to system default microphone...");
                     match default_input_device() {
                         Ok(device) => {
@@ -198,7 +213,9 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
                             Some(Arc::new(device))
                         }
                         Err(default_err) => {
-                            error!("❌ No microphone available (preferred and default both failed)");
+                            error!(
+                                "❌ No microphone available (preferred and default both failed)"
+                            );
                             return Err(format!(
                                 "No microphone device available. Preferred device '{}' not found, and default microphone unavailable: {}",
                                 pref_name, default_err
@@ -228,14 +245,20 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     // ============================================================================
     let system_device = match preferred_system_name {
         Some(pref_name) => {
-            info!("🔊 Attempting to use preferred system audio: '{}'", pref_name);
+            info!(
+                "🔊 Attempting to use preferred system audio: '{}'",
+                pref_name
+            );
             match parse_audio_device(&pref_name) {
                 Ok(device) => {
                     info!("✅ Using preferred system audio: '{}'", device.name);
                     Some(Arc::new(device))
                 }
                 Err(e) => {
-                    warn!("⚠️ Preferred system audio '{}' not available: {}", pref_name, e);
+                    warn!(
+                        "⚠️ Preferred system audio '{}' not available: {}",
+                        pref_name, e
+                    );
                     warn!("   Falling back to system default...");
                     match default_output_device() {
                         Ok(device) => {
@@ -270,10 +293,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     // Always ensure a meeting name is set so the meeting folder is created for transcripts
     let effective_meeting_name = meeting_name.clone().unwrap_or_else(|| {
         let now = chrono::Local::now();
-        format!(
-            "Meeting {}",
-            now.format("%Y-%m-%d_%H-%M-%S")
-        )
+        format!("Meeting {}", now.format("%Y-%m-%d_%H-%M-%S"))
     });
     manager.set_meeting_name(Some(effective_meeting_name));
 
@@ -298,6 +318,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     // Grab a reference to the RecordingState for the silence monitor before
     // moving the manager into the global lock.
     let recording_state_for_monitor = manager.get_state().clone();
+    let recording_state_for_transcripts = recording_state_for_monitor.clone();
 
     // Store the manager globally to keep it alive
     {
@@ -310,21 +331,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     IS_RECORDING.store(true, Ordering::SeqCst);
     reset_speech_detected_flag(); // Reset for new recording session
 
-    // Spawn silence auto-stop monitor (if enabled).
-    // If the frontend passed None (async store read failed, or old call-site),
-    // fall back to reading the preference directly from the Tauri store in Rust.
-    let effective_silence_timeout = match silence_timeout_secs {
-        Some(t) => {
-            info!("🔇 silence_timeout_secs from frontend: {}s", t);
-            Some(t)
-        }
-        None => {
-            info!("🔇 silence_timeout_secs not provided by frontend — reading from preferences.json");
-            load_silence_timeout_from_store(&app)
-        }
-    };
-
-    if let Some(timeout_secs) = effective_silence_timeout {
+    if let Some(timeout_secs) = resolve_silence_timeout(&app, silence_timeout_secs) {
         let monitor_handle = spawn_silence_monitor(
             app.clone(),
             recording_state_for_monitor,
@@ -332,9 +339,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         );
         let mut global_monitor = SILENCE_MONITOR_TASK.lock().unwrap();
         *global_monitor = Some(monitor_handle);
-        info!("🔇 Silence monitor started (timeout: {}s)", timeout_secs);
-    } else {
-        info!("🔇 Silence auto-stop disabled — monitor not started");
+        info!("🔇 Silence monitor started (fixed timeout: {}s)", timeout_secs);
     }
 
     // Start optimized parallel transcription task and store handle
@@ -352,6 +357,10 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         let listener_id = app.listen("transcript-update", move |event: tauri::Event| {
             // Parse the transcript update from the event payload
             if let Ok(update) = serde_json::from_str::<TranscriptUpdate>(event.payload()) {
+                if !update.text.trim().is_empty() {
+                    recording_state_for_transcripts.update_transcript_output_activity();
+                }
+
                 // Create structured transcript segment
                 let segment = crate::audio::recording_saver::TranscriptSegment {
                     id: format!("seg_{}", update.sequence_id),
@@ -378,11 +387,15 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     }
 
     // Emit success event
-    app.emit("recording-started", serde_json::json!({
-        "message": "Recording started successfully with parallel processing",
-        "devices": ["Default Microphone", "Default System Audio"],
-        "workers": 3
-    })).map_err(|e| e.to_string())?;
+    app.emit(
+        "recording-started",
+        serde_json::json!({
+            "message": "Recording started successfully with parallel processing",
+            "devices": ["Default Microphone", "Default System Audio"],
+            "workers": 3
+        }),
+    )
+    .map_err(|e| e.to_string())?;
 
     // Update tray menu to reflect recording state
     crate::tray::update_tray_menu(&app);
@@ -398,14 +411,23 @@ pub async fn start_recording_with_devices<R: Runtime>(
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
 ) -> Result<(), String> {
-    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None, None, None).await
+    start_recording_with_devices_and_meeting(
+        app,
+        mic_device_name,
+        system_device_name,
+        None,
+        None,
+        None,
+    )
+    .await
 }
 
 /// Start recording with specific devices, optional meeting name, optional meeting ID,
 /// and optional silence auto-stop timeout.
 ///
-/// `silence_timeout_secs` — when `Some(n)`, recording auto-stops after `n` consecutive
-/// seconds of no VAD-detected speech.  `None` disables the feature.
+/// `silence_timeout_secs` controls whether auto-stop is enabled. Any provided
+/// value uses the fixed 120-second transcript-silence timeout; `None` consults
+/// the persisted enabled preference.
 pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     app: AppHandle<R>,
     mic_device_name: Option<String>,
@@ -469,10 +491,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     // Always ensure a meeting name is set so the meeting folder is created for transcripts
     let effective_meeting_name = meeting_name.clone().unwrap_or_else(|| {
         let now = chrono::Local::now();
-        format!(
-            "Meeting {}",
-            now.format("%Y-%m-%d_%H-%M-%S")
-        )
+        format!("Meeting {}", now.format("%Y-%m-%d_%H-%M-%S"))
     });
     manager.set_meeting_name(Some(effective_meeting_name));
 
@@ -496,6 +515,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
 
     // Grab RecordingState reference before moving manager into global lock
     let recording_state_for_monitor = manager.get_state().clone();
+    let recording_state_for_transcripts = recording_state_for_monitor.clone();
 
     // Store the manager globally to keep it alive
     {
@@ -508,21 +528,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     IS_RECORDING.store(true, Ordering::SeqCst);
     reset_speech_detected_flag(); // Reset for new recording session
 
-    // Spawn silence auto-stop monitor (if enabled).
-    // If the frontend passed None (async store read failed, or old call-site),
-    // fall back to reading the preference directly from the Tauri store in Rust.
-    let effective_silence_timeout = match silence_timeout_secs {
-        Some(t) => {
-            info!("🔇 silence_timeout_secs from frontend: {}s", t);
-            Some(t)
-        }
-        None => {
-            info!("🔇 silence_timeout_secs not provided by frontend — reading from preferences.json");
-            load_silence_timeout_from_store(&app)
-        }
-    };
-
-    if let Some(timeout_secs) = effective_silence_timeout {
+    if let Some(timeout_secs) = resolve_silence_timeout(&app, silence_timeout_secs) {
         let monitor_handle = spawn_silence_monitor(
             app.clone(),
             recording_state_for_monitor,
@@ -530,9 +536,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         );
         let mut global_monitor = SILENCE_MONITOR_TASK.lock().unwrap();
         *global_monitor = Some(monitor_handle);
-        info!("🔇 Silence monitor started (timeout: {}s)", timeout_secs);
-    } else {
-        info!("🔇 Silence auto-stop disabled — monitor not started");
+        info!("🔇 Silence monitor started (fixed timeout: {}s)", timeout_secs);
     }
 
     // Start optimized parallel transcription task and store handle
@@ -550,6 +554,10 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         let listener_id = app.listen("transcript-update", move |event: tauri::Event| {
             // Parse the transcript update from the event payload
             if let Ok(update) = serde_json::from_str::<TranscriptUpdate>(event.payload()) {
+                if !update.text.trim().is_empty() {
+                    recording_state_for_transcripts.update_transcript_output_activity();
+                }
+
                 // Create structured transcript segment
                 let segment = crate::audio::recording_saver::TranscriptSegment {
                     id: format!("seg_{}", update.sequence_id),
@@ -576,14 +584,18 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     }
 
     // Emit success event
-    app.emit("recording-started", serde_json::json!({
-        "message": "Recording started with custom devices and parallel processing",
-        "devices": [
-            mic_device_name.unwrap_or_else(|| "Default Microphone".to_string()),
-            system_device_name.unwrap_or_else(|| "Default System Audio".to_string())
-        ],
-        "workers": 3
-    })).map_err(|e| e.to_string())?;
+    app.emit(
+        "recording-started",
+        serde_json::json!({
+            "message": "Recording started with custom devices and parallel processing",
+            "devices": [
+                mic_device_name.unwrap_or_else(|| "Default Microphone".to_string()),
+                system_device_name.unwrap_or_else(|| "Default System Audio".to_string())
+            ],
+            "workers": 3
+        }),
+    )
+    .map_err(|e| e.to_string())?;
 
     // Update tray menu to reflect recording state
     crate::tray::update_tray_menu(&app);
@@ -597,24 +609,22 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
 // LIVE SILENCE SETTINGS UPDATE
 // =============================================================================
 
-/// Apply new silence auto-stop settings while a recording is already in progress.
+/// Re-apply transcript-silence auto-stop while a recording is already in progress.
 ///
-/// Called by the frontend whenever the user changes the silence toggle or duration
-/// in Settings *during* an active recording.  If no recording is running the call
-/// is a harmless no-op — the updated values are already in `preferences.json` and
-/// will be picked up the next time recording starts.
-///
-/// Behaviour:
-/// - If `enabled` is false, or there is no active recording: abort the running
-///   monitor (if any) and do not start a new one.
-/// - If `enabled` is true and a recording is active: abort the old monitor and
-///   spawn a fresh one with the new `timeout_secs` value.
+/// The enabled flag is user-controlled, but the timeout is fixed at 120 seconds.
 #[tauri::command]
 pub async fn update_silence_settings<R: Runtime>(
     app: AppHandle<R>,
     enabled: bool,
     timeout_secs: u64,
 ) -> Result<(), String> {
+    if timeout_secs != FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS {
+        info!(
+            "🔇 update_silence_settings: ignoring requested timeout={}s; using fixed {}s",
+            timeout_secs, FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS
+        );
+    }
+
     // Abort whatever monitor is currently running (may be None).
     {
         let mut global_monitor = SILENCE_MONITOR_TASK.lock().unwrap();
@@ -624,13 +634,18 @@ pub async fn update_silence_settings<R: Runtime>(
         }
     }
 
-    // Nothing more to do when recording is not active or the feature was disabled.
-    if !IS_RECORDING.load(Ordering::SeqCst) || !enabled {
-        info!("🔇 update_silence_settings: recording not active or feature disabled — monitor not restarted");
+    if !enabled {
+        info!("🔇 update_silence_settings: feature disabled — monitor not restarted");
         return Ok(());
     }
 
-    // Retrieve the shared RecordingState so the new monitor can observe voice activity.
+    // Nothing more to do when recording is not active.
+    if !IS_RECORDING.load(Ordering::SeqCst) {
+        info!("🔇 update_silence_settings: recording not active — monitor not restarted");
+        return Ok(());
+    }
+
+    // Retrieve the shared RecordingState so the new monitor can observe transcript output.
     let recording_state = {
         let global_manager = RECORDING_MANAGER.lock().unwrap();
         match global_manager.as_ref() {
@@ -642,12 +657,15 @@ pub async fn update_silence_settings<R: Runtime>(
         }
     };
 
-    let handle = spawn_silence_monitor(app, recording_state, timeout_secs);
+    let handle = spawn_silence_monitor(app, recording_state, FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS);
     {
         let mut global_monitor = SILENCE_MONITOR_TASK.lock().unwrap();
         *global_monitor = Some(handle);
     }
-    info!("🔇 update_silence_settings: new monitor started (timeout: {}s)", timeout_secs);
+    info!(
+        "🔇 update_silence_settings: new monitor started (fixed timeout: {}s)",
+        FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS
+    );
 
     Ok(())
 }
@@ -656,11 +674,12 @@ pub async fn update_silence_settings<R: Runtime>(
 // SILENCE AUTO-STOP MONITOR
 // =============================================================================
 
-/// Spawns a background task that watches for prolonged vocal silence and
+/// Spawns a background task that watches for prolonged transcript silence and
 /// automatically stops the recording when the threshold is reached.
 ///
 /// The monitor:
-/// - Does nothing until VAD has confirmed at least one speech segment (voice_ever_detected).
+/// - Counts from recording start until the first transcript output.
+/// - Resets only when a visible transcript update is emitted.
 /// - Pauses counting while the recording is paused (silence timer is frozen).
 /// - Emits `recording-silence-warning` with `{ secondsRemaining: 10 }` when
 ///   10 seconds remain before the auto-stop.
@@ -673,9 +692,8 @@ fn spawn_silence_monitor<R: Runtime>(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         use std::time::{SystemTime, UNIX_EPOCH};
-        const SPEECH_RECENCY_WINDOW_MS: u64 = 3_000;
 
-        // How many seconds of accumulated silence before auto-stop.
+        // How many seconds of no transcript output before auto-stop.
         // We count in 1-second ticks, skipping ticks while paused.
         let mut silence_ticks: u64 = 0;
         let warning_at = timeout_secs.saturating_sub(10);
@@ -694,33 +712,26 @@ fn spawn_silence_monitor<R: Runtime>(
                 continue;
             }
 
-            // Wait until live speech presence has been observed a few times.
-            // This prevents the timer from triggering on a quiet room immediately
-            // after recording starts — the user must speak at least once before
-            // the silence counter begins decrementing.
-            if !state.voice_ever_detected() {
-                continue;
-            }
-
-            // Determine whether speech is currently "recent" by comparing the
-            // last live speech-presence refresh against the current wall-clock time.
-            // This is intentionally separate from transcript chunk boundaries.
+            // Determine whether transcript output is currently "recent" by
+            // comparing the last emitted transcript update against wall-clock
+            // time. This deliberately ignores VAD and audio activity: if the
+            // transcript panel is not outputting text, it counts as silence.
             let now_ms = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis() as u64;
 
-            let last_activity_ms = state.last_voice_activity_ms();
-            let ms_since_voice = now_ms.saturating_sub(last_activity_ms);
+            let last_activity_ms = state.last_transcript_output_ms();
+            let ms_since_transcript = now_ms.saturating_sub(last_activity_ms);
 
             // Diagnostic: log every 5 ticks so we can trace the monitor's progress
             if silence_ticks % 5 == 0 {
-                log::info!("🔇 [DIAG] Silence monitor tick: ticks={}, ms_since_voice={}ms, threshold={}s",
-                    silence_ticks, ms_since_voice, timeout_secs);
+                log::info!("🔇 [DIAG] Transcript-silence monitor tick: ticks={}, ms_since_transcript={}ms, threshold={}s",
+                    silence_ticks, ms_since_transcript, timeout_secs);
             }
 
-            if ms_since_voice < SPEECH_RECENCY_WINDOW_MS {
-                // Speech was recent — reset counter and clear warning flag
+            if ms_since_transcript < 1_000 {
+                // Transcript output was recent — reset counter and clear warning flag
                 silence_ticks = 0;
                 warning_sent = false;
                 continue;
@@ -736,18 +747,28 @@ fn spawn_silence_monitor<R: Runtime>(
                     serde_json::json!({ "secondsRemaining": timeout_secs - silence_ticks }),
                 );
                 warning_sent = true;
-                log::info!("🔇 Silence warning emitted ({} ticks accumulated, threshold {}s)", silence_ticks, timeout_secs);
+                log::info!(
+                    "🔇 Silence warning emitted ({} ticks accumulated, threshold {}s)",
+                    silence_ticks,
+                    timeout_secs
+                );
             }
 
             // Auto-stop when threshold reached
             if silence_ticks >= timeout_secs {
-                log::info!("🔇 Silence threshold reached ({}s) — auto-stopping recording", timeout_secs);
+                log::info!(
+                    "🔇 Silence threshold reached ({}s) — auto-stopping recording",
+                    timeout_secs
+                );
 
                 // Notify frontend first so it can update UI state immediately
-                let _ = app.emit("recording-auto-stopped", serde_json::json!({
-                    "reason": "silence",
-                    "silenceDurationSecs": silence_ticks
-                }));
+                let _ = app.emit(
+                    "recording-auto-stopped",
+                    serde_json::json!({
+                        "reason": "silence",
+                        "silenceDurationSecs": silence_ticks
+                    }),
+                );
 
                 // Spawn a separate task to run stop_recording so the monitor task
                 // can exit cleanly via `break`. Calling stop_recording() directly
@@ -756,11 +777,25 @@ fn spawn_silence_monitor<R: Runtime>(
                 // first await point and leaving the recording in a half-stopped state.
                 let app_for_stop = app.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = stop_recording(
-                        app_for_stop,
-                        RecordingArgs { save_path: String::new() },
-                    ).await {
-                        log::error!("❌ Silence auto-stop failed: {}", e);
+                    match stop_recording(
+                        app_for_stop.clone(),
+                        RecordingArgs {
+                            save_path: String::new(),
+                        },
+                    )
+                    .await
+                    {
+                        Ok(_) => {
+                            // Mirror tray/shortcut stops: Rust owns the backend stop,
+                            // then frontend owns transcript persistence/navigation.
+                            if let Err(e) = app_for_stop.emit("recording-stop-complete", true) {
+                                log::error!("❌ Silence auto-stop failed to emit recording-stop-complete: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("❌ Silence auto-stop failed: {}", e);
+                            let _ = app_for_stop.emit("recording-stop-complete", false);
+                        }
                     }
                 });
 
@@ -889,8 +924,10 @@ pub async fn stop_recording<R: Runtime>(
         // Wait up to 10 minutes for transcription completion to prevent indefinite hangs
         match tokio::time::timeout(
             tokio::time::Duration::from_secs(600), // 10 minutes max
-            task_handle
-        ).await {
+            task_handle,
+        )
+        .await
+        {
             Ok(Ok(())) => {
                 info!("✅ ALL transcription chunks processed successfully - no data lost");
             }
@@ -925,11 +962,7 @@ pub async fn stop_recording<R: Runtime>(
     // Determine which provider was used and unload the appropriate model (with timeout)
     let config = match tokio::time::timeout(
         tokio::time::Duration::from_secs(30), // 30 seconds max for DB operation
-        crate::api::api::api_get_transcript_config(
-            app.clone(),
-            app.clone().state(),
-            None,
-        )
+        crate::api::api::api_get_transcript_config(app.clone(), app.clone().state(), None),
     )
     .await
     {
@@ -963,7 +996,10 @@ pub async fn stop_recording<R: Runtime>(
                 info!("Current Parakeet model before unload: '{}'", current_model);
 
                 if engine.unload_model().await {
-                    info!("✅ Parakeet model '{}' unloaded successfully", current_model);
+                    info!(
+                        "✅ Parakeet model '{}' unloaded successfully",
+                        current_model
+                    );
                 } else {
                     warn!("⚠️ Failed to unload Parakeet model '{}'", current_model);
                 }
@@ -1020,7 +1056,17 @@ pub async fn stop_recording<R: Runtime>(
     };
 
     // Now perform async analytics tracking without holding manager reference
-    if let Some((total_duration, active_duration, pause_duration, transcript_segments_count, had_fatal_error, mic_device_name, sys_device_name, chunks_processed)) = analytics_data {
+    if let Some((
+        total_duration,
+        active_duration,
+        pause_duration,
+        transcript_segments_count,
+        had_fatal_error,
+        mic_device_name,
+        sys_device_name,
+        chunks_processed,
+    )) = analytics_data
+    {
         info!("📊 Collecting analytics for meeting end");
 
         // Helper function to classify device type from device name (privacy-safe)
@@ -1032,7 +1078,8 @@ pub async fn stop_recording<R: Runtime>(
                 || name_lower.contains("beats")
                 || name_lower.contains("headphones")
                 || name_lower.contains("bt ")
-                || name_lower.contains("wireless") {
+                || name_lower.contains("wireless")
+            {
                 "Bluetooth"
             } else {
                 "Wired"
@@ -1051,23 +1098,20 @@ pub async fn stop_recording<R: Runtime>(
             _ => None,
         };
 
-        let (transcription_provider, transcription_model) = transcription_config
-            .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
+        let (transcription_provider, transcription_model) =
+            transcription_config.unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
 
         // Get summary model info from API
-        let summary_config = match crate::api::api::api_get_model_config(
-            app.clone(),
-            app.clone().state(),
-            None,
-        )
-        .await
-        {
-            Ok(Some(config)) => Some((config.provider, config.model)),
-            _ => None,
-        };
+        let summary_config =
+            match crate::api::api::api_get_model_config(app.clone(), app.clone().state(), None)
+                .await
+            {
+                Ok(Some(config)) => Some((config.provider, config.model)),
+                _ => None,
+            };
 
-        let (summary_provider, summary_model) = summary_config
-            .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
+        let (summary_provider, summary_model) =
+            summary_config.unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
 
         // Classify device types (privacy-safe)
         let microphone_device_type = mic_device_name
@@ -1122,8 +1166,10 @@ pub async fn stop_recording<R: Runtime>(
 
         match tokio::time::timeout(
             tokio::time::Duration::from_secs(300), // 5 minutes max for file I/O
-            manager.save_recording_only(&app)
-        ).await {
+            manager.save_recording_only(&app),
+        )
+        .await
+        {
             Ok(Ok(_)) => {
                 info!("✅ Recording data saved successfully during cleanup");
             }
@@ -1154,10 +1200,7 @@ pub async fn stop_recording<R: Runtime>(
     // NOTE: We do NOT save to database here. The frontend will save after all transcripts are displayed.
     // This ensures the user sees all transcripts streaming in before the database save happens.
     let (folder_path_str, meeting_name_str) = match (&meeting_folder, &meeting_name) {
-        (Some(path), Some(name)) => (
-            Some(path.to_string_lossy().to_string()),
-            Some(name.clone()),
-        ),
+        (Some(path), Some(name)) => (Some(path.to_string_lossy().to_string()), Some(name.clone())),
         _ => (None, None),
     };
 
@@ -1324,7 +1367,9 @@ pub async fn get_recording_state() -> serde_json::Value {
 pub async fn get_meeting_folder_path() -> Result<Option<String>, String> {
     let manager_guard = RECORDING_MANAGER.lock().unwrap();
     if let Some(manager) = manager_guard.as_ref() {
-        Ok(manager.get_meeting_folder().map(|p| p.to_string_lossy().to_string()))
+        Ok(manager
+            .get_meeting_folder()
+            .map(|p| p.to_string_lossy().to_string()))
     } else {
         Ok(None)
     }
@@ -1333,7 +1378,8 @@ pub async fn get_meeting_folder_path() -> Result<Option<String>, String> {
 /// Get accumulated transcript segments from current recording session
 /// Used for syncing frontend state after page reload during active recording
 #[tauri::command]
-pub async fn get_transcript_history() -> Result<Vec<crate::audio::recording_saver::TranscriptSegment>, String> {
+pub async fn get_transcript_history(
+) -> Result<Vec<crate::audio::recording_saver::TranscriptSegment>, String> {
     let manager_guard = RECORDING_MANAGER.lock().unwrap();
 
     if let Some(manager) = manager_guard.as_ref() {
@@ -1378,18 +1424,20 @@ pub enum DeviceEventResponse {
 impl From<DeviceEvent> for DeviceEventResponse {
     fn from(event: DeviceEvent) -> Self {
         match event {
-            DeviceEvent::DeviceDisconnected { device_name, device_type } => {
-                DeviceEventResponse::DeviceDisconnected {
-                    device_name,
-                    device_type: format!("{:?}", device_type),
-                }
-            }
-            DeviceEvent::DeviceReconnected { device_name, device_type } => {
-                DeviceEventResponse::DeviceReconnected {
-                    device_name,
-                    device_type: format!("{:?}", device_type),
-                }
-            }
+            DeviceEvent::DeviceDisconnected {
+                device_name,
+                device_type,
+            } => DeviceEventResponse::DeviceDisconnected {
+                device_name,
+                device_type: format!("{:?}", device_type),
+            },
+            DeviceEvent::DeviceReconnected {
+                device_name,
+                device_type,
+            } => DeviceEventResponse::DeviceReconnected {
+                device_name,
+                device_type: format!("{:?}", device_type),
+            },
             DeviceEvent::DeviceListChanged => DeviceEventResponse::DeviceListChanged,
         }
     }
@@ -1436,12 +1484,12 @@ pub async fn get_reconnection_status() -> Result<ReconnectionStatus, String> {
 
     if let Some(manager) = manager_guard.as_ref() {
         let state = manager.get_state();
-        let disconnected_device = state.get_disconnected_device().map(|(device, device_type)| {
-            DisconnectedDeviceInfo {
+        let disconnected_device = state
+            .get_disconnected_device()
+            .map(|(device, device_type)| DisconnectedDeviceInfo {
                 name: device.name.clone(),
                 device_type: format!("{:?}", device_type),
-            }
-        });
+            });
 
         Ok(ReconnectionStatus {
             is_reconnecting: manager.is_reconnecting(),
@@ -1492,7 +1540,9 @@ pub async fn attempt_device_reconnect(
         tokio::runtime::Handle::current().block_on(async {
             let mut manager_guard = RECORDING_MANAGER.lock().unwrap();
             if let Some(manager) = manager_guard.as_mut() {
-                manager.attempt_device_reconnect(&device_name, monitor_type).await
+                manager
+                    .attempt_device_reconnect(&device_name, monitor_type)
+                    .await
             } else {
                 Err(anyhow::anyhow!("Recording not active"))
             }

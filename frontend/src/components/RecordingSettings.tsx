@@ -11,13 +11,7 @@ export interface RecordingPreferences {
   preferred_system_device: string | null;
 }
 
-/** Duration options for the silence auto-stop feature (label → seconds). */
-const SILENCE_DURATION_OPTIONS: { label: string; value: number }[] = [
-  { label: '30 seconds', value: 30 },
-  { label: '1 minute',   value: 60 },
-  { label: '2 minutes',  value: 120 },
-  { label: '5 minutes',  value: 300 },
-];
+const FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS = 120;
 
 interface RecordingSettingsProps {
   onSave?: (preferences: RecordingPreferences) => void;
@@ -32,10 +26,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showRecordingNotification, setShowRecordingNotification] = useState(true);
-
-  // Silence auto-stop preferences (persisted in preferences.json via Tauri plugin-store)
   const [silenceAutoStopEnabled, setSilenceAutoStopEnabled] = useState(true);
-  const [silenceTimeoutSecs, setSilenceTimeoutSecs] = useState(60);
 
   // Load recording preferences on component mount
   useEffect(() => {
@@ -59,7 +50,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     loadPreferences();
   }, []);
 
-  // Load plugin-store preferences (notification + silence auto-stop)
+  // Load plugin-store preferences.
   useEffect(() => {
     const loadStoredPrefs = async () => {
       try {
@@ -72,8 +63,9 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
         const silenceEnabled = await store.get<boolean>('silence_auto_stop_enabled') ?? true;
         setSilenceAutoStopEnabled(silenceEnabled);
 
-        const silenceSecs = await store.get<number>('silence_auto_stop_duration_secs') ?? 60;
-        setSilenceTimeoutSecs(silenceSecs);
+        // Keep duration canonical even though the enabled flag is user-controlled.
+        await store.set('silence_auto_stop_duration_secs', FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS);
+        await store.save();
       } catch (error) {
         console.error('Failed to load stored preferences:', error);
       }
@@ -113,54 +105,23 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     }
   };
 
-  /**
-   * Notify the Rust backend of the new silence settings so a running recording
-   * monitor is restarted (or stopped) immediately.  The store is always written
-   * first so the preference is durable; the Tauri command then applies it live.
-   */
-  const applyLiveSilenceSettings = async (enabled: boolean, secs: number) => {
-    try {
-      await invoke('update_silence_settings', {
-        enabled,
-        timeoutSecs: secs,
-      });
-    } catch (error) {
-      // Non-fatal: the preference was already saved; the new value will take
-      // effect on the next recording start even if the live update fails.
-      console.warn('Failed to apply silence settings to running recording:', error);
-    }
-  };
-
-  /** Persist the silence auto-stop enabled flag and apply to any active recording. */
   const handleSilenceToggle = async (enabled: boolean) => {
     try {
       setSilenceAutoStopEnabled(enabled);
       const { Store } = await import('@tauri-apps/plugin-store');
       const store = await Store.load('preferences.json');
       await store.set('silence_auto_stop_enabled', enabled);
+      await store.set('silence_auto_stop_duration_secs', FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS);
       await store.save();
-      // Apply immediately to any currently-running recording
-      await applyLiveSilenceSettings(enabled, silenceTimeoutSecs);
+
+      await invoke('update_silence_settings', {
+        enabled,
+        timeoutSecs: FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS,
+      });
+
       toast.success('Preference saved');
     } catch (error) {
       console.error('Failed to save silence preference:', error);
-      toast.error('Failed to save preference');
-    }
-  };
-
-  /** Persist the chosen silence duration and apply to any active recording. */
-  const handleSilenceDurationChange = async (secs: number) => {
-    try {
-      setSilenceTimeoutSecs(secs);
-      const { Store } = await import('@tauri-apps/plugin-store');
-      const store = await Store.load('preferences.json');
-      await store.set('silence_auto_stop_duration_secs', secs);
-      await store.save();
-      // Apply immediately to any currently-running recording
-      await applyLiveSilenceSettings(silenceAutoStopEnabled, secs);
-      toast.success('Preference saved');
-    } catch (error) {
-      console.error('Failed to save silence duration:', error);
       toast.error('Failed to save preference');
     }
   };
@@ -218,13 +179,13 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
         />
       </div>
 
-      {/* Silence Auto-Stop Toggle */}
-      <div className="border border-white/10 rounded-lg bg-white/5 overflow-hidden">
-        <div className="flex items-center justify-between p-4">
+      {/* Transcript Silence Auto-Stop */}
+      <div className="border border-white/10 rounded-lg bg-white/5 p-4">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex-1">
-            <div className="font-medium text-white">Auto-stop on Silence</div>
+            <div className="font-medium text-white">Auto-stop on Transcript Silence</div>
             <div className="text-sm text-zinc-400">
-              Automatically end the recording when no voice is detected for the chosen duration
+              Recordings automatically stop after 2 minutes without transcript output.
             </div>
           </div>
           <Switch
@@ -232,28 +193,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
             onCheckedChange={handleSilenceToggle}
           />
         </div>
-
-        {/* Duration selector — shown only when the feature is enabled */}
-        {silenceAutoStopEnabled && (
-          <div className="px-4 pb-4 border-t border-white/10 pt-3">
-            <p className="text-xs text-zinc-400 mb-2">Stop recording after this much silence:</p>
-            <div className="flex gap-2 flex-wrap">
-              {SILENCE_DURATION_OPTIONS.map(({ label, value }) => (
-                <button
-                  key={value}
-                  onClick={() => handleSilenceDurationChange(value)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    silenceTimeoutSecs === value
-                      ? 'bg-white text-zinc-900'
-                      : 'bg-white/10 text-zinc-300 hover:bg-white/20'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Device Preferences */}

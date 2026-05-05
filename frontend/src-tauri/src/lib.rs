@@ -85,7 +85,8 @@ async fn start_recording<R: Runtime>(
     system_device_name: Option<String>,
     meeting_name: Option<String>,
     meeting_id: Option<String>,
-    // Silence auto-stop threshold in seconds. None disables the feature.
+    // Enables auto-stop with a fixed 120-second transcript-silence timeout.
+    // None lets the audio layer consult the persisted enabled preference.
     silence_timeout_secs: Option<u64>,
 ) -> Result<(), String> {
     log_info!("🔥 CALLED start_recording with meeting: {:?}, meeting_id: {:?}, silence_timeout: {:?}",

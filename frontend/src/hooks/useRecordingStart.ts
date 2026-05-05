@@ -9,18 +9,17 @@ import Analytics from '@/lib/analytics';
 import { showRecordingNotification } from '@/lib/recordingNotification';
 import { toast } from 'sonner';
 
-/** Read the current silence auto-stop preference from the Tauri plugin-store.
- *  Returns the timeout in seconds, or null when the feature is disabled. */
+const FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS = 120;
+
+/** Transcript-silence auto-stop has a user-controlled enabled flag and fixed duration. */
 async function loadSilenceTimeout(): Promise<number | null> {
   try {
     const { Store } = await import('@tauri-apps/plugin-store');
     const store = await Store.load('preferences.json');
     const enabled = await store.get<boolean>('silence_auto_stop_enabled') ?? true;
-    if (!enabled) return null;
-    return await store.get<number>('silence_auto_stop_duration_secs') ?? 120;
+    return enabled ? FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS : null;
   } catch {
-    // Fall back to default (60 s) if the store is unavailable
-    return 60;
+    return FIXED_TRANSCRIPT_SILENCE_TIMEOUT_SECS;
   }
 }
 
@@ -161,7 +160,7 @@ export function useRecordingStart(
       // Set STARTING status before initiating backend recording
       setStatus(RecordingStatus.STARTING, 'Initializing recording...');
 
-      // Start the actual backend recording (pass silence timeout from settings)
+      // Start the actual backend recording with the fixed transcript-silence timeout.
       console.debug('Starting backend recording with meeting:', randomTitle);
       const silenceTimeout = await loadSilenceTimeout();
       await recordingService.startRecordingWithDevices(

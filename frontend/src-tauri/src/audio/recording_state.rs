@@ -1,11 +1,11 @@
+use anyhow::Result;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
-use anyhow::Result;
 
-use super::devices::AudioDevice;
 use super::buffer_pool::AudioBufferPool;
+use super::devices::AudioDevice;
 
 /// Device type for audio chunks
 #[derive(Debug, Clone, PartialEq)]
@@ -96,7 +96,7 @@ pub struct RecordingState {
     // Core recording state
     is_recording: AtomicBool,
     is_paused: AtomicBool,
-    is_reconnecting: AtomicBool,  // NEW: Attempting to reconnect to device
+    is_reconnecting: AtomicBool, // NEW: Attempting to reconnect to device
 
     // Audio devices
     microphone_device: Mutex<Option<Arc<AudioDevice>>>,
@@ -126,12 +126,13 @@ pub struct RecordingState {
     total_pause_duration: Mutex<std::time::Duration>,
 
     // Silence auto-stop tracking
-    // Set to current UNIX millis whenever the VAD detects a speech segment.
-    // The value 0 means no voice has been heard yet in this session.
+    // Set to current UNIX millis whenever the transcript emits visible text.
+    // Initialized at recording start so "no transcript output" counts as silence.
+    last_transcript_output_ms: AtomicU64,
+    // Legacy VAD/speech diagnostics. These no longer drive auto-stop.
     last_voice_activity_ms: AtomicU64,
     // Becomes true after 3 VAD speech segments in this recording session.
-    // The silence monitor does NOT start counting until this is true.
-    // Requiring 3 detections prevents audio init artifacts from opening the gate.
+    // Kept for diagnostics only; auto-stop is transcript-output based.
     voice_ever_detected: AtomicBool,
     voice_detection_count: AtomicU32,
 }
@@ -155,6 +156,7 @@ impl RecordingState {
             recording_start: Mutex::new(None),
             pause_start: Mutex::new(None),
             total_pause_duration: Mutex::new(std::time::Duration::ZERO),
+            last_transcript_output_ms: AtomicU64::new(0),
             last_voice_activity_ms: AtomicU64::new(0),
             voice_ever_detected: AtomicBool::new(false),
             voice_detection_count: AtomicU32::new(0),
@@ -168,7 +170,11 @@ impl RecordingState {
         self.error_count.store(0, Ordering::SeqCst);
         self.recoverable_error_count.store(0, Ordering::SeqCst);
         *self.last_error.lock().unwrap() = None;
-        // Reset silence-detection state for new session
+        // Reset silence-detection state for new session. The auto-stop timer is
+        // transcript-output based, so the absence of transcript output starts
+        // counting from recording start.
+        self.last_transcript_output_ms
+            .store(Self::now_unix_ms(), Ordering::SeqCst);
         self.last_voice_activity_ms.store(0, Ordering::SeqCst);
         self.voice_ever_detected.store(false, Ordering::SeqCst);
         self.voice_detection_count.store(0, Ordering::SeqCst);
@@ -217,7 +223,10 @@ impl RecordingState {
         if let Some(pause_start) = self.pause_start.lock().unwrap().take() {
             let pause_duration = pause_start.elapsed();
             *self.total_pause_duration.lock().unwrap() += pause_duration;
-            log::info!("Recording resumed after pause of {:.2}s", pause_duration.as_secs_f64());
+            log::info!(
+                "Recording resumed after pause of {:.2}s",
+                pause_duration.as_secs_f64()
+            );
         }
 
         self.is_paused.store(false, Ordering::SeqCst);
@@ -240,16 +249,36 @@ impl RecordingState {
     // Silence auto-stop tracking
     // -------------------------------------------------------------------------
 
-    /// Called by the audio pipeline whenever recent audio windows indicate
-    /// live speech presence. This is intentionally decoupled from transcript
-    /// segment emission so continuous speech keeps the silence timer fresh even
-    /// if no chunk boundary has been emitted yet.
-    pub fn update_speech_presence(&self) {
-        let now_ms = SystemTime::now()
+    fn now_unix_ms() -> u64 {
+        SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis() as u64;
-        self.last_voice_activity_ms.store(now_ms, Ordering::SeqCst);
+            .as_millis() as u64
+    }
+
+    /// Called when a transcript update with non-empty text is emitted. This is
+    /// the source of truth for silence auto-stop: if the user can see no new
+    /// transcript output, the silence timer must continue advancing regardless
+    /// of VAD, microphone noise, or background audio.
+    pub fn update_transcript_output_activity(&self) {
+        self.last_transcript_output_ms
+            .store(Self::now_unix_ms(), Ordering::SeqCst);
+    }
+
+    /// Returns the UNIX timestamp (ms) of the last emitted transcript output.
+    /// Initialized at recording start so a recording with no transcript output
+    /// auto-stops after the configured timeout.
+    pub fn last_transcript_output_ms(&self) -> u64 {
+        self.last_transcript_output_ms.load(Ordering::SeqCst)
+    }
+
+    /// Called by the audio pipeline whenever recent audio windows indicate
+    /// live speech presence. Kept for diagnostics only; it does not reset the
+    /// silence auto-stop timer because the product rule is based on transcript
+    /// output, not raw speech/noise detection.
+    pub fn update_speech_presence(&self) {
+        self.last_voice_activity_ms
+            .store(Self::now_unix_ms(), Ordering::SeqCst);
 
         // Require 3 detections before opening the silence gate, to prevent
         // audio init artifacts (e.g. ScreenCaptureKit startup noise on first run)
@@ -258,9 +287,14 @@ impl RecordingState {
         if prev == 2 {
             // 3rd detection — open the gate
             self.voice_ever_detected.store(true, Ordering::SeqCst);
-            log::info!("🔇 [DIAG] Voice confirmed (3 detections) — silence timer will now start counting");
+            log::info!(
+                "🔇 [DIAG] Voice confirmed (3 detections) — silence timer will now start counting"
+            );
         } else if prev < 2 {
-            log::info!("🔇 [DIAG] Voice detection {}/3 — silence gate not yet open", prev + 1);
+            log::info!(
+                "🔇 [DIAG] Voice detection {}/3 — silence gate not yet open",
+                prev + 1
+            );
         }
     }
 
@@ -332,7 +366,9 @@ impl RecordingState {
         }
 
         if let Some(sender) = self.audio_sender.lock().unwrap().as_ref() {
-            sender.send(chunk).map_err(|_| anyhow::anyhow!("Failed to send audio chunk"))?;
+            sender
+                .send(chunk)
+                .map_err(|_| anyhow::anyhow!("Failed to send audio chunk"))?;
 
             // Update statistics
             let mut stats = self.stats.lock().unwrap();
@@ -341,7 +377,9 @@ impl RecordingState {
             Ok(())
         } else {
             // Return an error when no sender is available (pipeline not ready)
-            Err(anyhow::anyhow!("Audio pipeline not ready - no sender available"))
+            Err(anyhow::anyhow!(
+                "Audio pipeline not ready - no sender available"
+            ))
         }
     }
 
@@ -359,11 +397,18 @@ impl RecordingState {
         // Track recoverable vs non-recoverable errors separately
         if error.is_recoverable() {
             let recoverable_count = self.recoverable_error_count.fetch_add(1, Ordering::SeqCst) + 1;
-            log::warn!("Recoverable audio error ({}): {:?}", recoverable_count, error);
+            log::warn!(
+                "Recoverable audio error ({}): {:?}",
+                recoverable_count,
+                error
+            );
 
             // Allow more recoverable errors before stopping
             if recoverable_count >= 10 {
-                log::error!("Too many recoverable errors ({}), stopping recording", recoverable_count);
+                log::error!(
+                    "Too many recoverable errors ({}), stopping recording",
+                    recoverable_count
+                );
                 self.stop_recording();
             }
         } else {
@@ -381,7 +426,10 @@ impl RecordingState {
 
         // Fallback: stop recording after too many total errors
         if count >= 15 {
-            log::error!("Too many total audio errors ({}), stopping recording", count);
+            log::error!(
+                "Too many total audio errors ({}), stopping recording",
+                count
+            );
             self.stop_recording();
         }
     }
@@ -471,6 +519,10 @@ impl RecordingState {
         *self.total_pause_duration.lock().unwrap() = std::time::Duration::ZERO;
         self.error_count.store(0, Ordering::SeqCst);
         self.recoverable_error_count.store(0, Ordering::SeqCst);
+        self.last_transcript_output_ms.store(0, Ordering::SeqCst);
+        self.last_voice_activity_ms.store(0, Ordering::SeqCst);
+        self.voice_ever_detected.store(false, Ordering::SeqCst);
+        self.voice_detection_count.store(0, Ordering::SeqCst);
 
         // Clear buffer pool to free memory
         self.buffer_pool.clear();
@@ -496,6 +548,7 @@ impl Default for RecordingState {
             recording_start: Mutex::new(None),
             pause_start: Mutex::new(None),
             total_pause_duration: Mutex::new(std::time::Duration::ZERO),
+            last_transcript_output_ms: AtomicU64::new(0),
             last_voice_activity_ms: AtomicU64::new(0),
             voice_ever_detected: AtomicBool::new(false),
             voice_detection_count: AtomicU32::new(0),
@@ -519,7 +572,20 @@ mod tests {
     use super::RecordingState;
 
     #[test]
-    fn speech_presence_gate_opens_after_three_detections() {
+    fn transcript_activity_initializes_and_updates_auto_stop_timer() {
+        let state = RecordingState::default();
+
+        assert_eq!(state.last_transcript_output_ms(), 0);
+        state.start_recording().unwrap();
+        let initial = state.last_transcript_output_ms();
+        assert!(initial > 0);
+
+        state.update_transcript_output_activity();
+        assert!(state.last_transcript_output_ms() >= initial);
+    }
+
+    #[test]
+    fn speech_presence_gate_opens_after_three_detections_for_diagnostics() {
         let state = RecordingState::default();
 
         assert!(!state.voice_ever_detected());

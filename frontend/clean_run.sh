@@ -42,7 +42,24 @@ echo "Setting up build environment..."
 # Seed dev app data so onboarding is skipped and meetings are visible
 PROD_APP_DATA="$HOME/Library/Application Support/com.adamant.ai"
 DEV_APP_DATA="$HOME/Library/Application Support/com.adamant.ai.dev"
+DEV_DB="$DEV_APP_DATA/meeting_minutes.sqlite"
 mkdir -p "$DEV_APP_DATA"
+
+# If Adamant Dev is still running, it may hold the dev SQLite database open.
+# Copying over an open SQLite DB can leave the dev database malformed, so stop
+# only processes that are actively using the dev database before reseeding it.
+if command -v lsof >/dev/null 2>&1; then
+  DEV_DB_PIDS=$(lsof -t "$DEV_DB" "$DEV_DB-wal" "$DEV_DB-shm" 2>/dev/null || true)
+  if [ -n "$DEV_DB_PIDS" ]; then
+    echo "Stopping existing Adamant Dev process using the dev database..."
+    kill $DEV_DB_PIDS 2>/dev/null || true
+    sleep 1
+    DEV_DB_PIDS=$(lsof -t "$DEV_DB" "$DEV_DB-wal" "$DEV_DB-shm" 2>/dev/null || true)
+    if [ -n "$DEV_DB_PIDS" ]; then
+      kill -9 $DEV_DB_PIDS 2>/dev/null || true
+    fi
+  fi
+fi
 
 # Skip onboarding by seeding completion status
 cat > "$DEV_APP_DATA/onboarding-status.json" << 'EOF'
@@ -52,8 +69,19 @@ echo "Dev onboarding pre-seeded (skipped)."
 
 # Copy production meetings database so dev shows real data
 if [ -f "$PROD_APP_DATA/meeting_minutes.sqlite" ]; then
-  cp "$PROD_APP_DATA/meeting_minutes.sqlite" "$DEV_APP_DATA/meeting_minutes.sqlite"
-  echo "Dev database seeded from production ($(du -h "$DEV_APP_DATA/meeting_minutes.sqlite" | cut -f1) copied)."
+  rm -f "$DEV_DB-wal" "$DEV_DB-shm"
+  TMP_DEV_DB="$DEV_DB.tmp"
+  cp "$PROD_APP_DATA/meeting_minutes.sqlite" "$TMP_DEV_DB"
+  if command -v sqlite3 >/dev/null 2>&1; then
+    SQLITE_CHECK=$(sqlite3 "file:$TMP_DEV_DB?mode=ro&immutable=1" 'PRAGMA quick_check;' 2>&1)
+    if [ "$SQLITE_CHECK" != "ok" ]; then
+      rm -f "$TMP_DEV_DB"
+      echo "Copied dev database failed SQLite quick_check: $SQLITE_CHECK"
+      exit 1
+    fi
+  fi
+  mv "$TMP_DEV_DB" "$DEV_DB"
+  echo "Dev database seeded from production ($(du -h "$DEV_DB" | cut -f1) copied)."
 else
   echo "No production database found — dev will start with empty meetings."
 fi
