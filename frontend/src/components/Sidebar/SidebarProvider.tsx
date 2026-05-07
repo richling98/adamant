@@ -268,12 +268,13 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       return Promise.resolve();
     }
 
+    latestQueryRef.current = query;
+    setSearchResults([]);
     setIsSearching(true);
 
     return new Promise<void>((resolve) => {
       searchDebounceRef.current = setTimeout(async () => {
         const thisQuery = query;
-        latestQueryRef.current = thisQuery;
 
         try {
           const results = await invoke('api_search_transcripts', { query: thisQuery }) as TranscriptSearchResult[];

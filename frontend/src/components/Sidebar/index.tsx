@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, FolderPlus, Square, CheckSquare } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, FolderPlus, Square, CheckSquare, Folder as FolderIcon, FolderOpen } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './SidebarProvider';
@@ -40,6 +40,11 @@ interface SidebarItem {
   folderData?: import('./SidebarProvider').Folder;
 }
 
+interface SearchResultSidebarItem extends SidebarItem {
+  matchContext?: string;
+  matchSource?: string;
+}
+
 const Sidebar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
@@ -63,6 +68,9 @@ const Sidebar: React.FC = () => {
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings']));
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const isSearchMode = searchQuery.trim().length > 0;
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const [expandedSearchFolders, setExpandedSearchFolders] = useState<Set<string>>(new Set());
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
     provider: 'ollama',
@@ -370,80 +378,76 @@ const Sidebar: React.FC = () => {
     setSearchQuery(value);
 
     // If search query is empty, just return to normal view
-    if (!value.trim()) return;
+    if (!value.trim()) {
+      await searchTranscripts('');
+      return;
+    }
 
     // Search through transcripts
     await searchTranscripts(value);
 
-    // Make sure the meetings folder is expanded when searching
-    if (!expandedFolders.has('meetings')) {
-      const newExpanded = new Set(expandedFolders);
-      newExpanded.add('meetings');
-      setExpandedFolders(newExpanded);
-    }
-  }, [expandedFolders, searchTranscripts]);
+  }, [searchTranscripts]);
 
-  // Combine search results with sidebar items
-  const filteredSidebarItems = useMemo(() => {
-    if (!searchQuery.trim()) return sidebarItems;
+  useEffect(() => {
+    setExpandedSearchFolders(new Set());
+  }, [normalizedSearchQuery]);
 
-    // If we have search results, highlight matching meetings
-    if (searchResults.length > 0) {
-      // Get the IDs of meetings that matched in transcripts
-      const matchedMeetingIds = new Set(searchResults.map(result => result.id));
+  const toggleSearchFolder = useCallback((folderId: string) => {
+    setExpandedSearchFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  }, []);
 
-      return sidebarItems
-        .map(folder => {
-          // Always include folders in the results
-          if (folder.type === 'folder') {
-            if (!folder.children) return folder;
+  const searchResultItems = useMemo<SearchResultSidebarItem[]>(() => {
+    if (!isSearchMode) return [];
 
-            // Filter children based on search results or title match
-            const filteredChildren = folder.children.filter(item => {
-              // Include if the meeting ID is in our search results
-              if (matchedMeetingIds.has(item.id)) return true;
+    const seen = new Set<string>();
+    return searchResults
+      .filter((result) => {
+        if (seen.has(result.id)) return false;
+        seen.add(result.id);
+        return true;
+      })
+      .map((result) => ({
+        id: result.id,
+        title: result.title,
+        type: 'file' as const,
+        matchContext: result.matchContext,
+        matchSource: result.matchSource,
+      }));
+  }, [isSearchMode, searchResults]);
 
-              // Or if the title matches the search query
-              return item.title.toLowerCase().includes(searchQuery.toLowerCase());
-            });
+  const folderSearchItems = useMemo<SidebarItem[]>(() => {
+    if (!isSearchMode || !normalizedSearchQuery) return [];
 
-            return {
-              ...folder,
-              children: filteredChildren
-            };
+    const matches: SidebarItem[] = [];
+    const seen = new Set<string>();
+
+    const visit = (items: SidebarItem[] = []) => {
+      for (const item of items) {
+        if (item.type === 'folder') {
+          const folderName = item.folderData?.name ?? item.title;
+          if (folderName.toLowerCase().includes(normalizedSearchQuery) && !seen.has(item.id)) {
+            seen.add(item.id);
+            matches.push(item);
           }
+        }
 
-          // For non-folder items, check if they match the search
-          return (matchedMeetingIds.has(folder.id) ||
-            folder.title.toLowerCase().includes(searchQuery.toLowerCase()))
-            ? folder : undefined;
-        })
-        .filter((item): item is SidebarItem => item !== undefined); // Type-safe filter
-    } else {
-      // Fall back to title-only filtering if no transcript results
-      return sidebarItems
-        .map(folder => {
-          // Always include folders in the results
-          if (folder.type === 'folder') {
-            if (!folder.children) return folder;
+        if (item.children?.length) {
+          visit(item.children);
+        }
+      }
+    };
 
-            // Filter children based on search query
-            const filteredChildren = folder.children.filter(item =>
-              item.title.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-
-            return {
-              ...folder,
-              children: filteredChildren
-            };
-          }
-
-          // For non-folder items, check if they match the search
-          return folder.title.toLowerCase().includes(searchQuery.toLowerCase()) ? folder : undefined;
-        })
-        .filter((item): item is SidebarItem => item !== undefined); // Type-safe filter
-    }
-  }, [sidebarItems, searchQuery, searchResults, expandedFolders]);
+    visit(sidebarItems);
+    return matches;
+  }, [isSearchMode, normalizedSearchQuery, sidebarItems]);
 
 
   const handleDelete = async (itemId: string) => {
@@ -857,11 +861,6 @@ const Sidebar: React.FC = () => {
                   </InputGroup>
                 </div>
 
-                {/* Searching indicator */}
-                {searchQuery && isSearching && (
-                  <p className="text-xs text-zinc-400 px-1 mb-1 animate-pulse">Searching…</p>
-                )}
-
               </div>
             )}
           </div>
@@ -871,7 +870,7 @@ const Sidebar: React.FC = () => {
         <div className="flex-1 flex flex-col min-h-0">
           {/* Fixed navigation items */}
           <div className="flex-shrink-0">
-            {!isCollapsed && (
+            {!isCollapsed && !isSearchMode && (
               <div
                 onClick={() => router.push('/')}
                 className="p-3 text-lg font-semibold items-center hover:bg-white/10 h-10 flex mx-3 mt-3 rounded-lg cursor-pointer"
@@ -886,7 +885,45 @@ const Sidebar: React.FC = () => {
           <div className="flex-1 flex flex-col min-h-0">
             {renderCollapsedIcons()}
 
-            {!isCollapsed && (
+            {!isCollapsed && isSearchMode && (
+              <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 px-3 pb-4">
+                <div className="mt-3">
+                  <div className="flex items-center h-8 mb-1">
+                    <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Folders</span>
+                  </div>
+                  {folderSearchItems.map((item) => (
+                    <SearchFolderResult
+                      key={item.id}
+                      item={item}
+                      expandedFolderIds={expandedSearchFolders}
+                      activeMeetingId={currentMeeting?.id}
+                      onToggleFolder={toggleSearchFolder}
+                      onNavigateMeeting={(meeting) => {
+                        setCurrentMeeting({ id: meeting.id, title: meeting.title });
+                        router.push(`/meeting-details?id=${meeting.id}`);
+                      }}
+                    />
+                  ))}
+
+                  <div className="flex items-center h-8 mt-4 mb-1">
+                    <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Meeting Notes</span>
+                  </div>
+                  {searchResultItems.map((item) => (
+                    <SearchMeetingRow
+                      key={item.id}
+                      item={item}
+                      isActive={currentMeeting?.id === item.id}
+                      onNavigate={() => {
+                        setCurrentMeeting({ id: item.id, title: item.title });
+                        router.push(`/meeting-details?id=${item.id}`);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!isCollapsed && !isSearchMode && (
               <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
                 <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 px-3 pb-4">
 
@@ -1026,7 +1063,7 @@ const Sidebar: React.FC = () => {
                     isMeetingNotesExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
                   )}>
                     <UnfiledDropZone>
-                      {filteredSidebarItems
+                      {sidebarItems
                         .filter((item) => item.type === 'file' && !meetings.find((m) => m.id === item.id)?.folder_id)
                         .map((item) => (
                           <DraggableMeetingRow
@@ -1278,6 +1315,115 @@ const Sidebar: React.FC = () => {
     </div>
   );
 };
+
+// ---------------------------------------------------------------------------
+// Helper: flat meeting row for focused search mode
+// ---------------------------------------------------------------------------
+
+function SearchMeetingRow({
+  item,
+  isActive,
+  onNavigate,
+}: {
+  item: SearchResultSidebarItem;
+  isActive: boolean;
+  onNavigate: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onNavigate}
+      className={`flex w-full items-center px-2 py-1.5 my-0.5 rounded-md text-sm text-left transition-colors ${
+        isActive
+          ? 'bg-emerald-500/20 text-emerald-100 font-medium'
+          : 'hover:bg-white/5 text-foreground/85'
+      }`}
+    >
+      <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full mr-2 bg-white/10">
+        <File className="w-3 h-3 text-foreground/65" />
+      </div>
+      <span className="flex-1 min-w-0 truncate">{item.title}</span>
+    </button>
+  );
+}
+
+function SearchFolderResult({
+  item,
+  expandedFolderIds,
+  activeMeetingId,
+  onToggleFolder,
+  onNavigateMeeting,
+  depth = 0,
+}: {
+  item: SidebarItem;
+  expandedFolderIds: Set<string>;
+  activeMeetingId?: string;
+  onToggleFolder: (folderId: string) => void;
+  onNavigateMeeting: (meeting: SidebarItem) => void;
+  depth?: number;
+}) {
+  const isExpanded = expandedFolderIds.has(item.id);
+  const folderName = item.folderData?.name ?? item.title;
+  const children = item.children ?? [];
+
+  return (
+    <div className="rounded-md">
+      <button
+        type="button"
+        onClick={() => onToggleFolder(item.id)}
+        className="flex w-full items-center gap-1 px-2 py-1.5 my-0.5 rounded-md text-sm text-left hover:bg-white/5 text-foreground/85 transition-colors"
+        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+      >
+        <span className="text-zinc-500 flex-shrink-0">
+          {isExpanded
+            ? <ChevronDown className="h-3 w-3" />
+            : <ChevronRight className="h-3 w-3" />}
+        </span>
+        <span className="text-zinc-400 flex-shrink-0">
+          {isExpanded
+            ? <FolderOpen className="h-3.5 w-3.5" />
+            : <FolderIcon className="h-3.5 w-3.5" />}
+        </span>
+        <span className="flex-1 min-w-0 truncate font-medium">{folderName}</span>
+        <span className="text-xs text-zinc-500 flex-shrink-0 ml-1">{children.length}</span>
+      </button>
+
+      <div className={cn(
+        'overflow-hidden transition-all duration-200',
+        isExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
+      )}>
+        {children.length > 0 && (
+          <div className="ml-4 border-l border-white/5">
+            {children.map((child) => {
+              if (child.type === 'folder') {
+                return (
+                  <SearchFolderResult
+                    key={child.id}
+                    item={child}
+                    expandedFolderIds={expandedFolderIds}
+                    activeMeetingId={activeMeetingId}
+                    onToggleFolder={onToggleFolder}
+                    onNavigateMeeting={onNavigateMeeting}
+                    depth={depth + 1}
+                  />
+                );
+              }
+
+              return (
+                <SearchMeetingRow
+                  key={child.id}
+                  item={child}
+                  isActive={activeMeetingId === child.id}
+                  onNavigate={() => onNavigateMeeting(child)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Helper: draggable meeting row
