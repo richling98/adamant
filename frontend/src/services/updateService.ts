@@ -44,6 +44,18 @@ export class UpdateService {
       throw new Error('Update check already in progress');
     }
 
+    const currentVersion = await getVersion();
+
+    // Tauri dev builds do not have a useful production update feed. Skipping
+    // avoids noisy startup console errors from the updater plugin in dev mode.
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('Skipping update check in development mode');
+      return {
+        available: false,
+        currentVersion,
+      };
+    }
+
     // Skip if checked recently (unless forced)
     if (!force && this.lastCheckTime) {
       const timeSinceLastCheck = Date.now() - this.lastCheckTime;
@@ -51,7 +63,7 @@ export class UpdateService {
         console.debug('Skipping update check - checked recently');
         return {
           available: false,
-          currentVersion: await getVersion(),
+          currentVersion,
         };
       }
     }
@@ -60,7 +72,6 @@ export class UpdateService {
     this.lastCheckTime = Date.now();
 
     try {
-      const currentVersion = await getVersion();
       const update = await check();
 
       if (update?.available) {

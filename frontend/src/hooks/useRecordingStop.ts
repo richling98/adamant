@@ -90,6 +90,14 @@ export function useRecordingStop(
 
   const router = useRouter();
 
+  const pendingMeetingIdRef = useRef(pendingMeetingId);
+  const meetingTitleRef = useRef(meetingTitle);
+  const pendingFolderIdRef = useRef(pendingFolderId);
+
+  pendingMeetingIdRef.current = pendingMeetingId;
+  meetingTitleRef.current = meetingTitle;
+  pendingFolderIdRef.current = pendingFolderId;
+
   // Guard to prevent duplicate/concurrent stop calls (e.g., from UI and tray simultaneously)
   const stopInProgressRef = useRef(false);
 
@@ -198,7 +206,7 @@ export function useRecordingStop(
           toast.error('Failed to stop recording', { description: message });
           window.dispatchEvent(new CustomEvent('recording-save-failed', {
             detail: {
-              meetingId: pendingMeetingId ?? undefined,
+              meetingId: pendingMeetingIdRef.current ?? undefined,
               error: message,
             },
           }));
@@ -339,7 +347,7 @@ export function useRecordingStop(
 
         console.debug('💾 Saving COMPLETE transcripts to database...', {
           transcript_count: freshTranscripts.length,
-          meeting_name: savedMeetingName || meetingTitle,
+          meeting_name: savedMeetingName || meetingTitleRef.current,
           folder_path: folderPath,
           sample_text: freshTranscripts.length > 0 ? freshTranscripts[0].text.substring(0, 50) + '...' : 'none',
           last_transcript: freshTranscripts.length > 0 ? freshTranscripts[freshTranscripts.length - 1].text.substring(0, 30) + '...' : 'none',
@@ -347,11 +355,13 @@ export function useRecordingStop(
 
         // Capture pendingMeetingId at save time — this is the existing meeting ID
         // set by the notes-page "Start Recording" button (unified notes + recording flow).
-        const existingMeetingId = pendingMeetingId ?? undefined;
+        const existingMeetingId = pendingMeetingIdRef.current ?? undefined;
+        const pendingFolderIdAtSave = pendingFolderIdRef.current;
+        const titleAtSave = meetingTitleRef.current;
 
         try {
           const responseData = await storageService.saveMeeting(
-            savedMeetingName || meetingTitle || 'New Meeting',  // PREFER savedMeetingName (backend source)
+            savedMeetingName || titleAtSave || 'New Meeting',  // PREFER savedMeetingName (backend source)
             freshTranscripts,
             folderPath,
             existingMeetingId
@@ -368,13 +378,14 @@ export function useRecordingStop(
           console.debug('   folder_path:', folderPath);
 
           // Assign meeting to pending folder if one was set (user clicked "+" on a folder before recording)
-          if (pendingFolderId) {
+          if (pendingFolderIdAtSave) {
             try {
-              await invoke('api_move_meeting_to_folder', { meetingId, folderId: pendingFolderId });
-              console.debug('✅ Assigned new meeting to folder:', pendingFolderId);
+              await invoke('api_move_meeting_to_folder', { meetingId, folderId: pendingFolderIdAtSave });
+              console.debug('✅ Assigned new meeting to folder:', pendingFolderIdAtSave);
             } catch (folderError) {
               console.warn('Could not assign meeting to folder:', folderError);
             } finally {
+              pendingFolderIdRef.current = null;
               setPendingFolderId(null);
             }
           }
@@ -394,6 +405,7 @@ export function useRecordingStop(
           sessionStorage.removeItem('indexeddb_current_meeting_id');
 
           // Clear the pending meeting ID now that save is complete
+          pendingMeetingIdRef.current = null;
           setPendingMeetingId(null);
 
           // Refetch meetings and set current meeting
@@ -410,7 +422,7 @@ export function useRecordingStop(
             }
           } catch (error) {
             console.warn('Could not fetch meeting details, using ID only:', error);
-            setCurrentMeeting({ id: meetingId, title: savedMeetingName || meetingTitle || 'New Meeting' });
+            setCurrentMeeting({ id: meetingId, title: savedMeetingName || titleAtSave || 'New Meeting' });
           }
 
           // Mark as completed
@@ -515,7 +527,8 @@ export function useRecordingStop(
         } catch (saveError) {
           console.error('Failed to save meeting to database:', saveError);
           // Clear pending folder assignment — don't leave stale state on failure
-          if (pendingFolderId) {
+          if (pendingFolderIdRef.current) {
+            pendingFolderIdRef.current = null;
             setPendingFolderId(null);
           }
           const errorMessage = saveError instanceof Error ? saveError.message : 'Unknown error';
@@ -544,7 +557,7 @@ export function useRecordingStop(
       setStatus(RecordingStatus.ERROR, errorMessage);
       window.dispatchEvent(new CustomEvent('recording-save-failed', {
         detail: {
-          meetingId: pendingMeetingId ?? undefined,
+          meetingId: pendingMeetingIdRef.current ?? undefined,
           error: errorMessage,
         },
       }));
@@ -560,11 +573,8 @@ export function useRecordingStop(
     transcriptsRef,
     flushBuffer,
     clearTranscripts,
-    meetingTitle,
     markMeetingAsSaved,
-    pendingMeetingId,
     setPendingMeetingId,
-    pendingFolderId,
     setPendingFolderId,
     refetchMeetings,
     setCurrentMeeting,

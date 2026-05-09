@@ -39,8 +39,12 @@ export function useUpdateCheck(options: UseUpdateCheckOptions = {}) {
         }
       }
     } catch (error) {
-      console.error('Failed to check for updates:', error);
       // Silently fail on startup checks to avoid disrupting user experience
+      if (force) {
+        console.warn('Failed to check for updates:', error);
+      } else {
+        console.debug('Startup update check skipped or failed:', error);
+      }
     } finally {
       setIsChecking(false);
     }
