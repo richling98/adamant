@@ -22,7 +22,7 @@ import { cn, isOllamaNotInstalledError } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export interface ModelConfig {
-  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai';
+  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai' | 'nvidia-inference';
   model: string;
   whisperModel: string;
   apiKey?: string | null;
@@ -51,6 +51,25 @@ interface OpenRouterModel {
   prompt_price?: string;
   completion_price?: string;
 }
+
+const NVIDIA_INFERENCE_MODELS = [
+  { label: 'nemotron 3 super', value: 'nvidia/nvidia/nemotron-3-super-v3' },
+  { label: 'gpt5.5', value: 'openai/openai/gpt-5.5' },
+  { label: 'claude 4.6', value: 'aws/anthropic/bedrock-claude-sonnet-4-6' },
+  { label: 'gpt-5-mini', value: 'openai/openai/gpt-5-mini' },
+  { label: 'gpt-oss-120b', value: 'nvidia/openai/gpt-oss-120b' },
+  { label: 'gpt-4.1', value: 'us/azure/openai/gpt-4.1' },
+  { label: 'gpt-oss-20b', value: 'nvidia/openai/gpt-oss-20b' },
+  { label: 'gpt-5', value: 'us/azure/openai/gpt-5' },
+] as const;
+
+const getModelDisplayName = (provider: ModelConfig['provider'], model: string) => {
+  if (provider === 'nvidia-inference') {
+    return NVIDIA_INFERENCE_MODELS.find((option) => option.value === model)?.label ?? model;
+  }
+
+  return model;
+};
 
 interface ModelSettingsModalProps {
   modelConfig: ModelConfig;
@@ -201,13 +220,15 @@ export function ModelSettingsModal({
     openrouter: openRouterModels.map((m) => m.id),
     'builtin-ai': builtinAiModels.map((m) => m.name),
     'custom-openai': customOpenAIModel ? [customOpenAIModel] : [], // User specifies model manually
+    'nvidia-inference': NVIDIA_INFERENCE_MODELS.map((model) => model.value),
   };
 
   const requiresApiKey =
     modelConfig.provider === 'claude' ||
     modelConfig.provider === 'groq' ||
     modelConfig.provider === 'openai' ||
-    modelConfig.provider === 'openrouter';
+    modelConfig.provider === 'openrouter' ||
+    modelConfig.provider === 'nvidia-inference';
 
   // Check if Ollama endpoint has changed but models haven't been fetched yet
   const ollamaEndpointChanged = modelConfig.provider === 'ollama' &&
@@ -482,9 +503,9 @@ export function ModelSettingsModal({
       );
     }
 
-    const updatedConfig = {
+    const configToSave = {
       ...modelConfig,
-      apiKey: null,
+      apiKey: modelConfig.provider === 'custom-openai' ? null : apiKey.trim() || null,
       hasApiKey:
         modelConfig.provider === 'custom-openai'
           ? hasStoredCustomOpenAIApiKey || Boolean(customOpenAIApiKey.trim())
@@ -502,10 +523,14 @@ export function ModelSettingsModal({
       // For custom-openai, use the customOpenAIModel as the model field
       model: modelConfig.provider === 'custom-openai' ? customOpenAIModel.trim() : modelConfig.model,
     };
+    const updatedConfig = {
+      ...configToSave,
+      apiKey: null,
+    };
     setModelConfig(updatedConfig);
     console.debug('ModelSettingsModal - handleSave - Updated ModelConfig:', updatedConfig);
 
-    onSave(updatedConfig);
+    onSave(configToSave);
   };
 
   // Test custom OpenAI connection
@@ -708,6 +733,7 @@ export function ModelSettingsModal({
                 <SelectItem value="claude">Claude</SelectItem>
                 <SelectItem value="custom-openai">Custom Server (OpenAI)</SelectItem>
                 <SelectItem value="groq">Groq</SelectItem>
+                <SelectItem value="nvidia-inference">NVIDIA inference</SelectItem>
                 <SelectItem value="ollama">Ollama</SelectItem>
                 <SelectItem value="openai">OpenAI</SelectItem>
                 <SelectItem value="openrouter">OpenRouter</SelectItem>
@@ -732,7 +758,7 @@ export function ModelSettingsModal({
                   ) : (
                     modelOptions[modelConfig.provider]?.map((model) => (
                       <SelectItem key={model} value={model}>
-                        {model}
+                        {getModelDisplayName(modelConfig.provider, model)}
                       </SelectItem>
                     ))
                   )}

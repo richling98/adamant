@@ -328,13 +328,14 @@ const Sidebar: React.FC = () => {
         ollamaEndpoint: config.ollamaEndpoint,
       });
 
-      setModelConfig(config);
+      const savedConfig = { ...config, apiKey: null };
+      setModelConfig(savedConfig);
       console.debug('Model config saved successfully');
       setSettingsSaveSuccess(true);
 
       // Emit event to sync other components
       const { emit } = await import('@tauri-apps/api/event');
-      await emit('model-config-updated', config);
+      await emit('model-config-updated', savedConfig);
 
       // Track settings change
       await Analytics.trackSettingsChanged('model_config', `${config.provider}_${config.model}`);

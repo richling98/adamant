@@ -102,6 +102,9 @@ pub struct Setting {
     #[sqlx(rename = "openRouterApiKey")]
     #[serde(rename = "openRouterApiKey")]
     pub open_router_api_key: Option<String>,
+    #[sqlx(rename = "nvidiaInferenceApiKey")]
+    #[serde(rename = "nvidiaInferenceApiKey")]
+    pub nvidia_inference_api_key: Option<String>,
     #[sqlx(rename = "ollamaEndpoint")]
     #[serde(rename = "ollamaEndpoint")]
     pub ollama_endpoint: Option<String>,

@@ -25,7 +25,7 @@ pub struct SaveTranscriptConfigRequest {
 pub struct SettingsRepository;
 
 // Transcript providers: localWhisper, deepgram, elevenLabs, groq, openai
-// Summary providers: openai, claude, ollama, groq, added openrouter
+// Summary providers: openai, claude, ollama, groq, openrouter, nvidia-inference
 // NOTE: Handle data exclusion in the higher layer as this is database abstraction layer(using SELECT *)
 
 impl SettingsRepository {
@@ -85,6 +85,7 @@ impl SettingsRepository {
             "ollama" => "ollamaApiKey",
             "groq" => "groqApiKey",
             "openrouter" => "openRouterApiKey",
+            "nvidia-inference" => "nvidiaInferenceApiKey",
             "builtin-ai" => return Ok(()), // No API key needed
             _ => {
                 return Err(sqlx::Error::Protocol(
@@ -123,6 +124,7 @@ impl SettingsRepository {
             "groq" => "groqApiKey",
             "claude" => "anthropicApiKey",
             "openrouter" => "openRouterApiKey",
+            "nvidia-inference" => "nvidiaInferenceApiKey",
             "builtin-ai" => return Ok(None), // No API key needed
             _ => {
                 return Err(sqlx::Error::Protocol(
@@ -285,6 +287,7 @@ impl SettingsRepository {
             "groq" => "groqApiKey",
             "claude" => "anthropicApiKey",
             "openrouter" => "openRouterApiKey",
+            "nvidia-inference" => "nvidiaInferenceApiKey",
             "builtin-ai" => return Ok(()), // No API key needed
             _ => {
                 return Err(sqlx::Error::Protocol(
@@ -405,6 +408,7 @@ mod tests {
                 anthropicApiKey TEXT,
                 groqApiKey TEXT,
                 openRouterApiKey TEXT,
+                nvidiaInferenceApiKey TEXT,
                 ollamaApiKey TEXT,
                 ollamaEndpoint TEXT,
                 customOpenAIConfig TEXT

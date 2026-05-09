@@ -73,6 +73,7 @@ pub enum LLMProvider {
     OpenRouter,
     BuiltInAI,
     CustomOpenAI,
+    NvidiaInference,
 }
 
 impl LLMProvider {
@@ -86,6 +87,7 @@ impl LLMProvider {
             "openrouter" => Ok(Self::OpenRouter),
             "builtin-ai" | "local-llama" | "localllama" => Ok(Self::BuiltInAI),
             "custom-openai" => Ok(Self::CustomOpenAI),
+            "nvidia-inference" => Ok(Self::NvidiaInference),
             _ => Err(format!("Unsupported LLM provider: {}", s)),
         }
     }
@@ -159,6 +161,10 @@ pub async fn generate_summary(
         ),
         LLMProvider::OpenRouter => (
             "https://openrouter.ai/api/v1/chat/completions".to_string(),
+            header::HeaderMap::new(),
+        ),
+        LLMProvider::NvidiaInference => (
+            "https://inference-api.nvidia.com/v1/chat/completions".to_string(),
             header::HeaderMap::new(),
         ),
         LLMProvider::Ollama => {
@@ -344,5 +350,6 @@ fn provider_name(provider: &LLMProvider) -> &str {
         LLMProvider::BuiltInAI => "Built-in AI",
         LLMProvider::OpenRouter => "OpenRouter",
         LLMProvider::CustomOpenAI => "Custom OpenAI",
+        LLMProvider::NvidiaInference => "NVIDIA inference",
     }
 }

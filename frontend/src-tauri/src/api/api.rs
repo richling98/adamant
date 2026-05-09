@@ -676,6 +676,11 @@ pub async fn api_test_key<R: Runtime>(
             .bearer_auth(&key)
             .send()
             .await,
+        "nvidia-inference" => client
+            .get("https://inference-api.nvidia.com/v1/models")
+            .bearer_auth(&key)
+            .send()
+            .await,
         "claude" => client
             .get("https://api.anthropic.com/v1/models")
             .header("x-api-key", &key)

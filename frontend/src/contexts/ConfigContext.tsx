@@ -338,6 +338,16 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     openai: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     'builtin-ai': [],
     'custom-openai': [],
+    'nvidia-inference': [
+      'nvidia/nvidia/nemotron-3-super-v3',
+      'openai/openai/gpt-5.5',
+      'aws/anthropic/bedrock-claude-sonnet-4-6',
+      'openai/openai/gpt-5-mini',
+      'nvidia/openai/gpt-oss-120b',
+      'us/azure/openai/gpt-4.1',
+      'nvidia/openai/gpt-oss-20b',
+      'us/azure/openai/gpt-5',
+    ],
   };
 
   // Toggle confidence indicator with localStorage persistence

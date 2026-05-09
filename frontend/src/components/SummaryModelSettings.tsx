@@ -97,11 +97,12 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
         ollamaEndpoint: config.ollamaEndpoint,
       });
 
-      setModelConfig(config);
+      const savedConfig = { ...config, apiKey: null };
+      setModelConfig(savedConfig);
 
       // Emit event to sync other components
       const { emit } = await import('@tauri-apps/api/event');
-      await emit('model-config-updated', config);
+      await emit('model-config-updated', savedConfig);
 
       toast.success('Model settings saved successfully');
     } catch (error) {

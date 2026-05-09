@@ -131,12 +131,13 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
         ollamaEndpoint: payload.ollamaEndpoint,
       });
 
+      const savedConfig = { ...payload, apiKey: null };
       console.debug('Save model config success');
-      setModelConfig(payload);
+      setModelConfig(savedConfig);
 
       // Emit event to sync other components
       const { emit } = await import('@tauri-apps/api/event');
-      await emit('model-config-updated', payload);
+      await emit('model-config-updated', savedConfig);
 
       toast.success("Summary settings Saved successfully");
 
