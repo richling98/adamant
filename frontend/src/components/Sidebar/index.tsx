@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, FolderPlus, Square, CheckSquare, Folder as FolderIcon, FolderOpen } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, FolderPlus, Square, CheckSquare } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './SidebarProvider';
@@ -70,7 +70,6 @@ const Sidebar: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const isSearchMode = searchQuery.trim().length > 0;
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-  const [expandedSearchFolders, setExpandedSearchFolders] = useState<Set<string>>(new Set());
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
     provider: 'ollama',
@@ -387,22 +386,6 @@ const Sidebar: React.FC = () => {
     await searchTranscripts(value);
 
   }, [searchTranscripts]);
-
-  useEffect(() => {
-    setExpandedSearchFolders(new Set());
-  }, [normalizedSearchQuery]);
-
-  const toggleSearchFolder = useCallback((folderId: string) => {
-    setExpandedSearchFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) {
-        next.delete(folderId);
-      } else {
-        next.add(folderId);
-      }
-      return next;
-    });
-  }, []);
 
   const searchResultItems = useMemo<SearchResultSidebarItem[]>(() => {
     if (!isSearchMode) return [];
@@ -892,17 +875,26 @@ const Sidebar: React.FC = () => {
                     <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Folders</span>
                   </div>
                   {folderSearchItems.map((item) => (
-                    <SearchFolderResult
-                      key={item.id}
-                      item={item}
-                      expandedFolderIds={expandedSearchFolders}
-                      activeMeetingId={currentMeeting?.id}
-                      onToggleFolder={toggleSearchFolder}
-                      onNavigateMeeting={(meeting) => {
-                        setCurrentMeeting({ id: meeting.id, title: meeting.title });
-                        router.push(`/meeting-details?id=${meeting.id}`);
-                      }}
-                    />
+                    item.folderData ? (
+                      <FolderItem
+                        key={item.id}
+                        folder={item.folderData}
+                        children={item.children ?? []}
+                        isSidebarCollapsed={isCollapsed}
+                        activeMeetingId={currentMeeting?.id}
+                        renderMeetingItem={(child) => (
+                          <SearchMeetingRow
+                            key={child.id}
+                            item={child}
+                            isActive={currentMeeting?.id === child.id}
+                            onNavigate={() => {
+                              setCurrentMeeting({ id: child.id, title: child.title });
+                              router.push(`/meeting-details?id=${child.id}`);
+                            }}
+                          />
+                        )}
+                      />
+                    ) : null
                   ))}
 
                   <div className="flex items-center h-8 mt-4 mb-1">
@@ -1347,83 +1339,6 @@ function SearchMeetingRow({
   );
 }
 
-function SearchFolderResult({
-  item,
-  expandedFolderIds,
-  activeMeetingId,
-  onToggleFolder,
-  onNavigateMeeting,
-  depth = 0,
-}: {
-  item: SidebarItem;
-  expandedFolderIds: Set<string>;
-  activeMeetingId?: string;
-  onToggleFolder: (folderId: string) => void;
-  onNavigateMeeting: (meeting: SidebarItem) => void;
-  depth?: number;
-}) {
-  const isExpanded = expandedFolderIds.has(item.id);
-  const folderName = item.folderData?.name ?? item.title;
-  const children = item.children ?? [];
-
-  return (
-    <div className="rounded-md">
-      <button
-        type="button"
-        onClick={() => onToggleFolder(item.id)}
-        className="flex w-full items-center gap-1 px-2 py-1.5 my-0.5 rounded-md text-sm text-left hover:bg-white/5 text-foreground/85 transition-colors"
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
-      >
-        <span className="text-zinc-500 flex-shrink-0">
-          {isExpanded
-            ? <ChevronDown className="h-3 w-3" />
-            : <ChevronRight className="h-3 w-3" />}
-        </span>
-        <span className="text-zinc-400 flex-shrink-0">
-          {isExpanded
-            ? <FolderOpen className="h-3.5 w-3.5" />
-            : <FolderIcon className="h-3.5 w-3.5" />}
-        </span>
-        <span className="flex-1 min-w-0 truncate font-medium">{folderName}</span>
-        <span className="text-xs text-zinc-500 flex-shrink-0 ml-1">{children.length}</span>
-      </button>
-
-      <div className={cn(
-        'overflow-hidden transition-all duration-200',
-        isExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
-      )}>
-        {children.length > 0 && (
-          <div className="ml-4 border-l border-white/5">
-            {children.map((child) => {
-              if (child.type === 'folder') {
-                return (
-                  <SearchFolderResult
-                    key={child.id}
-                    item={child}
-                    expandedFolderIds={expandedFolderIds}
-                    activeMeetingId={activeMeetingId}
-                    onToggleFolder={onToggleFolder}
-                    onNavigateMeeting={onNavigateMeeting}
-                    depth={depth + 1}
-                  />
-                );
-              }
-
-              return (
-                <SearchMeetingRow
-                  key={child.id}
-                  item={child}
-                  isActive={activeMeetingId === child.id}
-                  onNavigate={() => onNavigateMeeting(child)}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Helper: draggable meeting row
