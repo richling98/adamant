@@ -219,6 +219,11 @@ const Sidebar: React.FC = () => {
 
 
   const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean; itemId: string | null }>({ isOpen: false, itemId: null });
+  const [dateDeleteModalState, setDateDeleteModalState] = useState<{
+    isOpen: boolean;
+    dateLabel: string | null;
+    meetingIds: string[];
+  }>({ isOpen: false, dateLabel: null, meetingIds: [] });
 
   // ── Multi-select deletion state ──────────────────────────────────────────
   // Tracks the set of meeting IDs the user has check-selected for bulk delete.
@@ -233,6 +238,22 @@ const Sidebar: React.FC = () => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleDateSelection = useCallback((meetingIds: string[], e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedMeetingIds(prev => {
+      const next = new Set(prev);
+      const allSelected = meetingIds.length > 0 && meetingIds.every((id) => next.has(id));
+
+      if (allSelected) {
+        meetingIds.forEach((id) => next.delete(id));
+      } else {
+        meetingIds.forEach((id) => next.add(id));
+      }
+
       return next;
     });
   }, []);
@@ -434,38 +455,51 @@ const Sidebar: React.FC = () => {
   }, [isSearchMode, normalizedSearchQuery, sidebarItems]);
 
 
-  const handleDelete = async (itemId: string) => {
-    console.debug('Deleting item:', itemId);
-    const payload = {
-      meetingId: itemId
-    };
+  const deleteMeetingIds = useCallback(async (idsToDelete: string[]) => {
+    const successfulIds: string[] = [];
+    let failureCount = 0;
 
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('api_delete_meeting', {
-        meetingId: itemId,
+    for (const id of idsToDelete) {
+      try {
+        await invoke('api_delete_meeting', { meetingId: id });
+        Analytics.trackMeetingDeleted(id);
+        successfulIds.push(id);
+      } catch (error) {
+        failureCount++;
+        console.error(`Failed to delete meeting ${id}:`, error);
+      }
+    }
+
+    if (successfulIds.length > 0) {
+      setMeetings(meetings.filter((m: CurrentMeeting) => !successfulIds.includes(m.id)));
+
+      setSelectedMeetingIds(prev => {
+        const next = new Set(prev);
+        successfulIds.forEach((id) => next.delete(id));
+        return next;
       });
-      console.debug('Meeting deleted successfully');
-      const updatedMeetings = meetings.filter((m: CurrentMeeting) => m.id !== itemId);
-      setMeetings(updatedMeetings);
 
-      // Track meeting deletion
-      Analytics.trackMeetingDeleted(itemId);
-
-      // Show success toast
-      toast.success("Meeting deleted successfully", {
-        description: "All associated data has been removed"
-      });
-
-      // If deleting the active meeting, navigate to home
-      if (currentMeeting?.id === itemId) {
+      if (currentMeeting?.id && successfulIds.includes(currentMeeting.id)) {
         setCurrentMeeting({ id: 'intro-call', title: '+ New Call' });
         router.push('/');
       }
-    } catch (error) {
-      console.error('Failed to delete meeting:', error);
+    }
+
+    return { successCount: successfulIds.length, failureCount };
+  }, [currentMeeting?.id, meetings, router, setCurrentMeeting, setMeetings]);
+
+  const handleDelete = async (itemId: string) => {
+    console.debug('Deleting item:', itemId);
+    const { successCount, failureCount } = await deleteMeetingIds([itemId]);
+
+    if (successCount === 1) {
+      console.debug('Meeting deleted successfully');
+      toast.success("Meeting deleted successfully", {
+        description: "All associated data has been removed"
+      });
+    } else if (failureCount > 0) {
       toast.error("Failed to delete meeting", {
-        description: error instanceof Error ? error.message : String(error)
+        description: "Please try again."
       });
     }
   };
@@ -480,33 +514,37 @@ const Sidebar: React.FC = () => {
   // Delete all currently-selected meetings sequentially, then clean up state
   const handleBulkDelete = async () => {
     const idsToDelete = Array.from(selectedMeetingIds);
-    let successCount = 0;
-
-    for (const id of idsToDelete) {
-      try {
-        await invoke('api_delete_meeting', { meetingId: id });
-        Analytics.trackMeetingDeleted(id);
-        successCount++;
-      } catch (error) {
-        console.error(`Failed to delete meeting ${id}:`, error);
-      }
-    }
-
-    // Remove deleted meetings from local state
-    setMeetings(meetings.filter((m: CurrentMeeting) => !idsToDelete.includes(m.id)));
-
-    // If the currently-open meeting was deleted, navigate home
-    if (currentMeeting?.id && idsToDelete.includes(currentMeeting.id)) {
-      setCurrentMeeting({ id: 'intro-call', title: '+ New Call' });
-      router.push('/');
-    }
+    const { successCount, failureCount } = await deleteMeetingIds(idsToDelete);
 
     clearSelection();
     setBulkDeleteModalOpen(false);
 
-    toast.success(`${successCount} meeting${successCount !== 1 ? 's' : ''} deleted`, {
-      description: 'All associated data has been removed',
-    });
+    if (successCount > 0) {
+      toast.success(`${successCount} meeting${successCount !== 1 ? 's' : ''} deleted`, {
+        description: 'All associated data has been removed',
+      });
+    }
+
+    if (failureCount > 0) {
+      toast.error(`${failureCount} meeting${failureCount !== 1 ? 's' : ''} could not be deleted`);
+    }
+  };
+
+  const handleDateDeleteConfirm = async () => {
+    const { dateLabel, meetingIds } = dateDeleteModalState;
+    const { successCount, failureCount } = await deleteMeetingIds(meetingIds);
+
+    setDateDeleteModalState({ isOpen: false, dateLabel: null, meetingIds: [] });
+
+    if (successCount > 0) {
+      toast.success(`${successCount} meeting${successCount !== 1 ? 's' : ''} from ${dateLabel} deleted`, {
+        description: 'All associated data has been removed',
+      });
+    }
+
+    if (failureCount > 0) {
+      toast.error(`${failureCount} meeting${failureCount !== 1 ? 's' : ''} from ${dateLabel} could not be deleted`);
+    }
   };
 
   // Handle modal editing of meeting names
@@ -1126,14 +1164,49 @@ const Sidebar: React.FC = () => {
                         )}>
                           {sortedDates.map((dateLabel) => {
                             const dateMeetings = groupsByDate.get(dateLabel)!;
+                            const dateMeetingIds = dateMeetings.map((m) => m.id);
+                            const allDateMeetingsSelected =
+                              dateMeetingIds.length > 0 && dateMeetingIds.every((id) => selectedMeetingIds.has(id));
+                            const someDateMeetingsSelected =
+                              dateMeetingIds.some((id) => selectedMeetingIds.has(id));
                             const isGroupExpanded = getDateGroupExpanded(dateLabel);
                             return (
                               <div key={dateLabel} className="rounded-md">
                                 {/* Date header row */}
                                 <div
-                                  className="flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none hover:bg-white/5 transition-colors"
+                                  className={cn(
+                                    "group flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none transition-colors",
+                                    someDateMeetingsSelected ? "bg-emerald-500/10 hover:bg-emerald-500/15" : "hover:bg-white/5"
+                                  )}
                                   onClick={() => toggleDateGroup(dateLabel)}
                                 >
+                                  <button
+                                    type="button"
+                                    className="flex-shrink-0 p-0.5 rounded hover:bg-emerald-500/15"
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => toggleDateSelection(dateMeetingIds, e)}
+                                    aria-label={
+                                      allDateMeetingsSelected
+                                        ? `Unselect all meetings from ${dateLabel}`
+                                        : `Select all meetings from ${dateLabel}`
+                                    }
+                                    title={
+                                      allDateMeetingsSelected
+                                        ? `Unselect all meetings from ${dateLabel}`
+                                        : `Select all meetings from ${dateLabel}`
+                                    }
+                                  >
+                                    {allDateMeetingsSelected ? (
+                                      <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
+                                    ) : (
+                                      <Square className={cn(
+                                        "w-3.5 h-3.5 transition-opacity",
+                                        someDateMeetingsSelected
+                                          ? "opacity-100 text-emerald-400"
+                                          : "opacity-0 group-hover:opacity-100 text-foreground/30"
+                                      )} />
+                                    )}
+                                  </button>
                                   <span className="text-zinc-500 flex-shrink-0">
                                     {isGroupExpanded
                                       ? <ChevronDown className="h-3 w-3" />
@@ -1142,6 +1215,23 @@ const Sidebar: React.FC = () => {
                                   <span className="flex-1 text-sm font-medium text-zinc-300 truncate">{dateLabel}</span>
                                   {/* Meeting count badge */}
                                   <span className="text-xs text-zinc-500 flex-shrink-0 ml-1">{dateMeetings.length}</span>
+                                  <button
+                                    type="button"
+                                    className="p-0.5 rounded text-zinc-500 hover:text-red-400 hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDateDeleteModalState({
+                                        isOpen: true,
+                                        dateLabel,
+                                        meetingIds: dateMeetingIds,
+                                      });
+                                    }}
+                                    aria-label={`Delete all meetings from ${dateLabel}`}
+                                    title={`Delete all meetings from ${dateLabel}`}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
 
                                 {/* Meeting rows inside the date group */}
@@ -1153,23 +1243,19 @@ const Sidebar: React.FC = () => {
                                     {dateMeetings.map((m) => {
                                       const isActive = currentMeeting?.id === m.id;
                                       return (
-                                        <div
+                                        <SidebarMeetingRow
                                           key={m.id}
-                                          className={`flex items-center px-2 py-1.5 my-0.5 rounded-md text-sm cursor-pointer transition-colors ${
-                                            isActive
-                                              ? 'bg-emerald-500/20 text-emerald-100 font-medium'
-                                              : 'hover:bg-white/5 text-foreground/85'
-                                          }`}
-                                          onClick={() => {
+                                          title={m.title}
+                                          isActive={isActive}
+                                          isSelected={selectedMeetingIds.has(m.id)}
+                                          onToggleSelect={(e) => toggleMeetingSelection(m.id, e)}
+                                          onNavigate={() => {
                                             setCurrentMeeting({ id: m.id, title: m.title });
                                             router.push(`/meeting-details?id=${m.id}`);
                                           }}
-                                        >
-                                          <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full mr-2 bg-white/10">
-                                            <File className="w-3 h-3 text-foreground/65" />
-                                          </div>
-                                          <span className="flex-1 truncate">{m.title}</span>
-                                        </div>
+                                          onEdit={() => handleEditStart(m.id, m.title)}
+                                          onDelete={() => setDeleteModalState({ isOpen: true, itemId: m.id })}
+                                        />
                                       );
                                     })}
                                   </div>
@@ -1253,6 +1339,14 @@ const Sidebar: React.FC = () => {
         text={`Delete ${selectedMeetingIds.size} meeting${selectedMeetingIds.size !== 1 ? 's' : ''}? This action cannot be undone.`}
         onConfirm={handleBulkDelete}
         onCancel={() => setBulkDeleteModalOpen(false)}
+      />
+
+      {/* Confirmation Modal for deleting a whole By Date group */}
+      <ConfirmationModal
+        isOpen={dateDeleteModalState.isOpen}
+        text={`Delete ${dateDeleteModalState.meetingIds.length} meeting${dateDeleteModalState.meetingIds.length !== 1 ? 's' : ''} from ${dateDeleteModalState.dateLabel}? This action cannot be undone.`}
+        onConfirm={handleDateDeleteConfirm}
+        onCancel={() => setDateDeleteModalState({ isOpen: false, dateLabel: null, meetingIds: [] })}
       />
 
       {/* Edit Meeting Title Modal */}
@@ -1340,6 +1434,75 @@ function SearchMeetingRow({
   );
 }
 
+
+// ---------------------------------------------------------------------------
+// Helper: non-draggable meeting row used by virtual sections such as By Date
+// ---------------------------------------------------------------------------
+
+interface SidebarMeetingRowProps {
+  title: string;
+  isActive: boolean;
+  isSelected?: boolean;
+  onToggleSelect: (e: React.MouseEvent) => void;
+  onNavigate: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+function SidebarMeetingRow({
+  title,
+  isActive,
+  isSelected,
+  onToggleSelect,
+  onNavigate,
+  onEdit,
+  onDelete,
+}: SidebarMeetingRowProps) {
+  return (
+    <div
+      className={`flex items-center px-2 py-1.5 my-0.5 rounded-md text-sm cursor-pointer group transition-colors ${
+        isSelected
+          ? 'bg-emerald-500/10 text-emerald-100'
+          : isActive
+          ? 'bg-emerald-500/20 text-emerald-100 font-medium'
+          : 'hover:bg-white/5 text-foreground/85'
+      }`}
+      onClick={onNavigate}
+    >
+      <div
+        className="flex-shrink-0 mr-1.5"
+        onClick={onToggleSelect}
+      >
+        {isSelected ? (
+          <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
+        ) : (
+          <Square className="w-3.5 h-3.5 text-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
+      </div>
+
+      <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full mr-2 bg-white/10">
+        <File className="w-3 h-3 text-foreground/65" />
+      </div>
+      <span className="flex-1 break-words truncate">{title}</span>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="p-0.5 rounded hover:text-emerald-300 hover:bg-emerald-500/15"
+          aria-label="Edit meeting title"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="p-0.5 rounded hover:text-red-400 hover:bg-red-900/20"
+          aria-label="Delete meeting"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Helper: draggable meeting row

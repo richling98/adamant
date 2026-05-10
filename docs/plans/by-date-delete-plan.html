@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="8">
+  <title>By Date Delete Feature Plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel-2: #1f2430;
+      --text: #eef2f7;
+      --muted: #a3adbd;
+      --line: #303746;
+      --accent: #34d399;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --done: #22c55e;
+      --shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main { max-width: 980px; margin: 0 auto; padding: 48px 28px 72px; }
+    header { margin-bottom: 28px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+    h1 { margin: 0 0 10px; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.04; letter-spacing: 0; }
+    h2 { margin: 34px 0 12px; font-size: 1.2rem; letter-spacing: 0; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    ul { margin: 0; padding-left: 22px; }
+    li { margin: 8px 0; color: var(--muted); }
+    strong { color: var(--text); }
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: #0b0d12;
+      color: #d8ffe8;
+      font-size: 0.92em;
+    }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 0.85rem;
+    }
+    .progress {
+      color: var(--warning);
+      border-color: rgba(245, 158, 11, 0.35);
+      background: rgba(245, 158, 11, 0.08);
+    }
+    .card {
+      margin: 18px 0;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .decision {
+      border-left: 3px solid var(--accent);
+      padding-left: 14px;
+      margin: 12px 0;
+    }
+    .task {
+      margin: 14px 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      overflow: hidden;
+    }
+    .task h3 {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0;
+      padding: 14px 16px;
+      font-size: 1rem;
+      letter-spacing: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .task ul { padding: 12px 18px 16px 42px; }
+    .status {
+      display: inline-flex;
+      width: 12px;
+      height: 12px;
+      flex: 0 0 12px;
+      border-radius: 3px;
+      background: var(--danger);
+    }
+    .status.in-progress { background: var(--warning); }
+    .status.done { background: var(--done); }
+    .task.in-progress { border-color: rgba(245, 158, 11, 0.38); }
+    .task.done { border-color: rgba(34, 197, 94, 0.34); }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .legend span { color: var(--muted); font-size: 0.92rem; }
+    @media (max-width: 640px) {
+      main { padding: 32px 18px 56px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>By Date Delete Feature Plan</h1>
+      <p>Add date-level selection and deletion controls to the existing By Date sidebar groups.</p>
+      <div class="meta">
+        <span class="pill progress">Overall progress: 100%</span>
+        <span class="pill">Current status: complete and manually tested</span>
+        <span class="pill">Last updated: May 9, 2026 9:16 PM</span>
+        <span class="pill">Primary file: <code>frontend/src/components/Sidebar/index.tsx</code></span>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>TLDR</h2>
+      <p>The feature should reuse the current meeting bulk-delete system. A selected date will select every meeting ID in that date group, so the existing bottom delete bar and delete API can do the actual work.</p>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>Key Changes</h2>
+        <ul>
+          <li>Hovering a date row in <strong>By Date</strong> reveals a checkbox.</li>
+          <li>Checking a date selects every meeting under that date.</li>
+          <li>Users can check multiple dates and bulk-delete all selected meetings.</li>
+          <li>A date row gets a trash action for deleting that one whole date group.</li>
+          <li>Individual meeting rows inside By Date get the usual checkbox and delete controls.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Desired End Result</h2>
+        <ul>
+          <li>Delete all meetings from a date like <strong>5/9/2026</strong> in one action.</li>
+          <li>Select several dates, then delete all meetings across those dates.</li>
+          <li>Keep expand/collapse and click-to-open behavior working normally.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Critical Decisions</h2>
+      <div class="decision">
+        <p><strong>Reuse <code>selectedMeetingIds</code> as the source of truth.</strong> Selecting a date adds or removes all meeting IDs for that date, avoiding a second selection system.</p>
+      </div>
+      <div class="decision">
+        <p><strong>Delete by meeting IDs, not by date string.</strong> The date label is just UI grouping; the real records are meetings.</p>
+      </div>
+      <div class="decision">
+        <p><strong>Keep backend unchanged initially.</strong> Existing <code>api_delete_meeting</code> already deletes related transcript and summary data safely.</p>
+      </div>
+      <div class="decision">
+        <p><strong>Add separate date-delete confirmation state.</strong> Date deletion needs text like “Delete all N meetings from DATE?” rather than the current single-meeting prompt.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Tasks</h2>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 1: Refactor By Date Group Data</h3>
+        <ul>
+          <li>Keep the existing <code>groupsByDate</code> logic.</li>
+          <li>For each date group, derive <code>dateMeetingIds</code>.</li>
+          <li>Derive all-selected, none-selected, and optional partial-selected state.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 2: Add Date Header Controls</h3>
+        <ul>
+          <li>Make each date header row a hover group.</li>
+          <li>Add a checkbox icon hidden until hover unless selected.</li>
+          <li>Add a trash icon for single-date deletion.</li>
+          <li>Use <code>stopPropagation()</code> so controls do not expand or collapse the date group.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 3: Implement Date Selection Logic</h3>
+        <ul>
+          <li>Add <code>toggleDateSelection(dateMeetingIds, event)</code>.</li>
+          <li>If every meeting in the date is selected, unselect them.</li>
+          <li>Otherwise add every meeting ID from that date to <code>selectedMeetingIds</code>.</li>
+          <li>Keep Escape-to-clear behavior unchanged.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 4: Support Single Date Group Delete</h3>
+        <ul>
+          <li>Add state like <code>dateDeleteModalState</code>.</li>
+          <li>Open confirmation text like <code>Delete all N meetings from DATE?</code>.</li>
+          <li>On confirm, delete all meeting IDs in that date group.</li>
+          <li>Navigate home if the active meeting was deleted.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 5: Reuse Bulk Delete</h3>
+        <ul>
+          <li>Keep the existing bottom selection bar.</li>
+          <li>Let selected date groups populate <code>selectedMeetingIds</code>.</li>
+          <li>Keep the label as <code>N meetings selected</code> to handle mixed date and row selections clearly.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 6: Add Meeting Row Controls Inside By Date</h3>
+        <ul>
+          <li>Reuse <code>DraggableMeetingRow</code> or create a non-draggable shared row if needed.</li>
+          <li>Pass selection, edit, delete, and navigation handlers.</li>
+          <li>Preserve click-to-open behavior.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 7: Extract Shared Delete Helper</h3>
+        <ul>
+          <li>Move the bulk delete loop into a helper like <code>deleteMeetingIds(ids)</code>.</li>
+          <li>Use it from bulk delete and single date group delete.</li>
+          <li>Keep single meeting delete as-is unless routing through the helper stays clean.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 8: Verification</h3>
+        <ul>
+          <li><strong>Done:</strong> Run <code>npm exec tsc -- --noEmit</code>.</li>
+          <li><strong>Done:</strong> Run <code>git diff --check</code>.</li>
+          <li><strong>Done:</strong> Manually test date row hover, date selection, multi-date bulk delete, single-date delete, active-meeting navigation, expand/collapse, and individual meeting row behavior in the app.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Status Legend</h2>
+      <div class="legend">
+        <span>🟥 To Do</span>
+        <span>🟨 In Progress</span>
+        <span>🟩 Done</span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
