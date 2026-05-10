@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meeting Note Created On Plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel-2: #1f2430;
+      --text: #eef2f7;
+      --muted: #a3adbd;
+      --line: #303746;
+      --accent: #34d399;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --done: #22c55e;
+      --shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main { max-width: 980px; margin: 0 auto; padding: 48px 28px 72px; }
+    header { margin-bottom: 28px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+    h1 { margin: 0 0 10px; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.04; letter-spacing: 0; }
+    h2 { margin: 34px 0 12px; font-size: 1.2rem; letter-spacing: 0; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    ul { margin: 0; padding-left: 22px; }
+    li { margin: 8px 0; color: var(--muted); }
+    strong { color: var(--text); }
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: #0b0d12;
+      color: #d8ffe8;
+      font-size: 0.92em;
+    }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 0.85rem;
+    }
+    .progress {
+      color: var(--done);
+      border-color: rgba(34, 197, 94, 0.35);
+      background: rgba(34, 197, 94, 0.08);
+    }
+    .card {
+      margin: 18px 0;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .decision {
+      border-left: 3px solid var(--accent);
+      padding-left: 14px;
+      margin: 12px 0;
+    }
+    .warning {
+      border-left: 3px solid var(--warning);
+      padding-left: 14px;
+      margin: 12px 0;
+    }
+    .task {
+      margin: 14px 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      overflow: hidden;
+    }
+    .task h3 {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0;
+      padding: 14px 16px;
+      font-size: 1rem;
+      letter-spacing: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .task ul { padding: 12px 18px 16px 42px; }
+    .status {
+      display: inline-flex;
+      width: 12px;
+      height: 12px;
+      flex: 0 0 12px;
+      border-radius: 3px;
+      background: var(--danger);
+    }
+    .status.done { background: var(--done); }
+    .status.in-progress { background: var(--warning); }
+    .task.done { border-color: rgba(34, 197, 94, 0.34); }
+    .task.in-progress { border-color: rgba(245, 158, 11, 0.38); }
+    .mock {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0b0d12;
+      margin-top: 8px;
+    }
+    .mock-title { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+    .mock-date { font-size: 0.9rem; color: var(--muted); white-space: nowrap; }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .legend span { color: var(--muted); font-size: 0.92rem; }
+    @media (max-width: 640px) {
+      main { padding: 32px 18px 56px; }
+      .mock { display: flex; flex-direction: column; gap: 2px; }
+      .mock-date { white-space: normal; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Meeting Note “Created On” Plan</h1>
+      <p>Add the note creation date next to “My Notes” on the meeting notes page.</p>
+      <div class="meta">
+        <span class="pill progress">Overall progress: 100%</span>
+        <span class="pill">Status: complete and manually reviewed</span>
+        <span class="pill">Created: May 9, 2026</span>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>Answer: Is This Data Already Stored?</h2>
+      <p><strong>Yes.</strong> Creation date data already exists.</p>
+      <ul>
+        <li>The <code>meetings</code> table has <code>created_at</code> for every meeting note, and the meeting details page already receives it as <code>meeting.created_at</code>.</li>
+        <li>The <code>meeting_notes</code> table also has <code>created_at</code>, but <code>api_get_note</code> currently returns only note content and <code>updated_at</code>.</li>
+      </ul>
+      <div class="warning">
+        <p><strong>Recommendation:</strong> use <code>meeting.created_at</code> for this feature. It is already available for all prior meeting notes, so retroactive support needs no data migration.</p>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>TLDR</h2>
+        <p>Pass the already-loaded meeting creation timestamp into <code>NotesPanel</code>, format it for display, and render it next to the “My Notes” heading.</p>
+      </div>
+
+      <div class="card">
+        <h2>Mock Result</h2>
+        <div class="mock">
+          <span class="mock-title">My Notes</span>
+          <span class="mock-date">created on: May 9, 2026</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Desired End Result</h2>
+      <ul>
+        <li>Every existing meeting note shows its original created date next to <strong>My Notes</strong>.</li>
+        <li>Every new meeting note shows the correct created date as soon as the page has a real persisted meeting record.</li>
+        <li>No database migration is required because prior meeting records already have creation timestamps.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Critical Decisions</h2>
+      <div class="decision">
+        <p><strong>Use <code>meetings.created_at</code>, not <code>meeting_notes.created_at</code>.</strong> The visible page is a meeting note page, and the meeting row exists before note content is saved. This gives consistent retroactive coverage.</p>
+      </div>
+      <div class="decision">
+        <p><strong>Keep backend unchanged.</strong> The needed timestamp already flows through <code>MeetingDetailsResponse</code> into <code>PageContent</code>.</p>
+      </div>
+      <div class="decision">
+        <p><strong>Format in the frontend.</strong> Use local date formatting, matching the app’s existing By Date/sidebar behavior.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Tasks</h2>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 1: Add Created Date Prop to NotesPanel</h3>
+        <ul>
+          <li>Add an optional <code>createdAt</code> prop to <code>NotesPanelProps</code>.</li>
+          <li>Pass <code>meeting.created_at</code> from <code>frontend/src/app/meeting-details/page-content.tsx</code>.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 2: Format the Display Date</h3>
+        <ul>
+          <li>Add a small helper in <code>NotesPanel.tsx</code> to format an ISO timestamp as a readable local date.</li>
+          <li>Handle missing or invalid timestamps gracefully by hiding the label.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 3: Render Text Beside “My Notes”</h3>
+        <ul>
+          <li>Update the header row from just <code>My Notes</code> to a title plus muted metadata text.</li>
+          <li>Use text exactly like <code>created on: May 9, 2026</code>.</li>
+          <li>Make it responsive so it wraps cleanly on narrow windows.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 4: Ensure New Notes Update After Autosave</h3>
+        <ul>
+          <li>When <code>?id=new</code>, the page currently seeds <code>created_at</code> with the current time.</li>
+          <li>After autosave creates the real meeting ID, keep or refresh <code>created_at</code> from the persisted meeting data.</li>
+          <li>Prefer preserving the existing temporary timestamp until the normal metadata refetch replaces it.</li>
+        </ul>
+      </article>
+
+      <article class="task done">
+        <h3><span class="status done"></span>Step 5: Verification</h3>
+        <ul>
+          <li><strong>Done:</strong> Run <code>npm exec tsc -- --noEmit</code>.</li>
+          <li><strong>Done:</strong> Run <code>git diff --check</code>.</li>
+          <li><strong>Done:</strong> Open an old meeting note and confirm the displayed date matches its sidebar/By Date grouping.</li>
+          <li><strong>Done:</strong> Create a new meeting note and confirm the date appears next to <strong>My Notes</strong>.</li>
+          <li><strong>Done:</strong> Confirm no layout overlap with Copy/save status controls.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Files Expected To Change</h2>
+      <ul>
+        <li><code>frontend/src/components/NotesPanel.tsx</code></li>
+        <li><code>frontend/src/app/meeting-details/page-content.tsx</code></li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Status Legend</h2>
+      <div class="legend">
+        <span>🟥 To Do</span>
+        <span>🟨 In Progress</span>
+        <span>🟩 Done</span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

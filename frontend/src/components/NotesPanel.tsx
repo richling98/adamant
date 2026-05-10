@@ -19,6 +19,7 @@ import {
 
 interface NotesPanelProps {
   meetingId: string;
+  createdAt?: string;
   isNewNote: boolean;
   draftMeetingId: string | null;
   onMeetingCreated?: (actualMeetingId: string) => void;
@@ -72,8 +73,22 @@ function formatTimestamp(date: Date): string {
   return `${daysAgo}d ago`;
 }
 
+function formatCreatedDate(timestamp?: string): string | null {
+  if (!timestamp) return null;
+
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 export const NotesPanel = forwardRef<NotesPanelRef, NotesPanelProps>(function NotesPanel({
   meetingId,
+  createdAt,
   isNewNote,
   draftMeetingId,
   onMeetingCreated,
@@ -98,6 +113,7 @@ export const NotesPanel = forwardRef<NotesPanelRef, NotesPanelProps>(function No
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [noteVersion, setNoteVersion] = useState<number>(1);
   const [actualMeetingId, setActualMeetingId] = useState<string | null>(null);
+  const formattedCreatedDate = formatCreatedDate(createdAt);
   const editorRef = useRef<any>(null);
   const justSavedRef = useRef<boolean>(false); // Track if we just saved to avoid reload
   const editorContentRef = useRef<Block[] | null>(null); // Preserve content across re-renders
@@ -579,7 +595,14 @@ export const NotesPanel = forwardRef<NotesPanelRef, NotesPanelProps>(function No
       {/* Header */}
       <div className={MEETING_PANE_HEADER_CLASS}>
         <div className={MEETING_PANE_HEADER_ROW_CLASS}>
-          <h2 className={MEETING_PANE_TITLE_CLASS}>My Notes</h2>
+          <div className="min-w-0 flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+            <h2 className={MEETING_PANE_TITLE_CLASS}>My Notes</h2>
+            {formattedCreatedDate && (
+              <span className="text-sm text-foreground/55 whitespace-nowrap">
+                created on: {formattedCreatedDate}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2 shrink-0">
             {/* Copy notes to clipboard */}
             <Button

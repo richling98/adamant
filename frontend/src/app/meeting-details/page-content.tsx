@@ -484,6 +484,7 @@ export default function PageContent({
         <NotesPanel
           ref={notesPanelRef}
           meetingId={meeting.id}
+          createdAt={meeting.created_at}
           isNewNote={isNewNote}
           draftMeetingId={draftMeetingId}
           onMeetingCreated={onMeetingCreated}
