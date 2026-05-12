@@ -60,7 +60,7 @@ export function useRecordingStart(
 
   const { clearTranscripts, setMeetingTitle } = useTranscripts();
   const { setIsMeetingActive } = useSidebar();
-  const { selectedDevices } = useConfig();
+  const { selectedDevices, transcriptModelConfig } = useConfig();
   const { setStatus } = useRecordingState();
 
   // Generate meeting title with timestamp
@@ -128,10 +128,12 @@ export function useRecordingStart(
         }
       }
 
-      console.debug('Microphone permission confirmed - checking Parakeet model status');
+      console.debug('Microphone permission confirmed - checking transcription model status');
 
-      // Check if Parakeet transcription model is ready before starting
-      const parakeetReady = await checkParakeetReady();
+      // Local Parakeet needs a downloaded model before recording starts.
+      // Remote providers are validated by the Rust recording path.
+      const shouldCheckParakeet = transcriptModelConfig.provider === 'parakeet';
+      const parakeetReady = shouldCheckParakeet ? await checkParakeetReady() : true;
       if (!parakeetReady) {
         const isDownloading = await checkIfModelDownloading();
         if (isDownloading) {
@@ -152,7 +154,7 @@ export function useRecordingStart(
         return;
       }
 
-      console.debug('Parakeet ready - setting up meeting title and state');
+      console.debug('Transcription model ready - setting up meeting title and state');
 
       const randomTitle = generateMeetingTitle();
       setMeetingTitle(randomTitle);
@@ -189,7 +191,7 @@ export function useRecordingStart(
       // Re-throw so RecordingControls can handle device-specific errors
       throw error;
     }
-  }, [generateMeetingTitle, setMeetingTitle, setIsRecording, clearTranscripts, setIsMeetingActive, checkParakeetReady, checkIfModelDownloading, selectedDevices, showModal, setStatus]);
+  }, [generateMeetingTitle, setMeetingTitle, setIsRecording, clearTranscripts, setIsMeetingActive, checkParakeetReady, checkIfModelDownloading, selectedDevices, transcriptModelConfig.provider, showModal, setStatus]);
 
   // Check for autoStartRecording flag and start recording automatically
   useEffect(() => {
@@ -201,8 +203,9 @@ export function useRecordingStart(
           setIsAutoStarting(true);
           sessionStorage.removeItem('autoStartRecording'); // Clear the flag
 
-          // Check if Parakeet transcription model is ready before starting
-          const parakeetReady = await checkParakeetReady();
+          // Local Parakeet needs a downloaded model before recording starts.
+          const shouldCheckParakeet = transcriptModelConfig.provider === 'parakeet';
+          const parakeetReady = shouldCheckParakeet ? await checkParakeetReady() : true;
           if (!parakeetReady) {
             const isDownloading = await checkIfModelDownloading();
             if (isDownloading) {
@@ -276,6 +279,7 @@ export function useRecordingStart(
     setIsMeetingActive,
     checkParakeetReady,
     checkIfModelDownloading,
+    transcriptModelConfig.provider,
     showModal,
     setStatus,
   ]);
@@ -288,11 +292,12 @@ export function useRecordingStart(
         return;
       }
 
-      console.debug('Direct start from sidebar - checking Parakeet model status');
+      console.debug('Direct start from sidebar - checking transcription model status');
       setIsAutoStarting(true);
 
-      // Check if Parakeet transcription model is ready before starting
-      const parakeetReady = await checkParakeetReady();
+      // Local Parakeet needs a downloaded model before recording starts.
+      const shouldCheckParakeet = transcriptModelConfig.provider === 'parakeet';
+      const parakeetReady = shouldCheckParakeet ? await checkParakeetReady() : true;
       if (!parakeetReady) {
         const isDownloading = await checkIfModelDownloading();
         if (isDownloading) {
@@ -367,6 +372,7 @@ export function useRecordingStart(
     setIsMeetingActive,
     checkParakeetReady,
     checkIfModelDownloading,
+    transcriptModelConfig.provider,
     showModal,
     setStatus,
   ]);

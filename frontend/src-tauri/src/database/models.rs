@@ -143,4 +143,7 @@ pub struct TranscriptSetting {
     #[sqlx(rename = "openaiApiKey")]
     #[serde(rename = "openaiApiKey")]
     pub openai_api_key: Option<String>,
+    #[sqlx(rename = "nvidiaInferenceApiKey")]
+    #[serde(rename = "nvidiaInferenceApiKey")]
+    pub nvidia_inference_api_key: Option<String>,
 }

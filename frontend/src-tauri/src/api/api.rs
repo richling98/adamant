@@ -856,6 +856,30 @@ pub async fn api_save_transcript_config<R: Runtime>(
     );
     let pool = state.db_manager.pool();
 
+    if provider == "nvidia-inference" {
+        let key_to_test = match api_key.as_deref().map(str::trim).filter(|key| !key.is_empty()) {
+            Some(key) => key.to_string(),
+            None => SettingsRepository::get_transcript_api_key(pool, &provider)
+                .await
+                .map_err(|e| format!("Failed to load stored NVIDIA inference API key: {}", e))?
+                .ok_or_else(|| {
+                    "NVIDIA inference transcription requires an API key before it can be saved."
+                        .to_string()
+                })?,
+        };
+
+        let provider_probe = crate::audio::transcription::NvidiaInferenceProvider::new(
+            key_to_test,
+            model.clone(),
+        )
+        .map_err(|e| format!("Failed to initialize NVIDIA inference probe: {}", e))?;
+
+        provider_probe
+            .test_connection()
+            .await
+            .map_err(|e| format!("NVIDIA inference transcription test failed: {}", e))?;
+    }
+
     if let Err(e) = SettingsRepository::save_transcript_config(pool, &provider, &model).await {
         log_error!("Failed to save transcript config: {}", e);
         return Err(e.to_string());

@@ -24,7 +24,7 @@ pub struct SaveTranscriptConfigRequest {
 
 pub struct SettingsRepository;
 
-// Transcript providers: localWhisper, deepgram, elevenLabs, groq, openai
+// Transcript providers: localWhisper, parakeet, deepgram, elevenLabs, groq, openai, nvidia-inference
 // Summary providers: openai, claude, ollama, groq, openrouter, nvidia-inference
 // NOTE: Handle data exclusion in the higher layer as this is database abstraction layer(using SELECT *)
 
@@ -208,6 +208,7 @@ impl SettingsRepository {
             "elevenLabs" => "elevenLabsApiKey",
             "groq" => "groqApiKey",
             "openai" => "openaiApiKey",
+            "nvidia-inference" => "nvidiaInferenceApiKey",
             _ => {
                 return Err(sqlx::Error::Protocol(
                     format!("Invalid provider: {}", provider).into(),
@@ -240,6 +241,7 @@ impl SettingsRepository {
             "elevenLabs" => "elevenLabsApiKey",
             "groq" => "groqApiKey",
             "openai" => "openaiApiKey",
+            "nvidia-inference" => "nvidiaInferenceApiKey",
             _ => {
                 return Err(sqlx::Error::Protocol(
                     format!("Invalid provider: {}", provider).into(),
@@ -251,7 +253,11 @@ impl SettingsRepository {
             "SELECT {} FROM transcript_settings WHERE id = '1' LIMIT 1",
             api_key_column
         );
-        let api_key = sqlx::query_scalar(&query).fetch_optional(pool).await?;
+        let api_key: Option<String> = sqlx::query_scalar(&query).fetch_optional(pool).await?;
+        if provider == "nvidia-inference" && api_key.as_ref().map(|key| key.trim().is_empty()).unwrap_or(true) {
+            return Self::get_api_key(pool, provider).await;
+        }
+
         Ok(api_key)
     }
 
@@ -429,7 +435,8 @@ mod tests {
                 deepgramApiKey TEXT,
                 elevenLabsApiKey TEXT,
                 groqApiKey TEXT,
-                openaiApiKey TEXT
+                openaiApiKey TEXT,
+                nvidiaInferenceApiKey TEXT
             )
             "#,
         )
