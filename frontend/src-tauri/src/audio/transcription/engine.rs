@@ -7,6 +7,11 @@ use log::{info, warn};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime};
 
+const NVIDIA_INFERENCE_TRANSCRIPTION_MODELS: &[&str] = &[
+    "nvidia/nvidia/parakeet-1-1b-rnnt-multilingual",
+    "nvidia/nvidia/parakeet-1-1b-ctc-en-us",
+];
+
 // ============================================================================
 // TRANSCRIPTION ENGINE ENUM
 // ============================================================================
@@ -137,10 +142,38 @@ pub async fn validate_transcription_model_ready<R: Runtime>(app: &AppHandle<R>) 
                 }
             }
         }
+        "nvidia-inference" => {
+            info!("🔍 Validating NVIDIA inference transcription config...");
+
+            if !NVIDIA_INFERENCE_TRANSCRIPTION_MODELS.contains(&config.model.as_str()) {
+                return Err(format!(
+                    "NVIDIA inference transcription model '{}' is not supported.",
+                    config.model
+                ));
+            }
+
+            let state = app.state::<crate::state::AppState>();
+            let pool = state.db_manager.pool();
+            let has_key = crate::database::repositories::setting::SettingsRepository::has_transcript_api_key(
+                pool,
+                "nvidia-inference",
+            )
+            .await
+            .map_err(|e| format!("Failed to check NVIDIA inference API key: {}", e))?;
+
+            if !has_key {
+                return Err(
+                    "NVIDIA inference transcription requires an API key in Settings > AI Models."
+                        .to_string(),
+                );
+            }
+
+            Ok(())
+        }
         other => {
             warn!("❌ Unsupported transcription provider for local recording: {}", other);
             Err(format!(
-                "Provider '{}' is not supported for local transcription. Please select 'localWhisper' or 'parakeet'.",
+                "Provider '{}' is not supported for transcription. Please select 'localWhisper', 'parakeet', or 'nvidia-inference'.",
                 other
             ))
         }
@@ -216,11 +249,44 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
                 }
             }
         }
-        "localWhisper" | _ => {
+        "nvidia-inference" => {
+            info!("☁️ Initializing NVIDIA inference transcription provider");
+
+            if !NVIDIA_INFERENCE_TRANSCRIPTION_MODELS.contains(&config.model.as_str()) {
+                return Err(format!(
+                    "NVIDIA inference transcription model '{}' is not supported.",
+                    config.model
+                ));
+            }
+
+            let state = app.state::<crate::state::AppState>();
+            let pool = state.db_manager.pool();
+            let api_key = crate::database::repositories::setting::SettingsRepository::get_transcript_api_key(
+                pool,
+                "nvidia-inference",
+            )
+            .await
+            .map_err(|e| format!("Failed to load NVIDIA inference API key: {}", e))?
+            .ok_or_else(|| {
+                "NVIDIA inference transcription requires an API key in Settings > AI Models."
+                    .to_string()
+            })?;
+
+            let provider = crate::audio::transcription::NvidiaInferenceProvider::new(
+                api_key,
+                config.model,
+            )?;
+            Ok(TranscriptionEngine::Provider(Arc::new(provider)))
+        }
+        "localWhisper" => {
             info!("🎤 Initializing Whisper transcription engine");
             let whisper_engine = get_or_init_whisper(app).await?;
             Ok(TranscriptionEngine::Whisper(whisper_engine))
         }
+        other => Err(format!(
+            "Provider '{}' is not supported for transcription.",
+            other
+        )),
     }
 }
 
