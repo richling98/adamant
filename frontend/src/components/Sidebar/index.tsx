@@ -413,20 +413,27 @@ const Sidebar: React.FC = () => {
     if (!isSearchMode) return [];
 
     const seen = new Set<string>();
+    const meetingsById = new Map(meetings.map((meeting) => [meeting.id, meeting]));
+
     return searchResults
       .filter((result) => {
+        if (!meetingsById.has(result.id)) return false;
         if (seen.has(result.id)) return false;
         seen.add(result.id);
         return true;
       })
-      .map((result) => ({
-        id: result.id,
-        title: result.title,
-        type: 'file' as const,
-        matchContext: result.matchContext,
-        matchSource: result.matchSource,
-      }));
-  }, [isSearchMode, searchResults]);
+      .map((result) => {
+        const meeting = meetingsById.get(result.id);
+
+        return {
+          id: result.id,
+          title: meeting?.title ?? result.title,
+          type: 'file' as const,
+          matchContext: result.matchContext,
+          matchSource: result.matchSource,
+        };
+      });
+  }, [isSearchMode, meetings, searchResults]);
 
   const folderSearchItems = useMemo<SidebarItem[]>(() => {
     if (!isSearchMode || !normalizedSearchQuery) return [];
@@ -922,14 +929,18 @@ const Sidebar: React.FC = () => {
                         isSidebarCollapsed={isCollapsed}
                         activeMeetingId={currentMeeting?.id}
                         renderMeetingItem={(child) => (
-                          <SearchMeetingRow
+                          <SidebarMeetingRow
                             key={child.id}
-                            item={child}
+                            title={child.title}
                             isActive={currentMeeting?.id === child.id}
+                            isSelected={selectedMeetingIds.has(child.id)}
+                            onToggleSelect={(e) => toggleMeetingSelection(child.id, e)}
                             onNavigate={() => {
                               setCurrentMeeting({ id: child.id, title: child.title });
                               router.push(`/meeting-details?id=${child.id}`);
                             }}
+                            onEdit={() => handleEditStart(child.id, child.title)}
+                            onDelete={() => setDeleteModalState({ isOpen: true, itemId: child.id })}
                           />
                         )}
                       />
@@ -940,14 +951,18 @@ const Sidebar: React.FC = () => {
                     <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Meeting Notes</span>
                   </div>
                   {searchResultItems.map((item) => (
-                    <SearchMeetingRow
+                    <SidebarMeetingRow
                       key={item.id}
-                      item={item}
+                      title={item.title}
                       isActive={currentMeeting?.id === item.id}
+                      isSelected={selectedMeetingIds.has(item.id)}
+                      onToggleSelect={(e) => toggleMeetingSelection(item.id, e)}
                       onNavigate={() => {
                         setCurrentMeeting({ id: item.id, title: item.title });
                         router.push(`/meeting-details?id=${item.id}`);
                       }}
+                      onEdit={() => handleEditStart(item.id, item.title)}
+                      onDelete={() => setDeleteModalState({ isOpen: true, itemId: item.id })}
                     />
                   ))}
                 </div>
@@ -1402,38 +1417,6 @@ const Sidebar: React.FC = () => {
     </div>
   );
 };
-
-// ---------------------------------------------------------------------------
-// Helper: flat meeting row for focused search mode
-// ---------------------------------------------------------------------------
-
-function SearchMeetingRow({
-  item,
-  isActive,
-  onNavigate,
-}: {
-  item: SearchResultSidebarItem;
-  isActive: boolean;
-  onNavigate: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onNavigate}
-      className={`flex w-full items-center px-2 py-1.5 my-0.5 rounded-md text-sm text-left transition-colors ${
-        isActive
-          ? 'bg-emerald-500/20 text-emerald-100 font-medium'
-          : 'hover:bg-white/5 text-foreground/85'
-      }`}
-    >
-      <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full mr-2 bg-white/10">
-        <File className="w-3 h-3 text-foreground/65" />
-      </div>
-      <span className="flex-1 min-w-0 truncate">{item.title}</span>
-    </button>
-  );
-}
-
 
 // ---------------------------------------------------------------------------
 // Helper: non-draggable meeting row used by virtual sections such as By Date
