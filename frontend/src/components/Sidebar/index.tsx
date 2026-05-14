@@ -147,19 +147,50 @@ const Sidebar: React.FC = () => {
   };
   // Per-date-group collapse state — keyed by date label, stored in localStorage.
   // Date groups default to collapsed so the list stays compact on first load.
-  const getDateGroupExpanded = (dateLabel: string): boolean => {
+  const isDateGroupStoredExpanded = useCallback((dateLabel: string): boolean => {
     try {
       return localStorage.getItem(`sidebar-by-date-group-${dateLabel}`) === 'true';
     } catch {
       return false;
     }
-  };
-  // Dummy counter used only to trigger re-renders when a date group is toggled
-  const [dateGroupToggle, setDateGroupToggle] = useState(0);
+  }, []);
+  const [expandedDateGroups, setExpandedDateGroups] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setExpandedDateGroups((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+
+      for (const meeting of meetings) {
+        if (!meeting.created_at) continue;
+
+        const date = new Date(meeting.created_at);
+        const dateLabel = `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+
+        if (isDateGroupStoredExpanded(dateLabel) && !next.has(dateLabel)) {
+          next.add(dateLabel);
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [meetings, isDateGroupStoredExpanded]);
+
   const toggleDateGroup = (dateLabel: string) => {
-    const next = !getDateGroupExpanded(dateLabel);
-    try { localStorage.setItem(`sidebar-by-date-group-${dateLabel}`, String(next)); } catch {}
-    setDateGroupToggle((n) => n + 1); // force re-render
+    setExpandedDateGroups((prev) => {
+      const next = new Set(prev);
+      const shouldExpand = !next.has(dateLabel);
+
+      if (shouldExpand) {
+        next.add(dateLabel);
+      } else {
+        next.delete(dateLabel);
+      }
+
+      try { localStorage.setItem(`sidebar-by-date-group-${dateLabel}`, String(shouldExpand)); } catch {}
+      return next;
+    });
   };
 
   // Loading guard for unfiled note creation — prevents double-creation on rapid clicks
@@ -1134,10 +1165,6 @@ const Sidebar: React.FC = () => {
                   {(() => {
                     // Group ALL meetings (regardless of folder) by creation date M/D/YYYY,
                     // sorted descending so most-recent dates appear first.
-                    // `dateGroupToggle` is listed in the closure so React re-evaluates
-                    // when a date group is toggled (localStorage reads are not reactive).
-                    void dateGroupToggle;
-
                     const groupsByDate: Map<string, typeof meetings> = new Map();
                     for (const m of meetings) {
                       if (!m.created_at) continue;
@@ -1184,7 +1211,7 @@ const Sidebar: React.FC = () => {
                               dateMeetingIds.length > 0 && dateMeetingIds.every((id) => selectedMeetingIds.has(id));
                             const someDateMeetingsSelected =
                               dateMeetingIds.some((id) => selectedMeetingIds.has(id));
-                            const isGroupExpanded = getDateGroupExpanded(dateLabel);
+                            const isGroupExpanded = expandedDateGroups.has(dateLabel);
                             return (
                               <div key={dateLabel} className="rounded-md">
                                 {/* Date header row */}
