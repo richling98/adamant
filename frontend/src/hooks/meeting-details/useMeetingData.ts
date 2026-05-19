@@ -157,6 +157,26 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMe
     }
   }, [isTitleDirty, handleSaveMeetingTitle, aiSummary, handleSaveSummary]);
 
+  const handleRenameMeetingTitle = useCallback(async (newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+    try {
+      await invokeTauri('api_save_meeting_title', {
+        meetingId: meeting.id,
+        title: trimmed,
+      });
+      setMeetingTitle(trimmed);
+      setIsTitleDirty(false);
+      const updatedMeetings = sidebarMeetings.map((m: CurrentMeeting) =>
+        m.id === meeting.id ? { id: m.id, title: trimmed } : m
+      );
+      setMeetings(updatedMeetings);
+      setCurrentMeeting({ id: meeting.id, title: trimmed });
+    } catch (error) {
+      console.error('Failed to rename meeting title:', error);
+    }
+  }, [meeting.id, sidebarMeetings, setMeetings, setCurrentMeeting]);
+
   // Update meeting title from external source (e.g., AI summary)
   const updateMeetingTitle = useCallback((newTitle: string) => {
     console.debug('📝 Updating meeting title to:', newTitle);
@@ -189,6 +209,7 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMe
     handleSummaryChange,
     handleSaveSummary,
     handleSaveMeetingTitle,
+    handleRenameMeetingTitle,
     saveAllChanges,
     updateMeetingTitle,
   };
