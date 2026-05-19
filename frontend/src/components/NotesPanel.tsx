@@ -26,6 +26,8 @@ interface NotesPanelProps {
   onContentPresenceChange?: (hasContent: boolean) => void;
   onMarkdownChange?: (markdown: string) => void;
   onBlocksChange?: (blocks: Block[] | null) => void;
+  meetingTitle?: string;
+  onRenameTitle?: (newTitle: string) => Promise<void>;
 }
 
 export interface NotesPanelRef {
@@ -95,6 +97,8 @@ export const NotesPanel = forwardRef<NotesPanelRef, NotesPanelProps>(function No
   onContentPresenceChange,
   onMarkdownChange,
   onBlocksChange,
+  meetingTitle,
+  onRenameTitle,
 }, ref) {
   const renderCount = useRef(0);
   renderCount.current += 1;
@@ -113,6 +117,8 @@ export const NotesPanel = forwardRef<NotesPanelRef, NotesPanelProps>(function No
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [noteVersion, setNoteVersion] = useState<number>(1);
   const [actualMeetingId, setActualMeetingId] = useState<string | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [localTitle, setLocalTitle] = useState(meetingTitle ?? '');
   const formattedCreatedDate = formatCreatedDate(createdAt);
   const editorRef = useRef<any>(null);
   const justSavedRef = useRef<boolean>(false); // Track if we just saved to avoid reload
@@ -131,6 +137,24 @@ export const NotesPanel = forwardRef<NotesPanelRef, NotesPanelProps>(function No
   useEffect(() => {
     currentMeetingIdRef.current = meetingId;
   }, [meetingId]);
+
+  // Keep localTitle in sync with meetingTitle prop (e.g. when AI summary renames the meeting),
+  // but don't overwrite while the user is actively editing.
+  useEffect(() => {
+    if (!isEditingTitle) {
+      setLocalTitle(meetingTitle ?? '');
+    }
+  }, [meetingTitle, isEditingTitle]);
+
+  const handleTitleSave = useCallback(async () => {
+    const trimmed = localTitle.trim();
+    setIsEditingTitle(false);
+    if (!trimmed || trimmed === meetingTitle) {
+      setLocalTitle(meetingTitle ?? '');
+      return;
+    }
+    await onRenameTitle?.(trimmed);
+  }, [localTitle, meetingTitle, onRenameTitle]);
 
   // Track component mount/unmount
   useEffect(() => {
@@ -595,8 +619,32 @@ export const NotesPanel = forwardRef<NotesPanelRef, NotesPanelProps>(function No
       {/* Header */}
       <div className={MEETING_PANE_HEADER_CLASS}>
         <div className={MEETING_PANE_HEADER_ROW_CLASS}>
-          <div className="min-w-0 flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
-            <h2 className={MEETING_PANE_TITLE_CLASS}>My Notes</h2>
+          <div className="min-w-0 flex flex-col gap-0.5">
+            {isDraftMeeting ? (
+              <h2 className={`${MEETING_PANE_TITLE_CLASS} text-foreground/40`}>Untitled Note</h2>
+            ) : isEditingTitle ? (
+              <input
+                className="bg-white/[0.07] border border-emerald-400/60 rounded-md px-2 py-0.5 text-lg font-semibold text-foreground outline-none max-w-[280px] w-full"
+                value={localTitle}
+                autoFocus
+                onChange={(e) => setLocalTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); handleTitleSave(); }
+                  if (e.key === 'Escape') { setLocalTitle(meetingTitle ?? ''); setIsEditingTitle(false); }
+                }}
+                onBlur={handleTitleSave}
+              />
+            ) : (
+              <button
+                type="button"
+                className="group flex items-center gap-1.5 rounded px-1 -ml-1 hover:bg-white/[0.05] transition-colors text-left"
+                onClick={() => { setLocalTitle(meetingTitle ?? ''); setIsEditingTitle(true); }}
+                title="Click to rename"
+              >
+                <h2 className={MEETING_PANE_TITLE_CLASS}>{meetingTitle || 'Untitled Note'}</h2>
+                <span className="text-foreground/30 text-sm opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">✏</span>
+              </button>
+            )}
             {formattedCreatedDate && (
               <span className="text-sm text-foreground/55 whitespace-nowrap">
                 created on: {formattedCreatedDate}
