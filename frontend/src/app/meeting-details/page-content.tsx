@@ -491,6 +491,8 @@ export default function PageContent({
           onContentPresenceChange={setHasNotesContent}
           onMarkdownChange={setLiveNotesMarkdown}
           onBlocksChange={setLiveNotesBlocks}
+          meetingTitle={meetingData.meetingTitle}
+          onRenameTitle={meetingData.handleRenameMeetingTitle}
         />
         <TranscriptPanel
           transcripts={
