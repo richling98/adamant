@@ -71,9 +71,9 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMe
       console.debug('Save meeting title success');
       setIsTitleDirty(false);
 
-      // Update meetings with new title
+      // Update meetings with new title — spread to preserve folder_id and other fields
       const updatedMeetings = sidebarMeetings.map((m: CurrentMeeting) =>
-        m.id === meeting.id ? { id: m.id, title: meetingTitle } : m
+        m.id === meeting.id ? { ...m, title: meetingTitle } : m
       );
       setMeetings(updatedMeetings);
       setCurrentMeeting({ id: meeting.id, title: meetingTitle });
@@ -168,7 +168,7 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMe
       setMeetingTitle(trimmed);
       setIsTitleDirty(false);
       const updatedMeetings = sidebarMeetings.map((m: CurrentMeeting) =>
-        m.id === meeting.id ? { id: m.id, title: trimmed } : m
+        m.id === meeting.id ? { ...m, title: trimmed } : m
       );
       setMeetings(updatedMeetings);
       setCurrentMeeting({ id: meeting.id, title: trimmed });
