@@ -43,9 +43,13 @@ export function useMeetingChat(): UseMeetingChatReturn {
           dateRangeDays: dateRangeDays ?? null,
         });
 
+        const assistantResponse = response.trim();
         setMessages(prev => [
           ...prev,
-          { role: 'assistant', content: response },
+          {
+            role: 'assistant',
+            content: assistantResponse || '⚠️ The LLM returned an empty response.',
+          },
         ]);
       } catch (err) {
         const errorText =

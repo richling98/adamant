@@ -6,6 +6,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 const REQUEST_TIMEOUT_DURATION: Duration = Duration::from_secs(300);
+pub const EMPTY_LLM_RESPONSE_ERROR: &str = "LLM returned an empty response";
 
 // Generic structure for OpenAI-compatible API chat messages
 #[derive(Debug, Serialize)]
@@ -198,7 +199,10 @@ pub async fn generate_summary(
                     .parse()
                     .map_err(|_| "Invalid anthropic version".to_string())?,
             );
-            ("https://api.anthropic.com/v1/messages".to_string(), header_map)
+            (
+                "https://api.anthropic.com/v1/messages".to_string(),
+                header_map,
+            )
         }
         LLMProvider::BuiltInAI => {
             // This case is handled earlier with early returns
@@ -227,7 +231,8 @@ pub async fn generate_summary(
         // Apply optional parameters; CustomOpenAI exposes all three, other
         // OpenAI-compatible providers honour max_tokens to prevent runaway
         // repetition (especially with local Ollama models on long contexts).
-        let (max_tokens_val, temperature_val, top_p_val) = if provider == &LLMProvider::CustomOpenAI {
+        let (max_tokens_val, temperature_val, top_p_val) = if provider == &LLMProvider::CustomOpenAI
+        {
             (max_tokens, temperature, top_p)
         } else {
             (max_tokens, None, None)
@@ -261,7 +266,11 @@ pub async fn generate_summary(
         })
     };
 
-    info!("🐞 LLM Request to {}: model={}", provider_name(provider), model_name);
+    info!(
+        "🐞 LLM Request to {}: model={}",
+        provider_name(provider),
+        model_name
+    );
 
     // Send request with timeout and cancellation support
     let request_future = client
@@ -319,8 +328,8 @@ pub async fn generate_summary(
             .get(0)
             .ok_or("No content in LLM response")?
             .text
-            .trim();
-        Ok(content.to_string())
+            .as_str();
+        non_empty_llm_content(content)
     } else {
         let chat_response = response
             .json::<ChatResponse>()
@@ -335,8 +344,17 @@ pub async fn generate_summary(
             .ok_or("No content in LLM response")?
             .message
             .content
-            .trim();
-        Ok(content.to_string())
+            .as_str();
+        non_empty_llm_content(content)
+    }
+}
+
+fn non_empty_llm_content(content: &str) -> Result<String, String> {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        Err(EMPTY_LLM_RESPONSE_ERROR.to_string())
+    } else {
+        Ok(trimmed.to_string())
     }
 }
 
@@ -351,5 +369,23 @@ fn provider_name(provider: &LLMProvider) -> &str {
         LLMProvider::OpenRouter => "OpenRouter",
         LLMProvider::CustomOpenAI => "Custom OpenAI",
         LLMProvider::NvidiaInference => "NVIDIA inference",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_empty_llm_content_rejects_blank_output() {
+        assert_eq!(
+            non_empty_llm_content(" \n\t ").unwrap_err(),
+            EMPTY_LLM_RESPONSE_ERROR
+        );
+    }
+
+    #[test]
+    fn non_empty_llm_content_trims_valid_output() {
+        assert_eq!(non_empty_llm_content("  hello  ").unwrap(), "hello");
     }
 }

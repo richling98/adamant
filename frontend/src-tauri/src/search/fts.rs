@@ -17,7 +17,6 @@
 ///   - Notes save (api_save_note)
 /// Per-chunk transcript saves do NOT trigger a refresh to avoid O(n²) work
 /// during long recordings.
-
 use sqlx::SqlitePool;
 use tracing::{info, warn};
 
@@ -41,9 +40,9 @@ pub struct FtsMatch {
 /// Build a safe FTS5 OR query from a user-supplied string.
 ///
 /// Strategy:
-///   1. Replace FTS5 special characters (`"`, `*`, `(`, `)`, `-`) with spaces.
-///      Replacement (not stripping) prevents hyphenated words like `Q3-results`
-///      from fusing into the single mangled token `Q3results`.
+///   1. Replace punctuation and symbols with spaces. Replacement (not
+///      stripping) prevents hyphenated words like `Q3-results` from fusing into
+///      the single mangled token `Q3results`.
 ///   2. Split on whitespace.
 ///   3. Drop tokens shorter than 2 characters to avoid matching nearly everything.
 ///   4. Append `*` to each token for prefix matching (e.g. `quart` → `quart*`
@@ -52,7 +51,7 @@ pub struct FtsMatch {
 ///
 /// Returns `None` if no usable tokens remain (caller should return empty results).
 fn build_fts_query(raw: &str) -> Option<String> {
-    let sanitized = raw.replace(|c| matches!(c, '"' | '*' | '(' | ')' | '-'), " ");
+    let sanitized = raw.replace(|c: char| !(c.is_alphanumeric() || c.is_whitespace()), " ");
 
     let tokens: Vec<&str> = sanitized
         .split_whitespace()
@@ -65,6 +64,34 @@ fn build_fts_query(raw: &str) -> Option<String> {
 
     let prefixed: Vec<String> = tokens.iter().map(|t| format!("{}*", t)).collect();
     Some(prefixed.join(" OR "))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_fts_query;
+
+    #[test]
+    fn build_fts_query_removes_question_marks() {
+        assert_eq!(
+            build_fts_query("what did the Ryght AI meeting talk about?"),
+            Some(
+                "what* OR did* OR the* OR Ryght* OR AI* OR meeting* OR talk* OR about*".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn build_fts_query_splits_punctuation_without_fusing_terms() {
+        assert_eq!(
+            build_fts_query("Q3-results: follow-up"),
+            Some("Q3* OR results* OR follow* OR up*".to_string())
+        );
+    }
+
+    #[test]
+    fn build_fts_query_returns_none_for_punctuation_only() {
+        assert_eq!(build_fts_query("?! - *"), None);
+    }
 }
 
 /// Search the FTS5 index for `query`, returning up to 20 ranked results.
@@ -118,34 +145,36 @@ pub async fn search_fts(pool: &SqlitePool, query: &str) -> Result<Vec<FtsMatch>,
 
     let results = rows
         .into_iter()
-        .map(|(meeting_id, title, title_snip, trans_snip, notes_snip, summ_snip, raw_score)| {
-            // Normalise BM25: SQLite returns negative values (lower = better match).
-            // `1.0 / (1.0 + |raw|)` maps best match (~0) → near 1.0, weak → near 0.
-            // Safe when all scores are equal (no div-by-zero).
-            let score = 1.0 / (1.0 + raw_score.abs());
+        .map(
+            |(meeting_id, title, title_snip, trans_snip, notes_snip, summ_snip, raw_score)| {
+                // Normalise BM25: SQLite returns negative values (lower = better match).
+                // `1.0 / (1.0 + |raw|)` maps best match (~0) → near 1.0, weak → near 0.
+                // Safe when all scores are equal (no div-by-zero).
+                let score = 1.0 / (1.0 + raw_score.abs());
 
-            // Determine match source by checking which snippet contains a highlight
-            // marker. FTS5 only inserts `<b>` in snippets where the query matched.
-            let (match_source, context) = if trans_snip.contains("<b>") {
-                ("transcript", trans_snip)
-            } else if notes_snip.contains("<b>") {
-                ("notes", notes_snip)
-            } else if summ_snip.contains("<b>") {
-                ("summary", summ_snip)
-            } else {
-                // Title-only match: use the title snippet so the highlighted
-                // word is visible in the UI rather than an empty context area.
-                ("title", title_snip)
-            };
+                // Determine match source by checking which snippet contains a highlight
+                // marker. FTS5 only inserts `<b>` in snippets where the query matched.
+                let (match_source, context) = if trans_snip.contains("<b>") {
+                    ("transcript", trans_snip)
+                } else if notes_snip.contains("<b>") {
+                    ("notes", notes_snip)
+                } else if summ_snip.contains("<b>") {
+                    ("summary", summ_snip)
+                } else {
+                    // Title-only match: use the title snippet so the highlighted
+                    // word is visible in the UI rather than an empty context area.
+                    ("title", title_snip)
+                };
 
-            FtsMatch {
-                meeting_id,
-                title,
-                context,
-                score,
-                match_source: match_source.to_string(),
-            }
-        })
+                FtsMatch {
+                    meeting_id,
+                    title,
+                    context,
+                    score,
+                    match_source: match_source.to_string(),
+                }
+            },
+        )
         .collect();
 
     Ok(results)
