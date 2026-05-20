@@ -28,7 +28,7 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMe
   const blockNoteSummaryRef = useRef<BlockNoteSummaryViewRef>(null);
 
   // Sidebar context
-  const { setCurrentMeeting, setMeetings, meetings: sidebarMeetings } = useSidebar();
+  const { currentMeeting, setCurrentMeeting, setMeetings, meetings: sidebarMeetings } = useSidebar();
 
   // Sync aiSummary state when summaryData prop changes.
   // Avoid wiping non-null local summary with transient null during parent refreshes.
@@ -39,6 +39,9 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMe
     if (meetingChanged) {
       previousMeetingIdRef.current = meeting.id;
       console.debug('[useMeetingData] Meeting changed, syncing summary from prop:', summaryData ? 'present' : 'null');
+      setMeetingTitle(meeting.title || '+ New Call');
+      setIsEditingTitle(false);
+      setIsTitleDirty(false);
       setAiSummary(summaryData);
       return;
     }
@@ -50,6 +53,28 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMe
       console.debug('[useMeetingData] Ignoring transient null summary prop for same meeting');
     }
   }, [meeting.id, summaryData]); // meeting-aware sync
+
+  // Sidebar rename flow updates currentMeeting for the active meeting. Keep the
+  // details page title in sync, but never overwrite a draft the user is editing.
+  useEffect(() => {
+    const externalTitle = currentMeeting?.title?.trim();
+    if (
+      currentMeeting?.id === meeting.id &&
+      externalTitle &&
+      !isEditingTitle &&
+      !isTitleDirty &&
+      externalTitle !== meetingTitle
+    ) {
+      setMeetingTitle(externalTitle);
+    }
+  }, [
+    currentMeeting?.id,
+    currentMeeting?.title,
+    isEditingTitle,
+    isTitleDirty,
+    meeting.id,
+    meetingTitle,
+  ]);
 
   // Handlers
   const handleTitleChange = useCallback((newTitle: string) => {
@@ -182,7 +207,7 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated }: UseMe
     console.debug('📝 Updating meeting title to:', newTitle);
     setMeetingTitle(newTitle);
     const updatedMeetings = sidebarMeetings.map((m: CurrentMeeting) =>
-      m.id === meeting.id ? { id: m.id, title: newTitle } : m
+      m.id === meeting.id ? { ...m, title: newTitle } : m
     );
     setMeetings(updatedMeetings);
     setCurrentMeeting({ id: meeting.id, title: newTitle });
