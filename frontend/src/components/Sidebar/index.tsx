@@ -905,6 +905,10 @@ const Sidebar: React.FC = () => {
                   <InputGroup >
                     <InputGroupInput placeholder='Search meeting content...' value={searchQuery}
                       onChange={(e) => handleSearchChange(e.target.value)}
+                      autoCorrect="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      autoComplete="off"
                     />
                     <InputGroupAddon>
                       <SearchIcon />
