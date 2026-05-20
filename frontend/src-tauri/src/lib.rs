@@ -748,6 +748,7 @@ pub fn run() {
             api::api_create_folder,
             api::api_rename_folder,
             api::api_delete_folder,
+            api::api_move_folder,
             api::api_move_meeting_to_folder,
             // Chat with meetings command (ADA-8)
             api::api_chat_with_meetings,

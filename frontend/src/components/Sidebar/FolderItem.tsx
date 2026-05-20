@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronRight, FolderOpen, Folder as FolderIcon, FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useDroppable } from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { invoke } from '@tauri-apps/api/core';
 import type { Folder } from './SidebarProvider';
 import { useSidebar } from './SidebarProvider';
@@ -75,8 +75,31 @@ export function FolderItem({
   const [isCreating, setIsCreating] = useState(false);
   const [isCreatingSubfolder, setIsCreatingSubfolder] = useState(false);
 
-  // Make this folder a droppable target so meetings can be dragged into it
-  const { setNodeRef, isOver } = useDroppable({ id: folder.id });
+  // Make this folder both a drop target and a draggable item.
+  const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({
+    id: `folder-target:${folder.id}`,
+    data: { type: 'folder-target', folderId: folder.id },
+  });
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: `folder:${folder.id}`,
+    data: { type: 'folder', folderId: folder.id },
+  });
+  const setCombinedNodeRef = useCallback((node: HTMLDivElement | null) => {
+    setDroppableNodeRef(node);
+    setDraggableNodeRef(node);
+  }, [setDroppableNodeRef, setDraggableNodeRef]);
+  const dragStyle = transform
+    ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        opacity: isDragging ? 0.5 : 1,
+      }
+    : { opacity: isDragging ? 0.5 : 1 };
 
   // --- Rename handlers ---
 
@@ -173,7 +196,10 @@ export function FolderItem({
   if (isSidebarCollapsed) {
     return (
       <div
-        ref={setNodeRef}
+        ref={setCombinedNodeRef}
+        style={dragStyle}
+        {...attributes}
+        {...listeners}
         title={folder.name}
         className={cn(
           'flex justify-center items-center w-8 h-8 rounded-md mx-auto my-1 transition-colors cursor-pointer',
@@ -189,16 +215,19 @@ export function FolderItem({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={setCombinedNodeRef}
+      style={dragStyle}
       className={cn(
         'rounded-md transition-colors',
-        isOver && 'bg-blue-500/10 ring-1 ring-blue-500/30',
+        isOver && !isDragging && 'bg-blue-500/10 ring-1 ring-blue-500/30',
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Folder header row */}
       <div
+        {...attributes}
+        {...listeners}
         className="flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none group"
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={toggleExpanded}
@@ -226,6 +255,7 @@ export function FolderItem({
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={commitRename}
             onKeyDown={handleRenameKeyDown}
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
@@ -246,7 +276,11 @@ export function FolderItem({
 
         {/* Action buttons — visible on hover */}
         {isHovered && !isRenaming && (
-          <div className="flex items-center gap-0.5 ml-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex items-center gap-0.5 ml-1 flex-shrink-0"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Rename folder */}
             <button
               className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors"

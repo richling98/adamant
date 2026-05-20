@@ -8,7 +8,7 @@ import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
 import { FolderItem } from './FolderItem';
 import { DndContext, useDroppable, useDraggable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { ConfirmationModal } from '../ConfirmationModel/confirmation-modal';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SettingTabs } from '../SettingTabs';
@@ -62,6 +62,7 @@ const Sidebar: React.FC = () => {
     serverAddress,
     folders,
     createFolder,
+    moveFolder,
     moveMeetingToFolder,
     refetchMeetings,
   } = useSidebar();
@@ -200,6 +201,7 @@ const Sidebar: React.FC = () => {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const newFolderInputRef = useRef<HTMLInputElement>(null);
+  const [activeDragType, setActiveDragType] = useState<'meeting' | 'folder' | null>(null);
 
   // Require 8px of movement before drag activates — prevents click events from
   // briefly triggering drop-zone highlights (blue flash on meeting row clicks).
@@ -207,15 +209,58 @@ const Sidebar: React.FC = () => {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
-  // Handle drag-and-drop: move a meeting to a folder or back to root
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const dragType = event.active.data.current?.type;
+    setActiveDragType(dragType === 'meeting' || dragType === 'folder' ? dragType : null);
+  }, []);
+
+  // Handle drag-and-drop for meetings and folders.
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
+    setActiveDragType(null);
     if (!over) return;
-    const meetingId = active.id as string;
-    const targetId = over.id as string;
-    // 'root' drop zone = unfile the meeting
-    await moveMeetingToFolder(meetingId, targetId === 'root' ? null : targetId);
-  }, [moveMeetingToFolder]);
+
+    const activeData = active.data.current as
+      | { type: 'meeting'; meetingId: string }
+      | { type: 'folder'; folderId: string }
+      | undefined;
+    const overData = over.data.current as
+      | { type: 'folder-target'; folderId: string }
+      | { type: 'meeting-root-target' }
+      | { type: 'folder-root-target' }
+      | undefined;
+
+    if (!activeData || !overData) return;
+
+    try {
+      if (activeData.type === 'meeting') {
+        if (overData.type === 'folder-target') {
+          await moveMeetingToFolder(activeData.meetingId, overData.folderId);
+        } else if (overData.type === 'meeting-root-target') {
+          await moveMeetingToFolder(activeData.meetingId, null);
+        }
+        return;
+      }
+
+      if (activeData.type === 'folder') {
+        if (overData.type === 'folder-target') {
+          if (activeData.folderId === overData.folderId) return;
+          await moveFolder(activeData.folderId, overData.folderId);
+        } else if (overData.type === 'folder-root-target') {
+          const folder = folders.find((f) => f.id === activeData.folderId);
+          if (!folder?.parent_id) return;
+          await moveFolder(activeData.folderId, null);
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(message || 'Failed to move item');
+    }
+  }, [folders, moveFolder, moveMeetingToFolder]);
+
+  const handleDragCancel = useCallback(() => {
+    setActiveDragType(null);
+  }, []);
 
   // Commit a new folder name from the inline input
   const commitNewFolder = useCallback(async () => {
@@ -1005,7 +1050,12 @@ const Sidebar: React.FC = () => {
             )}
 
             {!isCollapsed && !isSearchMode && (
-              <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+              <DndContext
+                sensors={sensors}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragCancel={handleDragCancel}
+              >
                 <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 px-3 pb-4">
 
                   {/* ── Folders section ── */}
@@ -1059,6 +1109,8 @@ const Sidebar: React.FC = () => {
                       />
                     </div>
                   )}
+
+                  <FolderRootDropZone enabled={activeDragType === 'folder'} />
 
                   {/* User-created folder rows — root folders only; child folders rendered recursively by FolderItem */}
                   {folders.filter((f) => !f.parent_id).map((folder) => {
@@ -1534,7 +1586,10 @@ interface DraggableMeetingRowProps {
 }
 
 function DraggableMeetingRow({ item, isActive, indent, isSelected, onToggleSelect, onNavigate, onEdit, onDelete }: DraggableMeetingRowProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.id });
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `meeting:${item.id}`,
+    data: { type: 'meeting', meetingId: item.id },
+  });
 
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.5 : 1 }
@@ -1598,11 +1653,37 @@ function DraggableMeetingRow({ item, isActive, indent, isSelected, onToggleSelec
 }
 
 // ---------------------------------------------------------------------------
-// Helper: droppable "unfiled" root zone
+// Helper: droppable root zone for top-level folders
+// ---------------------------------------------------------------------------
+
+function FolderRootDropZone({ enabled }: { enabled: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'folder-root',
+    data: { type: 'folder-root-target' },
+    disabled: !enabled,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'mb-1 min-h-1 rounded-md transition-colors',
+        enabled && 'min-h-3',
+        enabled && isOver && 'bg-blue-500/10 ring-1 ring-blue-500/30',
+      )}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helper: droppable "unfiled" root zone for meetings
 // ---------------------------------------------------------------------------
 
 function UnfiledDropZone({ children }: { children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: 'root' });
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'meeting-root',
+    data: { type: 'meeting-root-target' },
+  });
   return (
     <div
       ref={setNodeRef}

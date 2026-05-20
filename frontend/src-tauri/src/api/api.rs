@@ -1893,6 +1893,38 @@ pub async fn api_delete_folder<R: Runtime>(
     }
 }
 
+/// Move a folder under another folder, or to the top level (parent_id = null).
+#[tauri::command]
+pub async fn api_move_folder<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    folder_id: String,
+    parent_id: Option<String>,
+) -> Result<(), String> {
+    log_info!(
+        "api_move_folder called: folder_id={}, parent_id={:?}",
+        folder_id,
+        parent_id
+    );
+
+    let pool = state.db_manager.pool();
+    let parent_ref = parent_id.as_deref();
+
+    match FoldersRepository::move_folder(pool, &folder_id, parent_ref).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(format!("Folder not found: {}", folder_id)),
+        Err(e) => {
+            log_error!(
+                "Failed to move folder {} to parent {:?}: {}",
+                folder_id,
+                parent_ref,
+                e
+            );
+            Err(format!("Failed to move folder: {}", e))
+        }
+    }
+}
+
 /// Assign a meeting to a folder, or remove it from all folders (pass folder_id = null).
 #[tauri::command]
 pub async fn api_move_meeting_to_folder<R: Runtime>(
