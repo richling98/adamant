@@ -29,6 +29,12 @@ interface FolderItemProps {
   activeMeetingId?: string;
   /** Nesting depth — 0 for top-level folders, +1 per level. */
   depth?: number;
+  /** Disable this component's own draggable behavior when a wrapper owns dragging. */
+  dragDisabled?: boolean;
+  /** Drag attributes supplied by an external draggable/sortable wrapper. */
+  dragAttributes?: Record<string, any>;
+  /** Drag listeners supplied by an external draggable/sortable wrapper. */
+  dragListeners?: Record<string, any>;
 }
 
 export function FolderItem({
@@ -38,6 +44,9 @@ export function FolderItem({
   renderMeetingItem,
   activeMeetingId,
   depth = 0,
+  dragDisabled = false,
+  dragAttributes,
+  dragListeners,
 }: FolderItemProps) {
   const router = useRouter();
   const { renameFolder, deleteFolder, moveMeetingToFolder, createFolder } = useSidebar();
@@ -75,10 +84,11 @@ export function FolderItem({
   const [isCreating, setIsCreating] = useState(false);
   const [isCreatingSubfolder, setIsCreatingSubfolder] = useState(false);
 
-  // Make this folder both a drop target and a draggable item.
+  // Folder nesting is intentionally header-only. If the whole expanded tree is
+  // droppable, dragging near children can accidentally nest into the parent.
   const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({
-    id: `folder-target:${folder.id}`,
-    data: { type: 'folder-target', folderId: folder.id },
+    id: `folder-nest-target:${folder.id}`,
+    data: { type: 'folder-nest-target', folderId: folder.id },
   });
   const {
     attributes,
@@ -89,17 +99,19 @@ export function FolderItem({
   } = useDraggable({
     id: `folder:${folder.id}`,
     data: { type: 'folder', folderId: folder.id },
+    disabled: dragDisabled,
   });
   const setCombinedNodeRef = useCallback((node: HTMLDivElement | null) => {
-    setDroppableNodeRef(node);
     setDraggableNodeRef(node);
-  }, [setDroppableNodeRef, setDraggableNodeRef]);
+  }, [setDraggableNodeRef]);
   const dragStyle = transform
     ? {
         transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
         opacity: isDragging ? 0.5 : 1,
       }
     : { opacity: isDragging ? 0.5 : 1 };
+  const headerAttributes = dragDisabled ? dragAttributes ?? {} : attributes;
+  const headerListeners = dragDisabled ? dragListeners ?? {} : listeners;
 
   // --- Rename handlers ---
 
@@ -217,18 +229,19 @@ export function FolderItem({
     <div
       ref={setCombinedNodeRef}
       style={dragStyle}
-      className={cn(
-        'rounded-md transition-colors',
-        isOver && !isDragging && 'bg-blue-500/10 ring-1 ring-blue-500/30',
-      )}
+      className="rounded-md transition-colors"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Folder header row */}
       <div
-        {...attributes}
-        {...listeners}
-        className="flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none group"
+        ref={setDroppableNodeRef}
+        {...headerAttributes}
+        {...headerListeners}
+        className={cn(
+          'flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none group',
+          isOver && !isDragging && 'bg-blue-500/10 ring-1 ring-blue-500/30',
+        )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={toggleExpanded}
       >

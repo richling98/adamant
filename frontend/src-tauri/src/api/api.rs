@@ -48,6 +48,7 @@ pub struct Folder {
     pub updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
+    pub sort_order: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1804,6 +1805,7 @@ pub async fn api_get_folders<R: Runtime>(
                     created_at: f.created_at.0.to_rfc3339(),
                     updated_at: f.updated_at.0.to_rfc3339(),
                     parent_id: f.parent_id,
+                    sort_order: f.sort_order,
                 })
                 .collect()
         })
@@ -1839,6 +1841,7 @@ pub async fn api_create_folder<R: Runtime>(
             created_at: f.created_at.0.to_rfc3339(),
             updated_at: f.updated_at.0.to_rfc3339(),
             parent_id: f.parent_id,
+            sort_order: f.sort_order,
         })
         .map_err(|e| {
             log_error!("Failed to create folder: {}", e);
@@ -1918,6 +1921,43 @@ pub async fn api_move_folder<R: Runtime>(
                 "Failed to move folder {} to parent {:?}: {}",
                 folder_id,
                 parent_ref,
+                e
+            );
+            Err(format!("Failed to move folder: {}", e))
+        }
+    }
+}
+
+/// Move a folder under another folder, or to the top level, at a specific sibling index.
+#[tauri::command]
+pub async fn api_move_folder_to_position<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    folder_id: String,
+    parent_id: Option<String>,
+    position_index: i64,
+) -> Result<(), String> {
+    log_info!(
+        "api_move_folder_to_position called: folder_id={}, parent_id={:?}, position_index={}",
+        folder_id,
+        parent_id,
+        position_index
+    );
+
+    let pool = state.db_manager.pool();
+    let parent_ref = parent_id.as_deref();
+
+    match FoldersRepository::move_folder_to_position(pool, &folder_id, parent_ref, position_index)
+        .await
+    {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(format!("Folder not found: {}", folder_id)),
+        Err(e) => {
+            log_error!(
+                "Failed to move folder {} to parent {:?} at index {}: {}",
+                folder_id,
+                parent_ref,
+                position_index,
                 e
             );
             Err(format!("Failed to move folder: {}", e))

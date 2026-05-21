@@ -22,6 +22,7 @@ pub struct FolderModel {
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
     pub parent_id: Option<String>,
+    pub sort_order: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]

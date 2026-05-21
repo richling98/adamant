@@ -1,14 +1,24 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, FolderPlus, Square, CheckSquare } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, FolderPlus, Square, CheckSquare, Folder as FolderIcon, FolderOpen } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
 import { FolderItem } from './FolderItem';
-import { DndContext, useDroppable, useDraggable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import { closestCenter, DndContext, useDroppable, useDraggable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import type { CollisionDetection, DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
+  getFolderDropProjection,
+  getMovedRectCenter,
+  type FolderDropProjection,
+  type FolderProjectionRow,
+  type FolderRowRect,
+  type PointerPosition,
+} from './folderDndProjection';
 import { ConfirmationModal } from '../ConfirmationModel/confirmation-modal';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SettingTabs } from '../SettingTabs';
@@ -45,6 +55,27 @@ interface SearchResultSidebarItem extends SidebarItem {
   matchSource?: string;
 }
 
+const folderTreeId = (folderId: string) => `folder-tree:${folderId}`;
+const folderRootBottomId = 'folder-tree:root-bottom';
+
+type FolderRow = FolderProjectionRow & {
+  folder: import('./SidebarProvider').Folder;
+};
+
+type FolderListNode =
+  | { type: 'folder'; row: FolderRow }
+  | { type: 'meeting'; meeting: CurrentMeeting; depth: number };
+
+function debugFolderDnd(action: string, details: Record<string, unknown>) {
+  try {
+    if (window.localStorage.getItem('adamant-debug-folder-dnd') === 'true') {
+      console.debug('[folder-dnd]', action, details);
+    }
+  } catch {
+    // Debug-only logging should never affect drag behavior.
+  }
+}
+
 const Sidebar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
@@ -62,7 +93,9 @@ const Sidebar: React.FC = () => {
     serverAddress,
     folders,
     createFolder,
-    moveFolder,
+    renameFolder,
+    deleteFolder,
+    moveFolderToPosition,
     moveMeetingToFolder,
     refetchMeetings,
   } = useSidebar();
@@ -201,7 +234,13 @@ const Sidebar: React.FC = () => {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const newFolderInputRef = useRef<HTMLInputElement>(null);
-  const [activeDragType, setActiveDragType] = useState<'meeting' | 'folder' | null>(null);
+  const [folderExpansion, setFolderExpansion] = useState<Record<string, boolean>>({});
+  const [folderDropProjection, setFolderDropProjection] = useState<FolderDropProjection | null>(null);
+  const [meetingDropFolderId, setMeetingDropFolderId] = useState<string | null>(null);
+  const folderRowRefs = useRef(new Map<string, HTMLDivElement>());
+  const meetingRowRefs = useRef(new Map<string, HTMLDivElement>());
+  const folderDragRowRectsRef = useRef<Map<string, FolderRowRect> | null>(null);
+  const activeDragRectRef = useRef<FolderRowRect | null>(null);
 
   // Require 8px of movement before drag activates — prevents click events from
   // briefly triggering drop-zone highlights (blue flash on meeting row clicks).
@@ -209,58 +248,311 @@ const Sidebar: React.FC = () => {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    const dragType = event.active.data.current?.type;
-    setActiveDragType(dragType === 'meeting' || dragType === 'folder' ? dragType : null);
+  useEffect(() => {
+    setFolderExpansion((prev) => {
+      const next: Record<string, boolean> = {};
+      for (const folder of folders) {
+        if (Object.prototype.hasOwnProperty.call(prev, folder.id)) {
+          next[folder.id] = prev[folder.id];
+          continue;
+        }
+
+        try {
+          const stored = localStorage.getItem(`sidebar-folder-collapsed-${folder.id}`);
+          next[folder.id] = stored === null ? true : stored === 'true';
+        } catch {
+          next[folder.id] = true;
+        }
+      }
+      return next;
+    });
+  }, [folders]);
+
+  const isFolderExpanded = useCallback((folderId: string) => {
+    return folderExpansion[folderId] ?? true;
+  }, [folderExpansion]);
+
+  const setFolderExpanded = useCallback((folderId: string, expanded: boolean) => {
+    setFolderExpansion((prev) => ({ ...prev, [folderId]: expanded }));
+    try { localStorage.setItem(`sidebar-folder-collapsed-${folderId}`, String(expanded)); } catch {}
   }, []);
+
+  const sortedFolders = useMemo(() => {
+    return [...folders].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+  }, [folders]);
+
+  const foldersByParent = useMemo(() => {
+    const map = new Map<string | null, typeof folders>();
+    for (const folder of sortedFolders) {
+      const parentId = folder.parent_id ?? null;
+      const siblings = map.get(parentId) ?? [];
+      siblings.push(folder);
+      map.set(parentId, siblings);
+    }
+    return map;
+  }, [sortedFolders]);
+
+  const folderSiblingIdsByParent = useMemo(() => {
+    return new Map(
+      Array.from(foldersByParent.entries()).map(([parentId, siblingFolders]) => [
+        parentId,
+        siblingFolders.map((folder) => folder.id),
+      ]),
+    );
+  }, [foldersByParent]);
+
+  const meetingsByFolder = useMemo(() => {
+    const map = new Map<string, CurrentMeeting[]>();
+    for (const meeting of meetings) {
+      if (!meeting.folder_id) continue;
+      const folderMeetings = map.get(meeting.folder_id) ?? [];
+      folderMeetings.push(meeting);
+      map.set(meeting.folder_id, folderMeetings);
+    }
+    return map;
+  }, [meetings]);
+
+  const folderRows = useMemo(() => {
+    const rows: FolderRow[] = [];
+    const visit = (parentId: string | null, depth: number, ancestorIds: string[]) => {
+      const siblings = foldersByParent.get(parentId) ?? [];
+      for (const folder of siblings) {
+        const row: FolderRow = {
+          id: folder.id,
+          folder,
+          parentId,
+          depth,
+          ancestorIds,
+        };
+        rows.push(row);
+        if (isFolderExpanded(folder.id)) {
+          visit(folder.id, depth + 1, [...ancestorIds, folder.id]);
+        }
+      }
+    };
+    visit(null, 0, []);
+    return rows;
+  }, [foldersByParent, isFolderExpanded]);
+
+  const folderTreeNodes = useMemo(() => {
+    const nodes: FolderListNode[] = [];
+    const visit = (parentId: string | null, depth: number, ancestorIds: string[]) => {
+      const siblings = foldersByParent.get(parentId) ?? [];
+      for (const folder of siblings) {
+        const row: FolderRow = {
+          id: folder.id,
+          folder,
+          parentId,
+          depth,
+          ancestorIds,
+        };
+        nodes.push({ type: 'folder', row });
+        if (isFolderExpanded(folder.id)) {
+          visit(folder.id, depth + 1, [...ancestorIds, folder.id]);
+          for (const meeting of meetingsByFolder.get(folder.id) ?? []) {
+            nodes.push({ type: 'meeting', meeting, depth: depth + 1 });
+          }
+        }
+      }
+    };
+    visit(null, 0, []);
+    return nodes;
+  }, [foldersByParent, isFolderExpanded, meetingsByFolder]);
+
+  const clearFolderDragState = useCallback(() => {
+    setFolderDropProjection(null);
+    setMeetingDropFolderId(null);
+    folderDragRowRectsRef.current = null;
+    activeDragRectRef.current = null;
+  }, []);
+
+  const folderCollisionDetection = useCallback<CollisionDetection>((args) => {
+    const activeType = args.active.data.current?.type;
+    if (activeType !== 'folder-tree-row') {
+      return closestCenter(args);
+    }
+
+    const folderContainers = args.droppableContainers.filter((container) => {
+      const type = container.data.current?.type;
+      return type === 'folder-tree-row' || type === 'folder-root-bottom';
+    });
+
+    return closestCenter({ ...args, droppableContainers: folderContainers });
+  }, []);
+
+  const setFolderRowRef = useCallback((folderId: string, node: HTMLDivElement | null) => {
+    if (node) {
+      folderRowRefs.current.set(folderId, node);
+    } else {
+      folderRowRefs.current.delete(folderId);
+    }
+  }, []);
+
+  const setMeetingRowRef = useCallback((meetingId: string, node: HTMLDivElement | null) => {
+    if (node) {
+      meetingRowRefs.current.set(meetingId, node);
+    } else {
+      meetingRowRefs.current.delete(meetingId);
+    }
+  }, []);
+
+  const domRectToFolderRect = useCallback((rect: DOMRect): FolderRowRect => ({
+    top: rect.top,
+    bottom: rect.bottom,
+    left: rect.left,
+    right: rect.right,
+    width: rect.width,
+    height: rect.height,
+  }), []);
+
+  const getFolderRowRects = useCallback(() => {
+    const rowRects = new Map<string, FolderRowRect>();
+    for (const [folderId, node] of folderRowRefs.current.entries()) {
+      const rect = node.getBoundingClientRect();
+      rowRects.set(folderId, domRectToFolderRect(rect));
+    }
+    return rowRects;
+  }, [domRectToFolderRect]);
+
+  const getDragVisualCenter = useCallback((delta: { x: number; y: number }): PointerPosition | null => {
+    const activeRect = activeDragRectRef.current;
+    if (!activeRect) {
+      return null;
+    }
+
+    return getMovedRectCenter(activeRect, delta);
+  }, []);
+
+  const projectFolderDrop = useCallback((activeFolderId: string, pointer: PointerPosition | null) => {
+    if (!pointer) return null;
+
+    return getFolderDropProjection({
+      activeFolderId,
+      pointer,
+      rows: folderRows,
+      rowRects: folderDragRowRectsRef.current ?? getFolderRowRects(),
+      siblingIdsByParent: folderSiblingIdsByParent,
+    });
+  }, [folderRows, folderSiblingIdsByParent, getFolderRowRects]);
+
+  const getFolderIdAtVisualCenter = useCallback((center: PointerPosition | null) => {
+    if (!center) return null;
+
+    const rowRects = folderDragRowRectsRef.current ?? getFolderRowRects();
+    for (const row of folderRows) {
+      const rect = rowRects.get(row.id);
+      if (!rect) continue;
+      if (center.y >= rect.top && center.y <= rect.bottom) {
+        return row.id;
+      }
+    }
+
+    return null;
+  }, [folderRows, getFolderRowRects]);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    clearFolderDragState();
+    const dragType = event.active.data.current?.type;
+    const isFolderDrag = dragType === 'folder-tree-row';
+    const isMeetingDrag = dragType === 'meeting';
+    const folderRects = getFolderRowRects();
+    folderDragRowRectsRef.current = isFolderDrag || isMeetingDrag ? folderRects : null;
+
+    if (isFolderDrag) {
+      const folderId = event.active.data.current?.folderId;
+      activeDragRectRef.current = typeof folderId === 'string' ? folderRects.get(folderId) ?? null : null;
+    } else if (isMeetingDrag) {
+      const meetingId = event.active.data.current?.meetingId;
+      const meetingNode = typeof meetingId === 'string' ? meetingRowRefs.current.get(meetingId) : null;
+      activeDragRectRef.current = meetingNode ? domRectToFolderRect(meetingNode.getBoundingClientRect()) : null;
+    } else {
+      activeDragRectRef.current = null;
+    }
+  }, [clearFolderDragState, domRectToFolderRect, getFolderRowRects]);
+
+  const handleDragMove = useCallback((event: DragMoveEvent) => {
+    const activeData = event.active.data.current as { type?: string; folderId?: string } | undefined;
+    const center = getDragVisualCenter(event.delta);
+
+    if (activeData?.type === 'folder-tree-row' && activeData.folderId) {
+      const projection = projectFolderDrop(activeData.folderId, center);
+      setFolderDropProjection(projection);
+      setMeetingDropFolderId(null);
+      debugFolderDnd('project-folder-drop', {
+        folderId: activeData.folderId,
+        dragVisualCenter: center,
+        projection,
+      });
+      return;
+    }
+
+    if (activeData?.type === 'meeting') {
+      setFolderDropProjection(null);
+      setMeetingDropFolderId(getFolderIdAtVisualCenter(center));
+    }
+  }, [getDragVisualCenter, getFolderIdAtVisualCenter, projectFolderDrop]);
 
   // Handle drag-and-drop for meetings and folders.
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveDragType(null);
-    if (!over) return;
-
     const activeData = active.data.current as
       | { type: 'meeting'; meetingId: string }
-      | { type: 'folder'; folderId: string }
+      | { type: 'folder-tree-row'; folderId: string }
       | undefined;
-    const overData = over.data.current as
-      | { type: 'folder-target'; folderId: string }
+    const overData = over?.data.current as
+      | { type: 'folder-tree-row'; folderId: string }
+      | { type: 'folder-root-bottom' }
       | { type: 'meeting-root-target' }
-      | { type: 'folder-root-target' }
       | undefined;
 
-    if (!activeData || !overData) return;
+    if (!activeData) return;
 
     try {
       if (activeData.type === 'meeting') {
-        if (overData.type === 'folder-target') {
-          await moveMeetingToFolder(activeData.meetingId, overData.folderId);
-        } else if (overData.type === 'meeting-root-target') {
+        const targetFolderId = meetingDropFolderId ?? getFolderIdAtVisualCenter(getDragVisualCenter(event.delta));
+        clearFolderDragState();
+        if (targetFolderId) {
+          await moveMeetingToFolder(activeData.meetingId, targetFolderId);
+          return;
+        }
+
+        if (!over) return;
+        if (!overData) return;
+        if (overData.type === 'meeting-root-target') {
           await moveMeetingToFolder(activeData.meetingId, null);
         }
         return;
       }
 
-      if (activeData.type === 'folder') {
-        if (overData.type === 'folder-target') {
-          if (activeData.folderId === overData.folderId) return;
-          await moveFolder(activeData.folderId, overData.folderId);
-        } else if (overData.type === 'folder-root-target') {
-          const folder = folders.find((f) => f.id === activeData.folderId);
-          if (!folder?.parent_id) return;
-          await moveFolder(activeData.folderId, null);
+      const projection = projectFolderDrop(activeData.folderId, getDragVisualCenter(event.delta)) ?? folderDropProjection;
+      clearFolderDragState();
+      if (activeData.type === 'folder-tree-row' && projection) {
+        const currentFolder = folders.find((folder) => folder.id === activeData.folderId);
+        if ((currentFolder?.parent_id ?? null) === projection.parentId) {
+          const currentSiblings = foldersByParent.get(projection.parentId) ?? [];
+          const currentIndex = currentSiblings.findIndex((folder) => folder.id === activeData.folderId);
+          if (currentIndex === projection.positionIndex) return;
         }
+
+        debugFolderDnd('move-folder-tree-row', {
+          folderId: activeData.folderId,
+          overId: over?.id,
+          overType: overData?.type,
+          dropType: projection.type,
+          parentId: projection.parentId,
+          positionIndex: projection.positionIndex,
+        });
+        await moveFolderToPosition(activeData.folderId, projection.parentId, projection.positionIndex);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error(message || 'Failed to move item');
     }
-  }, [folders, moveFolder, moveMeetingToFolder]);
+  }, [clearFolderDragState, folderDropProjection, folders, foldersByParent, getDragVisualCenter, getFolderIdAtVisualCenter, meetingDropFolderId, moveFolderToPosition, moveMeetingToFolder, projectFolderDrop]);
 
   const handleDragCancel = useCallback(() => {
-    setActiveDragType(null);
-  }, []);
+    clearFolderDragState();
+  }, [clearFolderDragState]);
 
   // Commit a new folder name from the inline input
   const commitNewFolder = useCallback(async () => {
@@ -1052,7 +1344,9 @@ const Sidebar: React.FC = () => {
             {!isCollapsed && !isSearchMode && (
               <DndContext
                 sensors={sensors}
+                collisionDetection={folderCollisionDetection}
                 onDragStart={handleDragStart}
+                onDragMove={handleDragMove}
                 onDragEnd={handleDragEnd}
                 onDragCancel={handleDragCancel}
               >
@@ -1110,40 +1404,65 @@ const Sidebar: React.FC = () => {
                     </div>
                   )}
 
-                  <FolderRootDropZone enabled={activeDragType === 'folder'} />
+                  {/* User-created folder tree — visible folder rows are one sortable tree. */}
+                  <div className="relative">
+                    <SortableContext
+                      items={folderRows.map((row) => folderTreeId(row.id))}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {folderTreeNodes.map((node) => {
+                        if (node.type === 'meeting') {
+                          return (
+                            <DraggableMeetingRow
+                              key={`meeting:${node.meeting.id}`}
+                              item={{ id: node.meeting.id, title: node.meeting.title, type: 'file' }}
+                              isActive={currentMeeting?.id === node.meeting.id}
+                              indent
+                              isSelected={selectedMeetingIds.has(node.meeting.id)}
+                              onToggleSelect={(e) => toggleMeetingSelection(node.meeting.id, e)}
+                              setRowRef={setMeetingRowRef}
+                              onNavigate={() => {
+                                setCurrentMeeting({ id: node.meeting.id, title: node.meeting.title });
+                                router.push(`/meeting-details?id=${node.meeting.id}`);
+                              }}
+                              onEdit={() => handleEditStart(node.meeting.id, node.meeting.title)}
+                              onDelete={() => setDeleteModalState({ isOpen: true, itemId: node.meeting.id })}
+                            />
+                          );
+                        }
 
-                  {/* User-created folder rows — root folders only; child folders rendered recursively by FolderItem */}
-                  {folders.filter((f) => !f.parent_id).map((folder) => {
-                    // Use the recursive children built by buildFolderTree in SidebarProvider.
-                    // This includes nested subfolders and their meetings at every depth.
-                    const sidebarFolder = sidebarItems.find((item) => item.id === folder.id);
-                    const folderChildren: SidebarItem[] = sidebarFolder?.children ?? [];
-                    return (
-                      <FolderItem
-                        key={folder.id}
-                        folder={folder}
-                        children={folderChildren}
-                        isSidebarCollapsed={isCollapsed}
-                        activeMeetingId={currentMeeting?.id}
-                        renderMeetingItem={(item, insideFolder) => (
-                          <DraggableMeetingRow
-                            key={item.id}
-                            item={item}
-                            isActive={currentMeeting?.id === item.id}
-                            indent={insideFolder}
-                            isSelected={selectedMeetingIds.has(item.id)}
-                            onToggleSelect={(e) => toggleMeetingSelection(item.id, e)}
-                            onNavigate={() => {
-                              setCurrentMeeting({ id: item.id, title: item.title });
-                              router.push(`/meeting-details?id=${item.id}`);
+                        return (
+                          <SortableFolderTreeRow
+                            key={node.row.id}
+                            row={node.row}
+                            childCount={(foldersByParent.get(node.row.id)?.length ?? 0) + (meetingsByFolder.get(node.row.id)?.length ?? 0)}
+                            isExpanded={isFolderExpanded(node.row.id)}
+                            isActiveMeeting={currentMeeting?.id}
+                            projection={folderDropProjection}
+                            isMeetingDropTarget={meetingDropFolderId === node.row.id}
+                            setRowRef={setFolderRowRef}
+                            onToggleExpanded={() => setFolderExpanded(node.row.id, !isFolderExpanded(node.row.id))}
+                            onRename={renameFolder}
+                            onDelete={deleteFolder}
+                            onCreateSubfolder={async () => {
+                              await createFolder('New Folder', node.row.id);
+                              setFolderExpanded(node.row.id, true);
                             }}
-                            onEdit={() => handleEditStart(item.id, item.title)}
-                            onDelete={() => setDeleteModalState({ isOpen: true, itemId: item.id })}
+                            onCreateMeeting={async () => {
+                              const now = new Date();
+                              const title = `${now.getMonth() + 1}-${now.getDate()}-${String(now.getFullYear()).slice(-2)} new note`;
+                              const meeting = await invoke<{ id: string }>('api_create_meeting', { title });
+                              await moveMeetingToFolder(meeting.id, node.row.id);
+                              router.push(`/meeting-details?id=${meeting.id}`);
+                            }}
                           />
-                        )}
-                      />
-                    );
-                  })}
+                        );
+                      })}
+                    </SortableContext>
+                    <FolderRootBottomDropZone
+                      isActive={folderDropProjection?.type === 'root-bottom'}
+                    />
+                  </div>
                   </div>{/* end collapsible folders wrapper */}
 
                   {/* ── Meeting Notes (unfiled) section ── */}
@@ -1206,6 +1525,7 @@ const Sidebar: React.FC = () => {
                             indent={false}
                             isSelected={selectedMeetingIds.has(item.id)}
                             onToggleSelect={(e) => toggleMeetingSelection(item.id, e)}
+                            setRowRef={setMeetingRowRef}
                             onNavigate={() => {
                               setCurrentMeeting({ id: item.id, title: item.title });
                               router.push(`/meeting-details?id=${item.id}`);
@@ -1365,8 +1685,6 @@ const Sidebar: React.FC = () => {
                       </>
                     );
                   })()}
-
-
                 </div>
               </DndContext>
             )}
@@ -1580,12 +1898,13 @@ interface DraggableMeetingRowProps {
   indent?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (e: React.MouseEvent) => void;
+  setRowRef?: (meetingId: string, node: HTMLDivElement | null) => void;
   onNavigate: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-function DraggableMeetingRow({ item, isActive, indent, isSelected, onToggleSelect, onNavigate, onEdit, onDelete }: DraggableMeetingRowProps) {
+function DraggableMeetingRow({ item, isActive, indent, isSelected, onToggleSelect, setRowRef, onNavigate, onEdit, onDelete }: DraggableMeetingRowProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `meeting:${item.id}`,
     data: { type: 'meeting', meetingId: item.id },
@@ -1597,7 +1916,10 @@ function DraggableMeetingRow({ item, isActive, indent, isSelected, onToggleSelec
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        setRowRef?.(item.id, node);
+      }}
       style={style}
       {...attributes}
       {...listeners}
@@ -1653,25 +1975,232 @@ function DraggableMeetingRow({ item, isActive, indent, isSelected, onToggleSelec
 }
 
 // ---------------------------------------------------------------------------
-// Helper: droppable root zone for top-level folders
+// Helper: sortable visible folder row for tree ordering/nesting
 // ---------------------------------------------------------------------------
 
-function FolderRootDropZone({ enabled }: { enabled: boolean }) {
+function SortableFolderTreeRow({
+  row,
+  childCount,
+  isExpanded,
+  projection,
+  isMeetingDropTarget,
+  setRowRef,
+  onToggleExpanded,
+  onRename,
+  onDelete,
+  onCreateSubfolder,
+  onCreateMeeting,
+}: {
+  row: FolderRow;
+  childCount: number;
+  isExpanded: boolean;
+  isActiveMeeting?: string;
+  projection: FolderDropProjection | null;
+  isMeetingDropTarget: boolean;
+  setRowRef: (folderId: string, node: HTMLDivElement | null) => void;
+  onToggleExpanded: () => void;
+  onRename: (folderId: string, name: string) => Promise<void>;
+  onDelete: (folderId: string) => Promise<void>;
+  onCreateSubfolder: () => Promise<void>;
+  onCreateMeeting: () => Promise<void>;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(row.folder.name);
+  const [isCreatingSubfolder, setIsCreatingSubfolder] = useState(false);
+  const [isCreatingMeeting, setIsCreatingMeeting] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: folderTreeId(row.id),
+    data: { type: 'folder-tree-row', folderId: row.id },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.35 : 1,
+  };
+  const isInsideTarget = projection?.type === 'inside' && projection.targetId === row.id;
+  const isFolderDropHighlighted = isInsideTarget || isMeetingDropTarget;
+  const showBeforeLine = projection?.type === 'before' && projection.targetId === row.id;
+  const showAfterLine = projection?.type === 'after' && projection.targetId === row.id;
+
+  const startRename = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    setRenameValue(row.folder.name);
+    setIsRenaming(true);
+    setTimeout(() => renameInputRef.current?.focus(), 0);
+  };
+
+  const commitRename = async () => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== row.folder.name) {
+      await onRename(row.id, trimmed);
+    }
+    setIsRenaming(false);
+  };
+
+  return (
+    <div
+      ref={(node) => {
+        setNodeRef(node);
+        setRowRef(row.id, node);
+      }}
+      style={style}
+      className="relative rounded-md"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {showBeforeLine && <FolderInsertionLine position="top" />}
+      <div
+        {...attributes}
+        {...listeners}
+        className={cn(
+          'flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none group transition-colors',
+          isFolderDropHighlighted ? 'bg-blue-500/10 ring-1 ring-blue-500/30' : 'hover:bg-white/5',
+        )}
+        style={{ paddingLeft: `${row.depth * 12 + 8}px` }}
+        onClick={onToggleExpanded}
+      >
+        <span className="text-zinc-500 flex-shrink-0">
+          {isExpanded
+            ? <ChevronDown className="h-3 w-3" />
+            : <ChevronRight className="h-3 w-3" />}
+        </span>
+        <span className="text-zinc-400 flex-shrink-0">
+          {isExpanded
+            ? <FolderOpen className="h-3.5 w-3.5" />
+            : <FolderIcon className="h-3.5 w-3.5" />}
+        </span>
+        {isRenaming ? (
+          <input
+            ref={renameInputRef}
+            className="flex-1 bg-transparent text-sm text-white border-b border-blue-500 outline-none px-0.5"
+            value={renameValue}
+            onChange={(event) => setRenameValue(event.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') commitRename();
+              if (event.key === 'Escape') {
+                setRenameValue(row.folder.name);
+                setIsRenaming(false);
+              }
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          />
+        ) : (
+          <span
+            className="flex-1 text-sm font-medium text-zinc-200 truncate"
+            onDoubleClick={startRename}
+          >
+            {row.folder.name}
+          </span>
+        )}
+        {!isRenaming && (
+          <span className="text-xs text-zinc-500 flex-shrink-0 ml-1">
+            {childCount}
+          </span>
+        )}
+        {isHovered && !isRenaming && (
+          <div
+            className="flex items-center gap-0.5 ml-1 flex-shrink-0"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors"
+              title="Rename folder"
+              onClick={startRename}
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+            <button
+              className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="New subfolder"
+              disabled={isCreatingSubfolder}
+              onClick={async () => {
+                setIsCreatingSubfolder(true);
+                try {
+                  await onCreateSubfolder();
+                } finally {
+                  setIsCreatingSubfolder(false);
+                }
+              }}
+            >
+              <FolderPlus className="h-3 w-3" />
+            </button>
+            <button
+              className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="New meeting in folder"
+              disabled={isCreatingMeeting}
+              onClick={async () => {
+                setIsCreatingMeeting(true);
+                try {
+                  await onCreateMeeting();
+                } finally {
+                  setIsCreatingMeeting(false);
+                }
+              }}
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+            <button
+              className="p-0.5 rounded hover:bg-red-900/30 text-zinc-500 hover:text-red-400 transition-colors"
+              title="Delete folder"
+              onClick={() => onDelete(row.id)}
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+      </div>
+      {showAfterLine && <FolderInsertionLine position="bottom" />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helper: folder insertion feedback
+// ---------------------------------------------------------------------------
+
+function FolderInsertionLine({ position }: { position: 'top' | 'bottom' }) {
+  return (
+    <div
+      className={cn(
+        'pointer-events-none absolute left-1 right-1 z-20 h-0.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.7)]',
+        position === 'top' ? 'top-0' : 'bottom-0',
+      )}
+    />
+  );
+}
+
+function FolderRootBottomDropZone({ isActive }: { isActive: boolean }) {
   const { setNodeRef, isOver } = useDroppable({
-    id: 'folder-root',
-    data: { type: 'folder-root-target' },
-    disabled: !enabled,
+    id: folderRootBottomId,
+    data: { type: 'folder-root-bottom' },
   });
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        'mb-1 min-h-1 rounded-md transition-colors',
-        enabled && 'min-h-3',
-        enabled && isOver && 'bg-blue-500/10 ring-1 ring-blue-500/30',
+        'relative h-5 transition-colors',
+        (isActive || isOver) && 'bg-blue-500/5',
       )}
-    />
+      aria-hidden
+    >
+      {isActive && (
+        <div className="pointer-events-none absolute left-1 right-1 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.7)]" />
+      )}
+    </div>
   );
 }
 

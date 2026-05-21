@@ -17,15 +17,30 @@ impl FoldersRepository {
     ) -> Result<FolderModel, SqlxError> {
         let now = Utc::now().naive_utc();
 
+        let mut tx = pool.begin().await?;
+
+        let next_sort_order: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COALESCE(MAX(sort_order) + 1, 0)
+            FROM folders
+            WHERE parent_id = ? OR (? IS NULL AND parent_id IS NULL)
+            "#,
+        )
+        .bind(parent_id)
+        .bind(parent_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
         sqlx::query(
-            "INSERT INTO folders (id, name, created_at, updated_at, parent_id) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO folders (id, name, created_at, updated_at, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(name)
         .bind(now)
         .bind(now)
         .bind(parent_id)
-        .execute(pool)
+        .bind(next_sort_order.0)
+        .execute(&mut *tx)
         .await?;
 
         info!(
@@ -35,19 +50,28 @@ impl FoldersRepository {
 
         // Return the freshly created row
         let folder = sqlx::query_as::<_, FolderModel>(
-            "SELECT id, name, created_at, updated_at, parent_id FROM folders WHERE id = ?",
+            "SELECT id, name, created_at, updated_at, parent_id, sort_order FROM folders WHERE id = ?",
         )
         .bind(id)
-        .fetch_one(pool)
+        .fetch_one(&mut *tx)
         .await?;
 
+        tx.commit().await?;
         Ok(folder)
     }
 
-    /// Return all folders ordered by creation time (oldest first).
+    /// Return all folders ordered by persisted sibling order.
     pub async fn get_all_folders(pool: &SqlitePool) -> Result<Vec<FolderModel>, SqlxError> {
         let folders = sqlx::query_as::<_, FolderModel>(
-            "SELECT id, name, created_at, updated_at, parent_id FROM folders ORDER BY created_at ASC",
+            r#"
+            SELECT id, name, created_at, updated_at, parent_id, sort_order
+            FROM folders
+            ORDER BY
+                CASE WHEN parent_id IS NULL THEN '' ELSE parent_id END ASC,
+                sort_order ASC,
+                created_at ASC,
+                id ASC
+            "#,
         )
         .fetch_all(pool)
         .await?;
@@ -83,8 +107,26 @@ impl FoldersRepository {
         folder_id: &str,
         parent_id: Option<&str>,
     ) -> Result<bool, SqlxError> {
+        Self::move_folder_to_position(pool, folder_id, parent_id, i64::MAX).await
+    }
+
+    /// Move a folder to a specific sibling position under `parent_id`.
+    /// The index is clamped to the target sibling list and all affected siblings
+    /// are compacted back to contiguous `sort_order` values.
+    pub async fn move_folder_to_position(
+        pool: &SqlitePool,
+        folder_id: &str,
+        parent_id: Option<&str>,
+        position_index: i64,
+    ) -> Result<bool, SqlxError> {
         if folder_id.trim().is_empty() {
             return Err(SqlxError::Protocol("folder_id cannot be empty".to_string()));
+        }
+
+        if position_index < 0 {
+            return Err(SqlxError::Protocol(
+                "position_index cannot be negative".to_string(),
+            ));
         }
 
         if let Some(parent_id) = parent_id {
@@ -101,16 +143,16 @@ impl FoldersRepository {
 
         let mut tx = pool.begin().await?;
 
-        let source_exists: Option<(String,)> =
-            sqlx::query_as("SELECT id FROM folders WHERE id = ?")
+        let source_row: Option<(String, Option<String>)> =
+            sqlx::query_as("SELECT id, parent_id FROM folders WHERE id = ?")
                 .bind(folder_id)
                 .fetch_optional(&mut *tx)
                 .await?;
 
-        if source_exists.is_none() {
+        let Some((_, old_parent_id)) = source_row else {
             tx.rollback().await?;
             return Ok(false);
-        }
+        };
 
         if let Some(parent_id) = parent_id {
             let mut current_parent = Some(parent_id.to_string());
@@ -143,20 +185,78 @@ impl FoldersRepository {
         }
 
         let now = Utc::now().naive_utc();
-        let result = sqlx::query("UPDATE folders SET parent_id = ?, updated_at = ? WHERE id = ?")
-            .bind(parent_id)
-            .bind(now)
+
+        if old_parent_id.as_deref() != parent_id {
+            let old_siblings: Vec<(String,)> = sqlx::query_as(
+                r#"
+                SELECT id
+                FROM folders
+                WHERE (parent_id = ? OR (? IS NULL AND parent_id IS NULL))
+                    AND id != ?
+                ORDER BY sort_order ASC, created_at ASC, id ASC
+                "#,
+            )
+            .bind(old_parent_id.as_deref())
+            .bind(old_parent_id.as_deref())
             .bind(folder_id)
-            .execute(&mut *tx)
+            .fetch_all(&mut *tx)
             .await?;
 
-        if result.rows_affected() == 0 {
-            tx.rollback().await?;
-            return Ok(false);
+            for (index, (sibling_id,)) in old_siblings.iter().enumerate() {
+                sqlx::query("UPDATE folders SET sort_order = ? WHERE id = ?")
+                    .bind(index as i64)
+                    .bind(sibling_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+        }
+
+        let mut target_siblings: Vec<String> = sqlx::query_as::<_, (String,)>(
+            r#"
+            SELECT id
+            FROM folders
+            WHERE (parent_id = ? OR (? IS NULL AND parent_id IS NULL))
+                AND id != ?
+            ORDER BY sort_order ASC, created_at ASC, id ASC
+            "#,
+        )
+        .bind(parent_id)
+        .bind(parent_id)
+        .bind(folder_id)
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .map(|(id,)| id)
+        .collect();
+
+        let insert_index = (position_index as usize).min(target_siblings.len());
+        target_siblings.insert(insert_index, folder_id.to_string());
+
+        for (index, sibling_id) in target_siblings.iter().enumerate() {
+            if sibling_id == folder_id {
+                sqlx::query(
+                    "UPDATE folders SET parent_id = ?, sort_order = ?, updated_at = ? WHERE id = ?",
+                )
+                .bind(parent_id)
+                .bind(index as i64)
+                .bind(now)
+                .bind(sibling_id)
+                .execute(&mut *tx)
+                .await?;
+            } else {
+                sqlx::query("UPDATE folders SET sort_order = ? WHERE id = ?")
+                    .bind(index as i64)
+                    .bind(sibling_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
         }
 
         tx.commit().await?;
-        info!("Moved folder {} to parent {:?}", folder_id, parent_id);
+        info!(
+            "Moved folder {} to parent {:?} at index {}",
+            folder_id, parent_id, insert_index
+        );
         Ok(true)
     }
 
@@ -212,7 +312,8 @@ mod tests {
                 name TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                parent_id TEXT REFERENCES folders(id) ON DELETE CASCADE
+                parent_id TEXT REFERENCES folders(id) ON DELETE CASCADE,
+                sort_order INTEGER NOT NULL DEFAULT 0
             )
             "#,
         )
@@ -237,6 +338,25 @@ mod tests {
             .expect("Failed to fetch folder parent");
 
         row.0
+    }
+
+    async fn folder_order(pool: &SqlitePool, parent_id: Option<&str>) -> Vec<String> {
+        sqlx::query_as::<_, (String,)>(
+            r#"
+            SELECT id
+            FROM folders
+            WHERE parent_id = ? OR (? IS NULL AND parent_id IS NULL)
+            ORDER BY sort_order ASC, created_at ASC, id ASC
+            "#,
+        )
+        .bind(parent_id)
+        .bind(parent_id)
+        .fetch_all(pool)
+        .await
+        .expect("Failed to fetch folder order")
+        .into_iter()
+        .map(|(id,)| id)
+        .collect()
     }
 
     #[tokio::test]
@@ -271,6 +391,124 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn move_folder_to_position_reorders_root_folders() {
+        let pool = test_pool().await;
+        create_test_folder(&pool, "folder-a", None).await;
+        create_test_folder(&pool, "folder-b", None).await;
+        create_test_folder(&pool, "folder-c", None).await;
+
+        let moved = FoldersRepository::move_folder_to_position(&pool, "folder-c", None, 0)
+            .await
+            .expect("move should succeed");
+
+        assert!(moved);
+        assert_eq!(
+            folder_order(&pool, None).await,
+            vec!["folder-c", "folder-a", "folder-b"]
+        );
+    }
+
+    #[tokio::test]
+    async fn move_folder_to_position_moves_nested_folder_to_root_at_index() {
+        let pool = test_pool().await;
+        create_test_folder(&pool, "folder-a", None).await;
+        create_test_folder(&pool, "folder-c", None).await;
+        create_test_folder(&pool, "folder-b", Some("folder-a")).await;
+
+        let moved = FoldersRepository::move_folder_to_position(&pool, "folder-b", None, 1)
+            .await
+            .expect("move should succeed");
+
+        assert!(moved);
+        assert_eq!(folder_parent(&pool, "folder-b").await, None);
+        assert_eq!(
+            folder_order(&pool, None).await,
+            vec!["folder-a", "folder-b", "folder-c"]
+        );
+    }
+
+    #[tokio::test]
+    async fn move_folder_to_position_moves_nested_folder_to_first_root_position() {
+        let pool = test_pool().await;
+        create_test_folder(&pool, "folder-a", None).await;
+        create_test_folder(&pool, "folder-c", None).await;
+        create_test_folder(&pool, "folder-b", Some("folder-a")).await;
+
+        let moved = FoldersRepository::move_folder_to_position(&pool, "folder-b", None, 0)
+            .await
+            .expect("move should succeed");
+
+        assert!(moved);
+        assert_eq!(folder_parent(&pool, "folder-b").await, None);
+        assert_eq!(
+            folder_order(&pool, None).await,
+            vec!["folder-b", "folder-a", "folder-c"]
+        );
+    }
+
+    #[tokio::test]
+    async fn move_folder_to_position_moves_nested_folder_to_last_root_position() {
+        let pool = test_pool().await;
+        create_test_folder(&pool, "folder-a", None).await;
+        create_test_folder(&pool, "folder-c", None).await;
+        create_test_folder(&pool, "folder-b", Some("folder-a")).await;
+
+        let moved = FoldersRepository::move_folder_to_position(&pool, "folder-b", None, 2)
+            .await
+            .expect("move should succeed");
+
+        assert!(moved);
+        assert_eq!(folder_parent(&pool, "folder-b").await, None);
+        assert_eq!(
+            folder_order(&pool, None).await,
+            vec!["folder-a", "folder-c", "folder-b"]
+        );
+    }
+
+    #[tokio::test]
+    async fn move_folder_to_position_reorders_root_folder_downward() {
+        let pool = test_pool().await;
+        create_test_folder(&pool, "folder-a", None).await;
+        create_test_folder(&pool, "folder-b", None).await;
+        create_test_folder(&pool, "folder-c", None).await;
+
+        let moved = FoldersRepository::move_folder_to_position(&pool, "folder-a", None, 2)
+            .await
+            .expect("move should succeed");
+
+        assert!(moved);
+        assert_eq!(
+            folder_order(&pool, None).await,
+            vec!["folder-b", "folder-c", "folder-a"]
+        );
+    }
+
+    #[tokio::test]
+    async fn move_folder_to_position_moves_root_folder_under_parent_with_order() {
+        let pool = test_pool().await;
+        create_test_folder(&pool, "parent", None).await;
+        create_test_folder(&pool, "folder-b", None).await;
+        create_test_folder(&pool, "child-a", Some("parent")).await;
+        create_test_folder(&pool, "child-c", Some("parent")).await;
+
+        let moved =
+            FoldersRepository::move_folder_to_position(&pool, "folder-b", Some("parent"), 1)
+                .await
+                .expect("move should succeed");
+
+        assert!(moved);
+        assert_eq!(
+            folder_parent(&pool, "folder-b").await.as_deref(),
+            Some("parent")
+        );
+        assert_eq!(
+            folder_order(&pool, Some("parent")).await,
+            vec!["child-a", "folder-b", "child-c"]
+        );
+        assert_eq!(folder_order(&pool, None).await, vec!["parent"]);
+    }
+
+    #[tokio::test]
     async fn move_folder_rejects_self_parent() {
         let pool = test_pool().await;
         create_test_folder(&pool, "folder-a", None).await;
@@ -297,6 +535,25 @@ mod tests {
             .to_string()
             .contains("Cannot move a folder into one of its descendants"));
         assert_eq!(folder_parent(&pool, "folder-a").await, None);
+    }
+
+    #[tokio::test]
+    async fn move_folder_to_position_rejects_descendant_parent() {
+        let pool = test_pool().await;
+        create_test_folder(&pool, "folder-a", None).await;
+        create_test_folder(&pool, "folder-b", Some("folder-a")).await;
+        create_test_folder(&pool, "folder-c", Some("folder-b")).await;
+
+        let err =
+            FoldersRepository::move_folder_to_position(&pool, "folder-a", Some("folder-c"), 0)
+                .await
+                .expect_err("descendant move should fail");
+
+        assert!(err
+            .to_string()
+            .contains("Cannot move a folder into one of its descendants"));
+        assert_eq!(folder_parent(&pool, "folder-a").await, None);
+        assert_eq!(folder_order(&pool, None).await, vec!["folder-a"]);
     }
 
     #[tokio::test]

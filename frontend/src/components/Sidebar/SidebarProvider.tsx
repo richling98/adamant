@@ -31,6 +31,7 @@ export interface Folder {
   created_at: string;
   updated_at: string;
   parent_id?: string | null;
+  sort_order: number;
 }
 
 // Keyword search result — FTS5 across title, transcript, notes, and AI summary.
@@ -80,6 +81,7 @@ interface SidebarContextType {
   renameFolder: (folderId: string, name: string) => Promise<void>;
   deleteFolder: (folderId: string) => Promise<void>;
   moveFolder: (folderId: string, parentId: string | null) => Promise<void>;
+  moveFolderToPosition: (folderId: string, parentId: string | null, positionIndex: number) => Promise<void>;
   moveMeetingToFolder: (meetingId: string, folderId: string | null) => Promise<void>;
   /** Set before navigating to a new meeting so it gets auto-assigned to a folder. */
   pendingFolderId: string | null;
@@ -183,6 +185,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     await fetchFolders();
   }, [fetchFolders]);
 
+  const moveFolderToPosition = React.useCallback(async (
+    folderId: string,
+    parentId: string | null,
+    positionIndex: number,
+  ): Promise<void> => {
+    await invoke('api_move_folder_to_position', { folderId, parentId, positionIndex });
+    await fetchFolders();
+  }, [fetchFolders]);
+
   const moveMeetingToFolder = React.useCallback(async (meetingId: string, folderId: string | null): Promise<void> => {
     await invoke('api_move_meeting_to_folder', { meetingId, folderId });
     await Promise.all([fetchFolders(), fetchMeetings()]);
@@ -202,6 +213,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     const buildFolderTree = (parentId: string | null): SidebarItem[] => {
       return folders
         .filter((f) => (f.parent_id ?? null) === parentId)
+        .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
         .map((folder) => ({
           id: folder.id,
           title: folder.name,
@@ -441,6 +453,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       renameFolder,
       deleteFolder,
       moveFolder,
+      moveFolderToPosition,
       moveMeetingToFolder,
       pendingFolderId,
       setPendingFolderId,
