@@ -108,3 +108,24 @@ export interface TranscriptSegmentData {
   text: string;
   confidence?: number;
 }
+
+// Todo types
+export interface Todo {
+  id: string;
+  meeting_id?: string | null;
+  meeting_title: string;
+  date: string;
+  content_json?: string | null;
+  content_markdown?: string | null;
+  is_checked: boolean;
+  sort_order: number;
+  source_text?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TodoDateSummary {
+  date: string;
+  count: number;
+  unchecked: number;
+}

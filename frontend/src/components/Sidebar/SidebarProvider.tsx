@@ -4,6 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { usePathname, useRouter } from 'next/navigation';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
+import type { TodoDateSummary } from '@/types';
+import { localDateKey } from '@/lib/dateKey';
 
 
 interface SidebarItem {
@@ -86,6 +88,11 @@ interface SidebarContextType {
   /** Set before navigating to a new meeting so it gets auto-assigned to a folder. */
   pendingFolderId: string | null;
   setPendingFolderId: (id: string | null) => void;
+  // Todo state
+  todoDates: TodoDateSummary[];
+  todayUncheckedCount: number;
+  todoRefreshVersion: number;
+  fetchTodoDates: () => Promise<void>;
 }
 
 const SidebarContext = createContext<SidebarContextType | null>(null);
@@ -115,6 +122,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [activeSummaryPolls, setActiveSummaryPolls] = useState<Map<string, NodeJS.Timeout>>(new Map());
   /** When set, the next newly created meeting will be auto-assigned to this folder. */
   const [pendingFolderId, setPendingFolderId] = useState<string | null>(null);
+  const [todoDates, setTodoDates] = useState<TodoDateSummary[]>([]);
+  const [todayUncheckedCount, setTodayUncheckedCount] = useState(0);
+  const [todoRefreshVersion, setTodoRefreshVersion] = useState(0);
 
   // Tracks whether the user has an active note-taking session open (pencil flow).
   // Set by meeting-details/page.tsx when showRecordingControls becomes true.
@@ -131,6 +141,21 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error fetching folders:', error);
       setFolders([]);
+    }
+  }, []);
+
+  const fetchTodoDates = React.useCallback(async () => {
+    try {
+      const dates = await invoke('api_get_todo_dates') as TodoDateSummary[];
+      setTodoDates(dates);
+      const todayStr = localDateKey();
+      const todayGroup = dates.find(d => d.date === todayStr);
+      setTodayUncheckedCount(todayGroup?.unchecked ?? 0);
+      setTodoRefreshVersion(v => v + 1);
+    } catch (error) {
+      console.error('Error fetching todo dates:', error);
+      setTodoDates([]);
+      setTodayUncheckedCount(0);
     }
   }, []);
 
@@ -159,7 +184,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchMeetings();
     fetchFolders();
-  }, [serverAddress, fetchMeetings, fetchFolders]);
+    fetchTodoDates();
+  }, [serverAddress, fetchMeetings, fetchFolders, fetchTodoDates]);
 
   // Folder CRUD helpers — each refreshes both meetings and folders after mutation.
 
@@ -361,6 +387,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         onUpdate(result);
 
         // Stop polling if completed, error, failed, cancelled, or idle (after initial processing)
+        if (result.status === 'completed') {
+          // Refresh todo dates when summary completes (todos may have been extracted)
+          fetchTodoDates();
+        }
+
         if (result.status === 'completed' || result.status === 'error' || result.status === 'failed' || result.status === 'cancelled') {
           console.debug(`Polling completed for ${meetingId}, status: ${result.status}`);
           clearInterval(pollInterval);
@@ -457,6 +488,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       moveMeetingToFolder,
       pendingFolderId,
       setPendingFolderId,
+      // Todo state
+      todoDates,
+      todayUncheckedCount,
+      todoRefreshVersion,
+      fetchTodoDates,
     }}>
       {children}
     </SidebarContext.Provider>

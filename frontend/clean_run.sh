@@ -101,7 +101,17 @@ if [[ "$(uname)" == "Darwin" ]]; then
   DEV_APP_PATH="../target/debug/bundle/macos/${DEV_APP_NAME}.app"
   DEV_TAURI_CONFIG='{"identifier":"com.adamant.ai.dev","productName":"Adamant Dev","bundle":{"createUpdaterArtifacts":false}}'
 
+  # Remove the previous app bundle before rebuilding. Reusing an existing .app
+  # can preserve macOS FinderInfo/resource-fork metadata that breaks codesign.
+  rm -rf "$DEV_APP_PATH"
+
   pnpm tauri build --debug --bundles app --config "$DEV_TAURI_CONFIG"
+
+  # macOS can attach extended attributes/resource forks to app bundle files,
+  # which causes codesign to fail with "resource fork ... not allowed".
+  xattr -d com.apple.FinderInfo "$DEV_APP_PATH" 2>/dev/null || true
+  xattr -d 'com.apple.fileprovider.fpfs#P' "$DEV_APP_PATH" 2>/dev/null || true
+  xattr -cr "$DEV_APP_PATH" 2>/dev/null || true
 
   # macOS privacy permissions are tied to a bundle identity and code requirement.
   # `tauri dev` runs the raw target/debug binary, which may not appear in
