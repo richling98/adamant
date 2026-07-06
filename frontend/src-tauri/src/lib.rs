@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex as StdMutex;
@@ -27,10 +29,6 @@ macro_rules! perf_trace {
 macro_rules! perf_trace {
     ($($arg:tt)*) => {};
 }
-
-// Make these macros available to other modules
-pub(crate) use perf_debug;
-pub(crate) use perf_trace;
 
 // Re-export async logging macros for external use (removed due to macro conflicts)
 
@@ -450,6 +448,7 @@ pub fn get_language_preference_internal() -> Option<String> {
     LANGUAGE_PREFERENCE.lock().ok().map(|lang| lang.clone())
 }
 
+#[allow(deprecated)]
 pub fn run() {
     log::set_max_level(log::LevelFilter::Info);
 
@@ -751,6 +750,15 @@ pub fn run() {
             api::api_move_folder,
             api::api_move_folder_to_position,
             api::api_move_meeting_to_folder,
+            // Todo commands
+            api::todos_api::api_get_todos_by_date,
+            api::todos_api::api_get_todo_dates,
+            api::todos_api::api_get_today_todos,
+            api::todos_api::api_get_meeting_todos,
+            api::todos_api::api_create_todo,
+            api::todos_api::api_update_todo,
+            api::todos_api::api_toggle_todo,
+            api::todos_api::api_delete_todo,
             // Chat with meetings command (ADA-8)
             api::api_chat_with_meetings,
             // Summary commands

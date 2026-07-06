@@ -34,16 +34,36 @@ impl TodoExtractor {
         cancellation_token: Option<&CancellationToken>,
     ) -> Result<usize, String> {
         info!(
-            "Starting todo extraction for meeting: {} (model: {}, transcript_len: {}, notes_len: {})",
+            "Todo extraction inputs: meeting={}, model={}, transcript_len={}, notes_markdown={}, notes_len={}",
             meeting_id,
             model_name,
             transcript_text.len(),
+            notes_markdown.is_some(),
             notes_markdown.map(str::len).unwrap_or(0)
         );
+
+        if let Some(notes) = notes_markdown {
+            let preview_len = notes.len().min(300);
+            info!(
+                "Notes markdown preview (first {} chars): {:?}",
+                preview_len,
+                &notes[..preview_len]
+            );
+        }
 
         let note_items = notes_markdown
             .map(Self::extract_todo_section_items)
             .unwrap_or_default();
+
+        info!(
+            "Deterministic parsing result: {} items found from notes for meeting: {}",
+            note_items.len(),
+            meeting_id
+        );
+
+        for (i, item) in note_items.iter().enumerate() {
+            info!("  Note todo item {}: {}", i, item.text);
+        }
 
         let items = if note_items.is_empty() {
             let (system_prompt, user_prompt) =
@@ -69,12 +89,31 @@ impl TodoExtractor {
             .await?;
 
             let transcript_items = Self::parse_extraction_response(&raw_response)?;
+            let pre_filter_count = transcript_items.len();
+            let corporate_filtered = Self::filter_llm_items(transcript_items);
+            let corporate_count = corporate_filtered.len();
+            let action_filtered: Vec<_> = corporate_filtered
+                .into_iter()
+                .filter(|item| {
+                    if Self::is_action_item(&item.text) {
+                        true
+                    } else {
+                        info!(
+                            "Filtered LLM todo (not an action item): {}",
+                            item.text
+                        );
+                        false
+                    }
+                })
+                .collect();
             info!(
-                "LLM transcript todo extraction found {} items for meeting: {}",
-                transcript_items.len(),
+                "LLM transcript todo extraction: {} raw → {} after corporate filter → {} after action-item filter for meeting: {}",
+                pre_filter_count,
+                corporate_count,
+                action_filtered.len(),
                 meeting_id
             );
-            transcript_items
+            action_filtered
         } else {
             info!(
                 "Deterministic notes todo extraction found {} items for meeting: {}; skipping transcript LLM extraction",
@@ -108,21 +147,32 @@ impl TodoExtractor {
     }
 
     fn build_extraction_prompt(title: &str, date: &str, transcript: &str) -> (String, String) {
-        let system_prompt = r#"You are an action-item extractor. Your task is to read a meeting transcript and extract explicit post-meeting commitments only. Return ONLY a JSON array of objects, each with exactly these fields:
+        let system_prompt = r#"You are an action-item extractor for personal to-do lists. Your task is to read a meeting transcript and extract ONLY unambiguous, explicit post-meeting action items that a meeting participant needs to do after this meeting.
+
+Return ONLY a JSON array of objects, each with exactly these fields:
   "text": a clear, self-contained description of the action item (max 120 characters)
   "owner": the person responsible (null if not explicitly stated)
   "deadline": any specific deadline mentioned (null if not stated)
 
-Rules:
-- Only extract commitments where someone explicitly says they will do something after this meeting.
-- Do NOT extract questions, discussion topics, examples, hypothetical tasks, travel plans, facts, or things someone says they already do.
-- Do NOT extract general discussion topics, decisions, opinions, or announcements
-- Do NOT invent owners or deadlines
-- If nothing qualifies, return an empty array []
-- Output ONLY valid JSON. No preamble, no explanation, no markdown fences."#;
+STRICT INCLUSION CRITERIA -- the item MUST meet ALL of these:
+1. Someone explicitly uses commitment language: "I will", "I need to", "I should", "let's make sure to", "remind me to", "after this meeting I'll", "I plan to", "we need to", "I'm going to" (in the context of a personal task, not a corporate strategy)
+2. The action is something a meeting participant would personally do after the meeting (e.g., "email John", "research X", "follow up with Y", "schedule a meeting with Z")
+3. The action is NOT already happening -- it's a future task
+
+ABSOLUTE EXCLUSIONS -- never extract these:
+- Business strategies, corporate plans, or company operations ("we're investing in insurance", "we're building a Berkshire-like entity", "we're buying a company")
+- Things companies are doing as part of their business ("they are acquiring Vantage", "the transaction should close next month")
+- Discussion topics, opinions, facts, or announcements
+- Questions, hypothetical scenarios, or examples
+- Things someone says they already do or have done
+- General statements about plans without explicit personal commitment language
+
+When in doubt, leave it out. An empty array is always better than a false positive.
+
+Output ONLY valid JSON. No preamble, no explanation, no markdown fences."#;
 
         let user_prompt = format!(
-            "=== MEETING METADATA ===\nTitle: {}\nDate: {}\n\n=== TRANSCRIPT ===\n{}\n\nExtract explicit post-meeting commitments from the transcript:",
+            "=== MEETING METADATA ===\nTitle: {}\nDate: {}\n\n=== TRANSCRIPT ===\n{}\n\nExtract ONLY unambiguous, explicit post-meeting action items that a meeting participant personally needs to do. If none qualify, return []:",
             title, date, transcript
         );
 
@@ -148,10 +198,366 @@ Rules:
         Ok(filtered)
     }
 
+    /// Post-extraction safety filter for LLM-extracted items.
+    /// Rejects common false-positive patterns where the LLM mistakes
+    /// business strategies or corporate actions for personal to-dos.
+    fn filter_llm_items(items: Vec<ExtractedTodoItem>) -> Vec<ExtractedTodoItem> {
+        const CORPORATE_ACTION_PREFIXES: &[&str] = &[
+            "invest in",
+            "build a",
+            "build an",
+            "buy a",
+            "buy an",
+            "acquire",
+            "merge with",
+            "develop a",
+            "develop an",
+            "launch a",
+            "launch an",
+            "create a",
+            "create an",
+            "establish a",
+            "establish an",
+            "form a",
+            "form an",
+            "take private",
+            "take the company private",
+        ];
+
+        const CORPORATE_CONTEXT_PHRASES: &[&str] = &[
+            "the company will",
+            "the firm will",
+            "pershing square will",
+            "howard hughes will",
+            "we are buying",
+            "we're buying",
+            "we are building",
+            "we're building",
+            "we are investing",
+            "we're investing",
+            "we are acquiring",
+            "we're acquiring",
+        ];
+
+        items
+            .into_iter()
+            .filter(|item| {
+                let text_lower = item.text.to_lowercase();
+
+                for pattern in CORPORATE_ACTION_PREFIXES {
+                    if text_lower.starts_with(pattern) {
+                        info!(
+                            "Filtered LLM todo (corporate action prefix '{}'): {}",
+                            pattern, item.text
+                        );
+                        return false;
+                    }
+                }
+
+                for phrase in CORPORATE_CONTEXT_PHRASES {
+                    if text_lower.contains(phrase) {
+                        info!(
+                            "Filtered LLM todo (corporate context phrase '{}'): {}",
+                            phrase, item.text
+                        );
+                        return false;
+                    }
+                }
+
+                true
+            })
+            .collect()
+    }
+
+    /// Check whether a normalized to-do line is actually an action item.
+    ///
+    /// A real to-do starts with an action verb in imperative mood
+    /// (e.g., "research", "find out", "email", "call", "schedule").
+    /// Questions, statements, and meta-commentary are rejected.
+    ///
+    /// Golden rule: when in doubt, leave it out.
+    fn is_action_item(text: &str) -> bool {
+        let text_lower = text.to_lowercase();
+        let text_lower = text_lower.trim();
+
+        if text_lower.is_empty() {
+            return false;
+        }
+
+        // --- REJECT: Meta-commentary about to-dos ---
+        const META_PHRASES: &[&str] = &[
+            "not a to do",
+            "not a todo",
+            "not an action item",
+            "not a to-do",
+            "don't put",
+            "do not put",
+            "please don't",
+            "please do not",
+            "this is not",
+            "this isn't",
+            "ignore this",
+            "skip this",
+        ];
+        for phrase in META_PHRASES {
+            if text_lower.contains(phrase) {
+                return false;
+            }
+        }
+
+        // --- REJECT: Questions ---
+        // Lines ending with "?" are questions, not action items.
+        if text_lower.ends_with('?') {
+            return false;
+        }
+        // Lines starting with question words are questions.
+        const QUESTION_STARTERS: &[&str] = &[
+            "why",
+            "how",
+            "what",
+            "when",
+            "where",
+            "who",
+            "which",
+            "whose",
+            "is ",
+            "are ",
+            "was ",
+            "were ",
+            "do ",
+            "does ",
+            "did ",
+            "can ",
+            "could ",
+            "should ",
+            "would ",
+            "will ",
+            "won't ",
+            "isn't",
+            "aren't",
+            "wasn't",
+            "weren't",
+            "don't",
+            "doesn't",
+            "can't",
+            "cannot",
+            "couldn't",
+            "shouldn't",
+            "wouldn't",
+            "what's",
+            "whats",
+            "where's",
+            "wheres",
+            "who's",
+            "whos",
+        ];
+        for starter in QUESTION_STARTERS {
+            if text_lower.starts_with(starter) {
+                return false;
+            }
+        }
+
+        // --- ACCEPT: Lines starting with known action verbs/phrases ---
+        const ACTION_VERBS: &[&str] = &[
+            // Research / learning
+            "research",
+            "find out",
+            "figure out",
+            "look into",
+            "investigate",
+            "learn",
+            "study",
+            "explore",
+            "read",
+            "watch",
+            "listen",
+            // Communication
+            "email",
+            "call",
+            "text",
+            "contact",
+            "reach out",
+            "message",
+            "notify",
+            "tell",
+            "ask",
+            "remind",
+            "follow up",
+            "reply",
+            "respond",
+            "send",
+            "share",
+            "forward",
+            "distribute",
+            "post",
+            // Scheduling / planning
+            "schedule",
+            "book",
+            "set up",
+            "arrange",
+            "plan",
+            "organize",
+            "prepare",
+            "draft",
+            "write",
+            "create",
+            "make",
+            "build",
+            "design",
+            "develop",
+            "outline",
+            "brainstorm",
+            "sketch",
+            // Review / verification
+            "review",
+            "check",
+            "verify",
+            "confirm",
+            "test",
+            "audit",
+            "inspect",
+            "examine",
+            "analyze",
+            "evaluate",
+            "assess",
+            "compare",
+            "measure",
+            "calculate",
+            "compute",
+            // Task completion
+            "complete",
+            "finish",
+            "submit",
+            "deliver",
+            "update",
+            "fix",
+            "repair",
+            "resolve",
+            "address",
+            "solve",
+            "clean",
+            "wash",
+            "pack",
+            "move",
+            "install",
+            "configure",
+            "deploy",
+            "refactor",
+            "rename",
+            "delete",
+            "remove",
+            "add",
+            "implement",
+            "integrate",
+            "migrate",
+            "backup",
+            "restore",
+            "export",
+            "import",
+            "convert",
+            "format",
+            "edit",
+            "proofread",
+            "translate",
+            "transcribe",
+            "summarize",
+            "compile",
+            "gather",
+            "collect",
+            "sort",
+            "fill",
+            "print",
+            "scan",
+            "copy",
+            "download",
+            "upload",
+            // Acquisition
+            "get",
+            "buy",
+            "order",
+            "purchase",
+            "obtain",
+            "acquire",
+            // Reminders / intention
+            "remember to",
+            "don't forget to",
+            "make sure to",
+            "need to",
+            "have to",
+            "got to",
+            // Scheduling actions
+            "cancel",
+            "postpone",
+            "reschedule",
+            "register",
+            "sign up",
+            "enroll",
+            "apply",
+            "request",
+            "subscribe",
+            "unsubscribe",
+            "join",
+            "leave",
+            "start",
+            "stop",
+            "pause",
+            "resume",
+            "begin",
+            "end",
+            "close",
+            "open",
+            "save",
+            "load",
+            "find",
+            "search",
+            "replace",
+            "connect",
+            "disconnect",
+            "attach",
+            "detach",
+            "mount",
+            "unmount",
+            "lock",
+            "unlock",
+            // Practice / training
+            "practice",
+            "train",
+            "exercise",
+            "rehearse",
+            // Misc actions
+            "announce",
+            "publish",
+            "launch",
+            "renew",
+            "refund",
+            "return",
+            "exchange",
+            "upgrade",
+            "downgrade",
+            "uninstall",
+            "pair",
+            "unpair",
+            "link",
+            "unlink",
+        ];
+        for verb in ACTION_VERBS {
+            if text_lower.starts_with(verb) {
+                return true;
+            }
+        }
+
+        // --- DEFAULT: Reject ---
+        // If the line doesn't start with a known action verb and doesn't
+        // match any rejection pattern, default to rejecting it.
+        // "When in doubt, leave it out."
+        false
+    }
+
     fn extract_todo_section_items(notes: &str) -> Vec<ExtractedTodoItem> {
         let mut items = Vec::new();
         let mut in_todo_section = false;
         let mut todo_heading_level = 0usize;
+        let mut total_lines = 0usize;
 
         for line in notes.lines() {
             let trimmed = line.trim();
@@ -176,13 +582,28 @@ Rules:
             }
 
             if let Some(text) = Self::normalize_todo_line(trimmed) {
-                items.push(ExtractedTodoItem {
-                    text,
-                    owner: None,
-                    deadline: None,
-                });
+                total_lines += 1;
+                if Self::is_action_item(&text) {
+                    items.push(ExtractedTodoItem {
+                        text,
+                        owner: None,
+                        deadline: None,
+                    });
+                } else {
+                    info!(
+                        "Rejected non-action-item line from todo section: {:?}",
+                        text
+                    );
+                }
             }
         }
+
+        info!(
+            "Todo section parsing: {} lines found, {} accepted as action items, {} rejected",
+            total_lines,
+            items.len(),
+            total_lines.saturating_sub(items.len())
+        );
 
         items
     }

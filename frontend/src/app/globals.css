@@ -285,3 +285,20 @@
     overflow: visible !important;
   }
 }
+
+/* Todo editor: compact single-line that expands on focus */
+.todo-editor .bn-editor {
+  max-height: 3em;
+  overflow-y: auto;
+  padding: 2px 0;
+  font-size: 0.875rem;
+}
+
+.todo-editor .bn-editor:focus-within {
+  max-height: 200px;
+}
+
+/* Remove the block handle dots in the todo editor */
+.todo-editor .bn-block-group .bn-block-group > .bn-block-outer:first-child > .bn-block .bn-block-content::before {
+  display: none !important;
+}

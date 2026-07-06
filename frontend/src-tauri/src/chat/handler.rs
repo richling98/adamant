@@ -3,6 +3,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use tokio::time::{sleep, Duration};
 use tracing::{info, warn};
 
 use crate::{
@@ -51,10 +52,20 @@ pub async fn chat_with_meetings(
     let pool = state.db_manager.pool();
 
     // ── 1. Fetch model config ────────────────────────────────────────────────
-    let setting = SettingsRepository::get_model_config(&pool)
-        .await
-        .map_err(|e| format!("Failed to read model config: {e}"))?
-        .ok_or_else(|| "No model configured. Please set up a model in Settings.".to_string())?;
+    let setting = match SettingsRepository::get_model_config(&pool).await {
+        Ok(Some(setting)) => setting,
+        Ok(None) => {
+            warn!("chat_model_config_missing: retrying once before returning error");
+            sleep(Duration::from_millis(100)).await;
+            SettingsRepository::get_model_config(&pool)
+                .await
+                .map_err(|e| format!("Failed to read model config: {e}"))?
+                .ok_or_else(|| {
+                    "No model configured. Please set up a model in Settings.".to_string()
+                })?
+        }
+        Err(e) => return Err(format!("Failed to read model config: {e}")),
+    };
 
     let provider =
         LLMProvider::from_str(&setting.provider).map_err(|e| format!("Unknown provider: {e}"))?;

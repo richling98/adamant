@@ -2,9 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2, Send, X } from 'lucide-react';
+import { listen } from '@tauri-apps/api/event';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useMeetingChat } from './useMeetingChat';
+import { ChatModelPicker } from './ChatModelPicker';
+import type { ModelConfig } from '@/services/configService';
 
 // Example prompts shown in the empty state
 const EXAMPLE_PROMPTS = [
@@ -12,6 +15,25 @@ const EXAMPLE_PROMPTS = [
   'What action items came up across my meetings?',
   'Who did I meet with most recently?',
 ];
+
+const PROVIDER_LABELS: Record<ModelConfig['provider'], string> = {
+  'builtin-ai': 'Built-in AI',
+  ollama: 'Ollama',
+  claude: 'Claude',
+  openai: 'OpenAI',
+  groq: 'Groq',
+  openrouter: 'OpenRouter',
+  'custom-openai': 'Custom OpenAI',
+  'nvidia-inference': 'NVIDIA',
+};
+
+const PROVIDERS_REQUIRING_KEY = new Set<ModelConfig['provider']>([
+  'claude',
+  'openai',
+  'groq',
+  'openrouter',
+  'nvidia-inference',
+]);
 
 /**
  * FloatingChatBubble — a non-modal customer-service-style chat widget.
@@ -25,12 +47,21 @@ const EXAMPLE_PROMPTS = [
 export function FloatingChatBubble() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
+  const [showModelPicker, setShowModelPicker] = useState(false);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { messages, isLoading, sendMessage, clearHistory } = useMeetingChat();
+  const { messages, isLoading, modelConfig, setModelConfig, sendMessage, clearHistory } = useMeetingChat();
+
+  const modelNeedsKey = modelConfig
+    ? PROVIDERS_REQUIRING_KEY.has(modelConfig.provider) && !modelConfig.hasApiKey
+    : false;
+
+  const modelBadgeText = modelConfig
+    ? `${PROVIDER_LABELS[modelConfig.provider] ?? modelConfig.provider} · ${modelConfig.model}`
+    : 'No model selected';
 
   // Auto-scroll to the bottom whenever messages change or loading state changes
   useEffect(() => {
@@ -44,6 +75,18 @@ export function FloatingChatBubble() {
       return () => clearTimeout(timer);
     }
   }, [open]);
+
+  // Keep the chat header synced with changes made in Settings.
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    listen<ModelConfig>('model-config-updated', event => {
+      setModelConfig(event.payload);
+    }).then(unlisten => {
+      cleanup = unlisten;
+    });
+
+    return () => cleanup?.();
+  }, [setModelConfig]);
 
   // Close on click outside the panel (but not on the trigger button itself,
   // which is handled by its own onClick toggle)
@@ -106,13 +149,25 @@ export function FloatingChatBubble() {
 
           {/* ── Header ────────────────────────────────────────────────────── */}
           <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
-            <div>
+            <div className="min-w-0 flex-1 pr-2">
               <p className="text-sm font-semibold text-white">
                 Chat with your meetings
               </p>
               <p className="text-xs text-zinc-500">
                 Ask anything about your notes
               </p>
+              <button
+                type="button"
+                onClick={() => setShowModelPicker(prev => !prev)}
+                className={`mt-2 max-w-full truncate rounded-full border px-2.5 py-1 text-left text-[11px] transition-colors ${
+                  !modelConfig || modelNeedsKey
+                    ? 'border-amber-400/30 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15'
+                    : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/15'
+                }`}
+                title={modelBadgeText}
+              >
+                {(!modelConfig || modelNeedsKey) ? '⚠️ ' : ''}{modelBadgeText}
+              </button>
             </div>
             <div className="flex items-center gap-1">
               {/* Clear history */}
@@ -134,6 +189,17 @@ export function FloatingChatBubble() {
               </button>
             </div>
           </div>
+
+          {showModelPicker && (
+            <ChatModelPicker
+              modelConfig={modelConfig}
+              onSaved={(config) => {
+                setModelConfig(config);
+                setShowModelPicker(false);
+              }}
+              onCancel={() => setShowModelPicker(false)}
+            />
+          )}
 
           {/* ── Message list ──────────────────────────────────────────────── */}
           <div className="flex-1 overflow-y-auto px-4 py-4">

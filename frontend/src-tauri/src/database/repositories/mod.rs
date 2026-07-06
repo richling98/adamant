@@ -2,5 +2,6 @@ pub mod folder;
 pub mod meeting;
 pub mod setting;
 pub mod summary;
+pub mod todos;
 pub mod transcript;
 pub mod transcript_chunk;

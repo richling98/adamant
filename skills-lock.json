@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "trademark-search": {
+      "source": "dylanfeltus/skills",
+      "sourceType": "github",
+      "skillPath": "trademark-search/SKILL.md",
+      "computedHash": "cc16bba29cd5d2ba1f309a0bbda1325ecc7130b432e7c5af064e6d2a9a99fa33"
+    }
+  }
+}

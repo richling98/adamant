@@ -37,6 +37,7 @@ pub mod service;
 pub mod summary_engine;
 pub mod template_commands;
 pub mod templates;
+pub mod todo_extractor;
 
 // Re-export all Tauri commands (wildcard picks up internal __cmd__/__tauri_command_name__ symbols regardless of Tauri version)
 pub use commands::*;

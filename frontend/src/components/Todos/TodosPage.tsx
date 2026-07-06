@@ -237,6 +237,15 @@ function TodoRow({
 }) {
   const router = useRouter();
   const editorRef = useRef<HTMLDivElement>(null);
+  const isLoadingContent = useRef(false);
+
+  // Extracted todos store text in content_markdown/source_text but have
+  // content_json = null. We need to load the markdown into the BlockNote
+  // editor so the to-do text is visible (not a blank editor).
+  const displayMarkdown = todo.content_json
+    ? null
+    : (todo.content_markdown || todo.source_text || "").trim();
+
   const initialContent = todo.content_json
     ? (JSON.parse(todo.content_json) as any[])
     : undefined;
@@ -245,8 +254,40 @@ function TodoRow({
     initialContent: initialContent as any,
   });
 
+  // When content_json is null but we have markdown text, parse it into
+  // BlockNote blocks and load them into the editor. This is the same
+  // pattern used in BlockNoteSummaryView.tsx and BasicBlockNoteTest.tsx.
+  useEffect(() => {
+    if (!displayMarkdown) return;
+
+    let cancelled = false;
+    const loadMarkdown = async () => {
+      try {
+        const blocks = await editor.tryParseMarkdownToBlocks(displayMarkdown);
+        if (!cancelled && blocks.length > 0) {
+          // Guard: prevent the onChange fired by replaceBlocks from
+          // triggering a save back to the database.
+          isLoadingContent.current = true;
+          editor.replaceBlocks(editor.document, blocks);
+          setTimeout(() => {
+            isLoadingContent.current = false;
+          }, 0);
+        }
+      } catch (err) {
+        console.error("Failed to parse todo markdown to blocks:", err);
+      }
+    };
+    loadMarkdown();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, displayMarkdown]);
+
   const debouncedSave = useRef(
     debounce(async () => {
+      if (isLoadingContent.current) return;
       const markdown = await editor.blocksToMarkdownLossy();
       if (!markdown?.trim()) return;
       const json = JSON.stringify(editor.document);
@@ -287,7 +328,11 @@ function TodoRow({
             editor={editor}
             theme="dark"
             className="todo-editor"
-            onChange={() => debouncedSave()}
+            onChange={() => {
+              if (!isLoadingContent.current) {
+                debouncedSave();
+              }
+            }}
           />
         </div>
         {todo.meeting_id && todo.meeting_title && (

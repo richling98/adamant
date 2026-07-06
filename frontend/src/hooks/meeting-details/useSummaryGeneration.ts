@@ -492,6 +492,13 @@ export function useSummaryGeneration({
 
     console.debug(`✅ Proceeding with ${allTranscripts.length} transcripts and ${notesMarkdown.length} note characters`);
 
+    // Diagnostic: verify notes are being passed and check for to-do section
+    console.debug('📝 Notes markdown for todo extraction:', {
+      length: notesMarkdown.length,
+      preview: notesMarkdown.substring(0, 200),
+      hasTodoSection: /#{1,6}\s*(to.?do|action.?item|follow.?up)/i.test(notesMarkdown),
+    });
+
     console.debug('🚀 Starting summary generation with config:', {
       provider: modelConfig.provider,
       model: modelConfig.model,

@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design Spec: Inline Meeting Title in Notes Panel</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #22263a;
+    --border: rgba(255,255,255,0.08);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --emerald: #34d399;
+    --emerald-dim: rgba(52,211,153,0.15);
+    --amber: #fbbf24;
+    --red: #f87171;
+    --blue: #60a5fa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.6; padding: 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin: 2.5rem 0 0.75rem; color: var(--emerald); border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+  h3 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--text); }
+  p { margin-bottom: 0.75rem; color: var(--muted); }
+  strong { color: var(--text); }
+  code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85em; background: var(--card2); padding: 0.15em 0.4em; border-radius: 4px; color: var(--emerald); }
+  .meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 2rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+  .card-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.5rem; }
+  .tag { display: inline-block; padding: 0.2em 0.6em; border-radius: 99px; font-size: 0.75rem; font-weight: 600; }
+  .tag-green { background: var(--emerald-dim); color: var(--emerald); }
+  .tag-amber { background: rgba(251,191,36,0.12); color: var(--amber); }
+  .tag-blue { background: rgba(96,165,250,0.12); color: var(--blue); }
+  ul { padding-left: 1.4rem; color: var(--muted); }
+  ul li { margin-bottom: 0.3rem; }
+  ul li strong { color: var(--text); }
+
+  /* --- Mockup styles --- */
+  .mockup-wrapper { margin: 1rem 0 1.5rem; }
+  .mockup-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 0.4rem; }
+  .pane { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; width: 360px; }
+  .pane-header { min-height: 64px; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .pane-title-static { font-size: 1.05rem; font-weight: 600; color: var(--text); }
+  .pane-title-muted { font-size: 1.05rem; font-weight: 600; color: var(--muted); }
+  .pane-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .btn-outline { border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 0.8rem; color: var(--muted); background: transparent; cursor: pointer; }
+  .save-status { font-size: 0.8rem; color: var(--muted); }
+  .pane-body { padding: 1.25rem; height: 80px; }
+  .edit-pencil { color: var(--muted); opacity: 0; transition: opacity 0.15s; font-size: 0.8rem; }
+  .title-hover-row { display: flex; align-items: center; gap: 6px; cursor: text; border-radius: 4px; padding: 2px 4px; transition: background 0.15s; }
+  .title-hover-row:hover .edit-pencil { opacity: 1; }
+  .title-hover-row:hover { background: rgba(255,255,255,0.05); }
+  .title-input { background: rgba(255,255,255,0.07); border: 1px solid var(--emerald); border-radius: 6px; padding: 3px 8px; font-size: 1.05rem; font-weight: 600; color: var(--text); outline: none; width: 200px; font-family: inherit; }
+  .cursor-blink { display: inline-block; width: 2px; height: 1em; background: var(--emerald); margin-left: 2px; animation: blink 1s step-end infinite; vertical-align: middle; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .mockup-grid { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+  .mockup-item { flex-shrink: 0; }
+
+  /* --- Task list --- */
+  .task-list { list-style: none; padding: 0; }
+  .task-list li { display: flex; gap: 0.75rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .task-list li:last-child { border-bottom: none; }
+  .task-num { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--card2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: var(--emerald); margin-top: 1px; }
+  .task-body { flex: 1; }
+  .task-title { font-weight: 600; color: var(--text); font-size: 0.9rem; margin-bottom: 0.2rem; }
+  .task-detail { color: var(--muted); font-size: 0.82rem; }
+
+  /* --- Approach cards --- */
+  .approach-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin: 0.75rem 0; }
+  .approach-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; }
+  .approach-card.recommended { border-color: var(--emerald); }
+  .approach-card h3 { margin-top: 0; }
+  .pros { color: var(--emerald); font-size: 0.82rem; }
+  .cons { color: var(--red); font-size: 0.82rem; }
+
+  .file-pill { display: inline-block; background: var(--card2); border: 1px solid var(--border); border-radius: 6px; padding: 0.15em 0.5em; font-size: 0.78rem; font-family: 'SF Mono', monospace; color: var(--blue); margin: 0.15rem 0.15rem 0.15rem 0; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+
+  .callout { background: var(--emerald-dim); border-left: 3px solid var(--emerald); border-radius: 0 8px 8px 0; padding: 0.75rem 1rem; margin: 0.75rem 0; }
+  .callout p { color: var(--text); margin: 0; font-size: 0.9rem; }
+  .callout-amber { background: rgba(251,191,36,0.08); border-left-color: var(--amber); }
+  .callout-amber p { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<h1>Inline Meeting Title in Notes Panel</h1>
+<p class="meta">Design spec &nbsp;·&nbsp; 2026-05-18 &nbsp;·&nbsp; Adamant v0.5.x</p>
+
+<!-- ═══════════════════════════════════════════════════════ OVERVIEW -->
+<h2>Overview</h2>
+<div class="card">
+  <div class="card-title">Problem</div>
+  <p>The Notes panel header always shows the static label <strong>"My Notes"</strong>. Users have no way to see — or quickly edit — the meeting's title from the Notes panel. Renaming currently requires going through the AI Cleanup panel or sidebar, which is indirect.</p>
+  <div class="card-title" style="margin-top:0.75rem">Goal</div>
+  <p>Replace <code>My Notes</code> with the meeting's actual title, rendered as an <strong>inline-editable heading</strong>. Hovering reveals a pencil affordance; clicking converts it to a focused input. Saving persists to the database and syncs the sidebar — exactly as the existing <code>api_save_meeting_title</code> flow already does.</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ CURRENT STATE -->
+<h2>Current State</h2>
+<ul>
+  <li><strong>NotesPanel.tsx:599</strong> — <code>&lt;h2&gt;My Notes&lt;/h2&gt;</code>, static, no title prop</li>
+  <li><strong>useMeetingData.ts</strong> — <code>meetingTitle</code>, <code>handleTitleChange</code>, <code>handleSaveMeetingTitle</code> already exist and work, but are not wired to the Notes panel</li>
+  <li><strong>Backend</strong> — <code>api_save_meeting_title</code> Tauri command is complete; sidebar sync logic is in <code>handleSaveMeetingTitle</code></li>
+  <li><strong>page-content.tsx</strong> — renders <code>NotesPanel</code> but passes no title props; <code>meetingData.meetingTitle</code> and handlers are available right there</li>
+</ul>
+<div class="callout">
+  <p>The backend, state management, and sidebar sync are all done. This is a purely frontend wiring + UI task.</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ MOCKUPS -->
+<h2>UI States</h2>
+<div class="mockup-grid">
+
+  <div class="mockup-item">
+    <div class="mockup-label">1 · Default (resting)</div>
+    <div class="pane">
+      <div class="pane-header">
+        <div>
+          <div class="title-hover-row">
+            <span class="pane-title-static">Team Standup</span>
+            <span class="edit-pencil">✏</span>
+          </div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">created on: May 12, 2026</div>
+        </div>
+        <div class="pane-header-right">
+          <button class="btn-outline">Copy</button>
+          <span class="save-status">Saved 2m ago</span>
+        </div>
+      </div>
+      <div class="pane-body" style="color:var(--muted);font-size:0.85rem">Notes content…</div>
+    </div>
+    <p style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">Title shows in place of "My Notes". Pencil icon hidden until hover.</p>
+  </div>
+
+  <div class="mockup-item">
+    <div class="mockup-label">2 · Hovered</div>
+    <div class="pane">
+      <div class="pane-header">
+        <div>
+          <div class="title-hover-row" style="background:rgba(255,255,255,0.05)">
+            <span class="pane-title-static">Team Standup</span>
+            <span class="edit-pencil" style="opacity:1">✏</span>
+          </div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">created on: May 12, 2026</div>
+        </div>
+        <div class="pane-header-right">
+          <button class="btn-outline">Copy</button>
+          <span class="save-status">Saved 2m ago</span>
+        </div>
+      </div>
+      <div class="pane-body" style="color:var(--muted);font-size:0.85rem">Notes content…</div>
+    </div>
+    <p style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">Subtle highlight + pencil appear. Cursor becomes a text cursor.</p>
+  </div>
+
+  <div class="mockup-item">
+    <div class="mockup-label">3 · Editing (focused)</div>
+    <div class="pane">
+      <div class="pane-header">
+        <div>
+          <input class="title-input" value="Team Standup" readonly />
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">created on: May 12, 2026</div>
+        </div>
+        <div class="pane-header-right">
+          <button class="btn-outline">Copy</button>
+        </div>
+      </div>
+      <div class="pane-body" style="color:var(--muted);font-size:0.85rem">Notes content…</div>
+    </div>
+    <p style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">Input replaces heading. Enter or blur = save. Esc = cancel.</p>
+  </div>
+
+  <div class="mockup-item">
+    <div class="mockup-label">4 · New / Draft note</div>
+    <div class="pane">
+      <div class="pane-header">
+        <div>
+          <div class="title-hover-row">
+            <span class="pane-title-muted">Untitled Note</span>
+          </div>
+        </div>
+        <div class="pane-header-right">
+          <button class="btn-outline" style="opacity:0.4">Copy</button>
+        </div>
+      </div>
+      <div class="pane-body" style="color:var(--muted);font-size:0.85rem">enter text or type '/'</div>
+    </div>
+    <p style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">Draft note: title is non-editable (no meeting persisted yet). Greyed out.</p>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ INTERACTION -->
+<h2>Interaction Design</h2>
+<div class="card">
+  <h3>Keyboard &amp; mouse behaviour</h3>
+  <ul>
+    <li><strong>Click title</strong> → focus input, select all text</li>
+    <li><strong>Enter</strong> → trim, save if changed, return to heading view</li>
+    <li><strong>Escape</strong> → discard edits, return to heading view</li>
+    <li><strong>Blur</strong> (click outside) → same as Enter (save if changed)</li>
+    <li><strong>Empty input on save</strong> → revert to previous title (no empty titles)</li>
+    <li><strong>Draft note (id==="new")</strong> → title shows <code>Untitled Note</code> in muted color, click-to-edit disabled until meeting is persisted</li>
+  </ul>
+</div>
+<div class="card">
+  <h3>Save behaviour</h3>
+  <ul>
+    <li>Calls <code>handleSaveMeetingTitle()</code> from <code>useMeetingData</code> — already handles API call + sidebar sync + current meeting context update</li>
+    <li>No new API or state needed; just wire existing hooks to new props</li>
+    <li>Show a brief toast on save error (already handled by <code>handleSaveMeetingTitle</code>'s error path)</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ APPROACHES -->
+<h2>Approaches Considered</h2>
+<div class="approach-grid">
+
+  <div class="approach-card recommended">
+    <h3>A · Inline in NotesPanel <span class="tag tag-green" style="margin-left:6px">Recommended</span></h3>
+    <p>Add <code>meetingTitle</code>, <code>onTitleChange</code>, <code>onTitleSave</code> props to <code>NotesPanel</code>. Build the editable heading inline — a small controlled input toggled by <code>isEditingTitle</code> state local to <code>NotesPanel</code>.</p>
+    <p class="pros">✓ Self-contained. No new component file. Minimal prop surface. Follows the pattern already used in the panel (e.g. save status).</p>
+    <p class="cons">✗ NotesPanel gets a few more props.</p>
+  </div>
+
+  <div class="approach-card">
+    <h3>B · Shared <code>EditableTitle</code> component</h3>
+    <p>Extract a generic <code>&lt;EditableTitle&gt;</code> component, reuse it across Notes, Transcript, and Summary panels.</p>
+    <p class="pros">✓ Reusable if other panels ever need editable titles.</p>
+    <p class="cons">✗ Only one panel needs it now. Premature abstraction. Adds a new file for no current gain.</p>
+  </div>
+
+  <div class="approach-card">
+    <h3>C · Title in a shared panel header component</h3>
+    <p>Refactor all three panels to share a <code>PaneHeader</code> component that supports an optional editable title slot.</p>
+    <p class="cons">✗ Large refactor of working code. Much more risk for no user-facing gain. Out of scope.</p>
+  </div>
+
+</div>
+<div class="callout">
+  <p><strong>Recommendation: Approach A.</strong> It's the smallest change that fully delivers the feature. The codebase explicitly avoids premature abstractions (per CLAUDE.md).</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TASKS -->
+<h2>Implementation Tasks</h2>
+<ul class="task-list">
+
+  <li>
+    <div class="task-num">1</div>
+    <div class="task-body">
+      <div class="task-title">Add title props to <code>NotesPanel</code></div>
+      <div class="task-detail">
+        Extend <code>NotesPanelProps</code> with <code>meetingTitle?: string</code>, <code>onTitleChange?: (t: string) => void</code>, <code>onTitleSave?: () => Promise&lt;void&gt;</code>.<br>
+        <span class="file-pill">src/components/NotesPanel.tsx</span>
+      </div>
+    </div>
+  </li>
+
+  <li>
+    <div class="task-num">2</div>
+    <div class="task-body">
+      <div class="task-title">Build inline editable title in the Notes panel header</div>
+      <div class="task-detail">
+        Replace the static <code>&lt;h2&gt;My Notes&lt;/h2&gt;</code> at line 599 with a conditional: if <code>isEditingTitle</code> (local state), render <code>&lt;input&gt;</code>; else render the hover-affordance heading. Handle Enter / Escape / blur interactions. Guard against empty titles on save.<br>
+        <span class="file-pill">src/components/NotesPanel.tsx</span>
+      </div>
+    </div>
+  </li>
+
+  <li>
+    <div class="task-num">3</div>
+    <div class="task-body">
+      <div class="task-title">Wire props from <code>page-content.tsx</code> → <code>NotesPanel</code></div>
+      <div class="task-detail">
+        Pass <code>meetingTitle={meetingData.meetingTitle}</code>, <code>onTitleChange={meetingData.handleTitleChange}</code>, <code>onTitleSave={meetingData.handleSaveMeetingTitle}</code> at the <code>&lt;NotesPanel&gt;</code> call site (line 484).<br>
+        <span class="file-pill">src/app/meeting-details/page-content.tsx</span>
+      </div>
+    </div>
+  </li>
+
+  <li>
+    <div class="task-num">4</div>
+    <div class="task-body">
+      <div class="task-title">Handle draft note state</div>
+      <div class="task-detail">
+        When <code>isNewNote</code> is true, show <code>Untitled Note</code> in muted style and disable click-to-edit (no meeting ID exists yet, so there is nothing to save to). The title becomes editable once the note is first persisted and <code>onMeetingCreated</code> fires.<br>
+        <span class="file-pill">src/components/NotesPanel.tsx</span>
+      </div>
+    </div>
+  </li>
+
+  <li>
+    <div class="task-num">5</div>
+    <div class="task-body">
+      <div class="task-title">Verify sidebar stays in sync</div>
+      <div class="task-detail">
+        <code>handleSaveMeetingTitle</code> already calls <code>setMeetings</code> and <code>setCurrentMeeting</code>. Manually test: rename via Notes panel → confirm sidebar and page title update immediately, no reload needed.<br>
+        <span class="file-pill">src/hooks/meeting-details/useMeetingData.ts</span> (no changes needed — just verify)
+      </div>
+    </div>
+  </li>
+
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════ FILES -->
+<h2>Files Changed</h2>
+<div class="card">
+  <div style="margin-bottom:0.5rem">
+    <span class="file-pill">src/components/NotesPanel.tsx</span>
+    <span class="tag tag-amber" style="font-size:0.72rem;margin-left:4px">modified</span>
+    &nbsp; Add 3 props + replace static title with editable component (~40 lines net change)
+  </div>
+  <div>
+    <span class="file-pill">src/app/meeting-details/page-content.tsx</span>
+    <span class="tag tag-amber" style="font-size:0.72rem;margin-left:4px">modified</span>
+    &nbsp; Pass 3 new props to <code>&lt;NotesPanel&gt;</code> (~3 lines)
+  </div>
+</div>
+<p>No new files. No backend changes. No changes to <code>useMeetingData.ts</code>, <code>SidebarProvider.tsx</code>, or any Rust code.</p>
+
+<!-- ═══════════════════════════════════════════════════════ END RESULT -->
+<h2>End Result</h2>
+<div class="callout">
+  <p>When a user opens any meeting, the Notes panel header shows the meeting's real name instead of "My Notes." Hovering over the title reveals a pencil icon. Clicking it replaces the heading with a text input pre-filled with the current title. The user types a new name and presses Enter (or clicks away) — the title saves instantly, updates in the sidebar, and the heading snaps back. Pressing Escape cancels without saving. For brand-new unsaved notes, the title displays "Untitled Note" in grey and is not editable until the note is first saved.</p>
+</div>
+
+<hr class="divider">
+<p style="font-size:0.8rem;color:var(--muted)">Review this spec, then we'll move to the implementation plan.</p>
+
+</body>
+</html>

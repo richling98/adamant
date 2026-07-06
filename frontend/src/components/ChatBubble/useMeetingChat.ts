@@ -1,5 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import type { ModelConfig } from '@/services/configService';
 
 // Mirrors the Rust `ChatMessage` struct
 export interface ChatMessage {
@@ -10,9 +12,20 @@ export interface ChatMessage {
 interface UseMeetingChatReturn {
   messages: ChatMessage[];
   isLoading: boolean;
+  modelConfig: ModelConfig | null;
+  setModelConfig: Dispatch<SetStateAction<ModelConfig | null>>;
+  refreshModelConfig: () => Promise<ModelConfig | null>;
   sendMessage: (text: string, dateRangeDays?: number) => Promise<void>;
   clearHistory: () => void;
 }
+
+const PROVIDERS_REQUIRING_API_KEY = new Set([
+  'claude',
+  'groq',
+  'openai',
+  'openrouter',
+  'nvidia-inference',
+]);
 
 /**
  * Hook that manages the chat-with-meetings session state and communicates with
@@ -24,6 +37,23 @@ interface UseMeetingChatReturn {
 export function useMeetingChat(): UseMeetingChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
+
+  const refreshModelConfig = useCallback(async () => {
+    try {
+      const config = await invoke<ModelConfig | null>('api_get_model_config');
+      setModelConfig(config);
+      return config;
+    } catch (err) {
+      console.error('Failed to load chatbot model config:', err);
+      setModelConfig(null);
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshModelConfig();
+  }, [refreshModelConfig]);
 
   const sendMessage = useCallback(
     async (text: string, dateRangeDays?: number) => {
@@ -32,6 +62,33 @@ export function useMeetingChat(): UseMeetingChatReturn {
       // Append user turn immediately so the UI feels responsive
       const userMessage: ChatMessage = { role: 'user', content: text.trim() };
       setMessages(prev => [...prev, userMessage]);
+
+      const currentConfig = modelConfig ?? await refreshModelConfig();
+      if (!currentConfig) {
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: '⚠️ No model selected. Pick an AI model in the chat header or Settings to continue.',
+          },
+        ]);
+        return;
+      }
+
+      if (
+        PROVIDERS_REQUIRING_API_KEY.has(currentConfig.provider) &&
+        !currentConfig.hasApiKey
+      ) {
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: `⚠️ ${currentConfig.provider} requires an API key. Add one in Settings before using this model for chat.`,
+          },
+        ]);
+        return;
+      }
+
       setIsLoading(true);
 
       try {
@@ -70,12 +127,12 @@ export function useMeetingChat(): UseMeetingChatReturn {
         setIsLoading(false);
       }
     },
-    [messages, isLoading],
+    [messages, isLoading, modelConfig, refreshModelConfig],
   );
 
   const clearHistory = useCallback(() => {
     setMessages([]);
   }, []);
 
-  return { messages, isLoading, sendMessage, clearHistory };
+  return { messages, isLoading, modelConfig, setModelConfig, refreshModelConfig, sendMessage, clearHistory };
 }

@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 use anyhow::Result;
 use cpal::traits::{DeviceTrait, HostTrait};
 

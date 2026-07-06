@@ -199,6 +199,7 @@ pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
         None,
     ).await {
         error!("Failed to set default summary model config: {}", e);
+        return Err(format!("Failed to set default summary model config: {}", e));
     }
 
     // Default Transcription Model: Parakeet
@@ -208,6 +209,7 @@ pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
         "parakeet-tdt-0.6b-v3-int8",
     ).await {
         error!("Failed to set default transcription model config: {}", e);
+        return Err(format!("Failed to set default transcription model config: {}", e));
     }
 
     info!("Fresh database initialized successfully with default models");

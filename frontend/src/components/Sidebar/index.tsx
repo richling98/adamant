@@ -98,6 +98,8 @@ const Sidebar: React.FC = () => {
     moveFolderToPosition,
     moveMeetingToFolder,
     refetchMeetings,
+    todoDates,
+    todayUncheckedCount,
   } = useSidebar();
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings']));
@@ -160,6 +162,22 @@ const Sidebar: React.FC = () => {
     setIsFoldersExpanded((prev) => {
       const next = !prev;
       try { localStorage.setItem('sidebar-folders-collapsed', String(next)); } catch {}
+      return next;
+    });
+  };
+  // Collapse state for the "To Do's" section — persisted across restarts
+  const [isTodosExpanded, setIsTodosExpanded] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('sidebar-todos-collapsed');
+      return stored === null ? true : stored !== 'true' ? false : true;
+    } catch {
+      return true;
+    }
+  });
+  const toggleTodos = () => {
+    setIsTodosExpanded((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('sidebar-todos-collapsed', String(next)); } catch {}
       return next;
     });
   };
@@ -1537,6 +1555,59 @@ const Sidebar: React.FC = () => {
                     </UnfiledDropZone>
                   </div>
 
+                  {/* ── To Do's section ── */}
+                  {(() => {
+                    if (todoDates.length === 0) return null;
+
+                    return (
+                      <>
+                        <div
+                          className="flex items-center justify-between h-8 mt-4 mb-1 cursor-pointer select-none"
+                          onClick={toggleTodos}
+                        >
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-500 flex-shrink-0">
+                              {isTodosExpanded
+                                ? <ChevronDown className="h-3 w-3" />
+                                : <ChevronRight className="h-3 w-3" />}
+                            </span>
+                            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">To Do&apos;s</span>
+                            {todayUncheckedCount > 0 && (
+                              <span className="text-xs text-zinc-500 ml-1">({todayUncheckedCount})</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className={cn(
+                          'overflow-hidden transition-all duration-200',
+                          isTodosExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
+                        )}>
+                          {/* "Today" quick link */}
+                          <button
+                            onClick={() => router.push('/todos')}
+                            className="flex items-center gap-2 w-full px-2 py-1 text-sm text-zinc-400 hover:text-zinc-200 transition-colors rounded-md hover:bg-white/5"
+                          >
+                            <span className="text-xs">📋</span>
+                            <span>Today</span>
+                            {todayUncheckedCount > 0 && (
+                              <span className="text-xs text-zinc-600">({todayUncheckedCount})</span>
+                            )}
+                          </button>
+
+                          {/* Date groups */}
+                          {todoDates.map((dateSummary) => (
+                            <TodoDateGroupRow
+                              key={dateSummary.date}
+                              date={dateSummary.date}
+                              count={dateSummary.unchecked}
+                              totalCount={dateSummary.count}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    );
+                  })()}
+
                   {/* ── By Date virtual section ── */}
                   {(() => {
                     // Group ALL meetings (regardless of folder) by creation date M/D/YYYY,
@@ -1818,6 +1889,65 @@ const Sidebar: React.FC = () => {
     </div>
   );
 };
+
+// ---------------------------------------------------------------------------
+// Helper: date group row for the To Do's sidebar section
+// ---------------------------------------------------------------------------
+
+function TodoDateGroupRow({
+  date,
+  count,
+  totalCount,
+}: {
+  date: string;
+  count: number;
+  totalCount: number;
+}) {
+  const router = useRouter();
+  const d = new Date(date + "T00:00:00");
+  const label = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+  const storageKey = `sidebar-todos-date-${label}`;
+  const [isExpanded, setIsExpanded] = useState(() => {
+    try {
+      return localStorage.getItem(storageKey) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleExpand = () => {
+    const next = !isExpanded;
+    setIsExpanded(next);
+    try { localStorage.setItem(storageKey, String(next)); } catch {}
+  };
+
+  return (
+    <div className="ml-2">
+      <button
+        onClick={toggleExpand}
+        className="flex items-center gap-1 w-full px-2 py-0.5 text-sm text-zinc-400 hover:text-zinc-200 transition-colors rounded-md hover:bg-white/5 text-left"
+      >
+        <span className="text-zinc-500 flex-shrink-0">
+          {isExpanded
+            ? <ChevronDown className="h-3 w-3" />
+            : <ChevronRight className="h-3 w-3" />}
+        </span>
+        <span className="truncate">{label}</span>
+        <span className="text-xs text-zinc-600 flex-shrink-0">({count})</span>
+      </button>
+      {isExpanded && (
+        <div className="ml-6">
+          <button
+            onClick={() => router.push(`/todos?date=${date}`)}
+            className="block w-full text-left text-xs text-zinc-500 hover:text-zinc-300 truncate px-1 py-0.5 rounded hover:bg-white/5 transition-colors"
+          >
+            View all {totalCount} item{totalCount !== 1 ? 's' : ''} →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Helper: non-draggable meeting row used by virtual sections such as By Date

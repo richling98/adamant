@@ -2,6 +2,7 @@ use log::info;
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::manager::DatabaseManager;
+use super::repositories::setting::SettingsRepository;
 use crate::state::AppState;
 
 /// Initialize database on app startup
@@ -29,6 +30,25 @@ pub async fn initialize_database_on_startup(app: &AppHandle) -> Result<(), Strin
         let db_manager = DatabaseManager::new_from_app_handle(app)
             .await
             .map_err(|e| format!("Failed to initialize database manager: {}", e))?;
+
+        let pool = db_manager.pool();
+
+        let setting = SettingsRepository::get_model_config(pool)
+            .await
+            .map_err(|e| format!("Failed to read model config: {}", e))?;
+
+        if setting.is_none() {
+            info!("No model config found - seeding default model config");
+            SettingsRepository::save_model_config(
+                pool,
+                "builtin-ai",
+                "gemma3:1b",
+                "large-v3",
+                None,
+            )
+            .await
+            .map_err(|e| format!("Failed to seed default model config: {}", e))?;
+        }
 
         app.manage(AppState { db_manager });
         info!("Database initialized successfully");
