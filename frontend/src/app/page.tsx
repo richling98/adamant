@@ -14,37 +14,16 @@ import { indexedDBService } from '@/services/indexedDBService';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import Link from 'next/link';
-import { getTodosByDate, toggleTodo as apiToggleTodo } from '@/lib/todoApi';
-import { localDateKey } from '@/lib/dateKey';
-import type { Todo } from '@/types';
 
 export default function Home() {
   const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
   const [hoverStartBtn, setHoverStartBtn] = useState(false);
-  const [todayTodos, setTodayTodos] = useState<Todo[]>([]);
-  const [todosLoading, setTodosLoading] = useState(true);
 
   const { transcriptModelConfig } = useConfig();
   const recordingState = useRecordingState();
   const { status } = recordingState;
 
-  const { setIsMeetingActive, refetchMeetings, todoRefreshVersion, fetchTodoDates } = useSidebar();
-
-  useEffect(() => {
-    setTodosLoading(true);
-    getTodosByDate(localDateKey()).then(setTodayTodos).finally(() => setTodosLoading(false));
-  }, [todoRefreshVersion]);
-
-  const handleTodoToggle = async (id: string, checked: boolean) => {
-    setTodayTodos(prev => prev.map(t => t.id === id ? { ...t, is_checked: checked } : t));
-    try {
-      await apiToggleTodo(id, checked);
-      fetchTodoDates();
-    } catch (e) {
-      setTodayTodos(prev => prev.map(t => t.id === id ? { ...t, is_checked: !checked } : t));
-    }
-  };
+  const { setIsMeetingActive, refetchMeetings } = useSidebar();
   const { modals, messages, hideModal } = useModalState(transcriptModelConfig);
 
   const {
@@ -200,58 +179,23 @@ export default function Home() {
           Start New Meeting
         </button>
 
-        {/* Today's To-Dos quick view */}
-        <div className="w-full max-w-md mt-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-zinc-300">Today&apos;s To-Dos</h2>
-            <Link href="/todos" className="text-xs text-primary hover:text-primary/80 transition-colors">
-              View all →
-            </Link>
-          </div>
-
-          {todosLoading ? (
-            <div className="space-y-2 animate-pulse">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-4 bg-zinc-800 rounded w-3/4" />
-              ))}
-            </div>
-          ) : todayTodos.length === 0 ? (
-            <p className="text-xs text-zinc-500">
-              No to-dos for today. Run AI cleanup on a meeting to get started.
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              {todayTodos.slice(0, 5).map((todo) => (
-                <div key={todo.id} className="flex items-center gap-2 text-sm group">
-                  <input
-                    type="checkbox"
-                    checked={todo.is_checked}
-                    onChange={() => handleTodoToggle(todo.id, !todo.is_checked)}
-                    className="accent-primary cursor-pointer shrink-0"
-                  />
-                  <span
-                    className={`truncate ${
-                      todo.is_checked ? "line-through text-zinc-500" : "text-zinc-300"
-                    }`}
-                  >
-                    {todo.content_markdown || todo.source_text || "Untitled"}
-                  </span>
-                  {todo.meeting_id && (
-                    <Link
-                      href={`/meeting-details?id=${todo.meeting_id}`}
-                      className="text-xs text-zinc-600 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    >
-                      ↗
-                    </Link>
-                  )}
-                </div>
-              ))}
-              {todayTodos.length > 5 && (
-                <p className="text-xs text-zinc-500">+{todayTodos.length - 5} more</p>
-              )}
-            </div>
-          )}
-        </div>
+        <button
+          onClick={() => router.push('/todos')}
+          className="px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
+          style={{
+            background: hoverStartBtn ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--primary) / 0.07)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: `1px solid ${hoverStartBtn ? 'hsl(var(--primary) / 0.75)' : 'hsl(var(--primary) / 0.5)'}`,
+            color: 'hsl(var(--primary))',
+            boxShadow: hoverStartBtn
+              ? '0 0 40px hsl(var(--primary) / 0.22), 0 8px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
+              : '0 0 28px hsl(var(--primary) / 0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
+            transform: hoverStartBtn ? 'translateY(-2px) scale(1.03)' : 'translateY(0) scale(1)',
+          }}
+        >
+          To dos
+        </button>
       </div>
     </motion.div>
   );
