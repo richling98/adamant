@@ -1,6 +1,6 @@
 ---
-name: explore
-description: Explore and understand a feature before implementation
+name: "explore"
+description: "Explore and understand a feature before implementation"
 ---
 
 # Initial Exploration Stage

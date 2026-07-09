@@ -1,6 +1,6 @@
 ---
-name: review
-description: Perform comprehensive code review for a Linear issue
+name: "review"
+description: "Perform comprehensive code review for a Linear issue"
 ---
 
 # Code Review Task

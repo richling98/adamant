@@ -186,14 +186,14 @@ export default function Home() {
           onMouseLeave={() => setHoverStartBtn(false)}
           className="px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
           style={{
-            background: hoverStartBtn ? 'rgba(34, 197, 94, 0.15)' : 'rgba(34, 197, 94, 0.07)',
+            background: hoverStartBtn ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--primary) / 0.07)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
-            border: `1px solid ${hoverStartBtn ? 'rgba(34, 197, 94, 0.75)' : 'rgba(34, 197, 94, 0.5)'}`,
-            color: hoverStartBtn ? '#86efac' : '#4ade80',
+            border: `1px solid ${hoverStartBtn ? 'hsl(var(--primary) / 0.75)' : 'hsl(var(--primary) / 0.5)'}`,
+            color: 'hsl(var(--primary))',
             boxShadow: hoverStartBtn
-              ? '0 0 40px rgba(34, 197, 94, 0.22), 0 8px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
-              : '0 0 28px rgba(34, 197, 94, 0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
+              ? '0 0 40px hsl(var(--primary) / 0.22), 0 8px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
+              : '0 0 28px hsl(var(--primary) / 0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
             transform: hoverStartBtn ? 'translateY(-2px) scale(1.03)' : 'translateY(0) scale(1)',
           }}
         >
@@ -204,7 +204,7 @@ export default function Home() {
         <div className="w-full max-w-md mt-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-medium text-zinc-300">Today&apos;s To-Dos</h2>
-            <Link href="/todos" className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors">
+            <Link href="/todos" className="text-xs text-primary hover:text-primary/80 transition-colors">
               View all →
             </Link>
           </div>
@@ -227,7 +227,7 @@ export default function Home() {
                     type="checkbox"
                     checked={todo.is_checked}
                     onChange={() => handleTodoToggle(todo.id, !todo.is_checked)}
-                    className="accent-emerald-500 cursor-pointer shrink-0"
+                    className="accent-primary cursor-pointer shrink-0"
                   />
                   <span
                     className={`truncate ${
@@ -239,7 +239,7 @@ export default function Home() {
                   {todo.meeting_id && (
                     <Link
                       href={`/meeting-details?id=${todo.meeting_id}`}
-                      className="text-xs text-zinc-600 hover:text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      className="text-xs text-zinc-600 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                     >
                       ↗
                     </Link>

@@ -41,6 +41,18 @@ import Logo from '../Logo';
 import { ComplianceNotification } from '../ComplianceNotification';
 import { Input } from '../ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import { useConfig } from '@/contexts/ConfigContext';
+import { THEME_OPTIONS, type ThemeName } from '@/lib/theme';
 
 interface SidebarItem {
   id: string;
@@ -101,6 +113,7 @@ const Sidebar: React.FC = () => {
     todoDates,
     todayUncheckedCount,
   } = useSidebar();
+  const { uiTheme, setUiTheme } = useConfig();
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings']));
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -1068,31 +1081,47 @@ const Sidebar: React.FC = () => {
             </TooltipContent>
           </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
-                onClick={() => router.push('/settings')}
+                type="button"
                 onMouseEnter={() => setHoverCollapsedSettings(true)}
                 onMouseLeave={() => setHoverCollapsedSettings(false)}
                 className="p-2 rounded-xl transition-all duration-300"
+                title="Settings"
                 style={{
-                  background: isSettingsPage || hoverCollapsedSettings ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+                  background: isSettingsPage || hoverCollapsedSettings ? 'hsl(var(--primary) / 0.18)' : 'hsl(var(--background) / 0.7)',
                   backdropFilter: 'blur(20px)',
                   WebkitBackdropFilter: 'blur(20px)',
-                  border: `1px solid ${hoverCollapsedSettings ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.12)'}`,
+                  border: `1px solid ${hoverCollapsedSettings ? 'hsl(var(--primary) / 0.32)' : 'hsl(var(--border) / 0.85)'}`,
                   boxShadow: hoverCollapsedSettings
-                    ? '0 0 16px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.12)'
+                    ? '0 0 18px hsl(var(--primary) / 0.16), inset 0 1px 0 rgba(255,255,255,0.12)'
                     : 'inset 0 1px 0 rgba(255,255,255,0.06)',
                   transform: hoverCollapsedSettings ? 'scale(1.06)' : 'scale(1)',
                 }}
               >
                 <Settings className="w-5 h-5 text-foreground/75" />
               </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Settings</p>
-            </TooltipContent>
-          </Tooltip>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="right" className="w-56">
+              <DropdownMenuLabel>Settings</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => router.push('/settings')}>
+                Open Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Theme</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={uiTheme}
+                onValueChange={(value) => setUiTheme(value as ThemeName)}
+              >
+                {THEME_OPTIONS.map((theme) => (
+                  <DropdownMenuRadioItem key={theme.value} value={theme.value}>
+                    {theme.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
         </div>
       </TooltipProvider>
@@ -1409,7 +1438,7 @@ const Sidebar: React.FC = () => {
                     <div className="flex items-center gap-1 mb-1 px-2 py-1 bg-white/5 rounded-md">
                       <input
                         ref={newFolderInputRef}
-                        className="flex-1 bg-transparent text-sm text-white outline-none border-b border-blue-500"
+                        className="flex-1 bg-transparent text-sm text-white outline-none border-b border-primary"
                         placeholder="Folder name…"
                         value={newFolderName}
                         onChange={(e) => setNewFolderName(e.target.value)}
@@ -1788,26 +1817,48 @@ const Sidebar: React.FC = () => {
         {!isCollapsed && (
 
           <div className="flex-shrink-0 p-2 border-t border-white/10">
-            <button
-              onClick={() => router.push('/settings')}
-              onMouseEnter={() => setHoverExpandedSettings(true)}
-              onMouseLeave={() => setHoverExpandedSettings(false)}
-              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium rounded-xl transition-all duration-300"
-              style={{
-                background: hoverExpandedSettings ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
-                border: `1px solid ${hoverExpandedSettings ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.1)'}`,
-                color: hoverExpandedSettings ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.75)',
-                boxShadow: hoverExpandedSettings
-                  ? '0 4px 20px rgba(0,0,0,0.16), 0 0 14px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.14)'
-                  : '0 2px 16px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08)',
-                transform: hoverExpandedSettings ? 'translateY(-1px)' : 'translateY(0)',
-              }}
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              <span>Settings</span>
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  onMouseEnter={() => setHoverExpandedSettings(true)}
+                  onMouseLeave={() => setHoverExpandedSettings(false)}
+                  className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium rounded-xl transition-all duration-300"
+                  style={{
+                    background: hoverExpandedSettings ? 'hsl(var(--primary) / 0.16)' : 'hsl(var(--background) / 0.65)',
+                    backdropFilter: 'blur(24px)',
+                    WebkitBackdropFilter: 'blur(24px)',
+                    border: `1px solid ${hoverExpandedSettings ? 'hsl(var(--primary) / 0.28)' : 'hsl(var(--border) / 0.85)'}`,
+                    color: hoverExpandedSettings ? 'hsl(var(--foreground) / 0.98)' : 'hsl(var(--foreground) / 0.78)',
+                    boxShadow: hoverExpandedSettings
+                      ? '0 4px 20px rgba(0,0,0,0.16), 0 0 14px hsl(var(--primary) / 0.14), inset 0 1px 0 rgba(255,255,255,0.14)'
+                      : '0 2px 16px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08)',
+                    transform: hoverExpandedSettings ? 'translateY(-1px)' : 'translateY(0)',
+                  }}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  <span>Settings</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={8} className="w-56">
+                <DropdownMenuLabel>Settings</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => router.push('/settings')}>
+                  Open Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Theme</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={uiTheme}
+                  onValueChange={(value) => setUiTheme(value as ThemeName)}
+                >
+                  {THEME_OPTIONS.map((theme) => (
+                    <DropdownMenuRadioItem key={theme.value} value={theme.value}>
+                      {theme.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </div>
@@ -2194,7 +2245,7 @@ function SortableFolderTreeRow({
         {...listeners}
         className={cn(
           'flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none group transition-colors',
-          isFolderDropHighlighted ? 'bg-blue-500/10 ring-1 ring-blue-500/30' : 'hover:bg-white/5',
+          isFolderDropHighlighted ? 'bg-primary/10 ring-1 ring-primary/30' : 'hover:bg-white/5',
         )}
         style={{ paddingLeft: `${row.depth * 12 + 8}px` }}
         onClick={onToggleExpanded}
@@ -2212,7 +2263,7 @@ function SortableFolderTreeRow({
         {isRenaming ? (
           <input
             ref={renameInputRef}
-            className="flex-1 bg-transparent text-sm text-white border-b border-blue-500 outline-none px-0.5"
+            className="flex-1 bg-transparent text-sm text-white border-b border-primary outline-none px-0.5"
             value={renameValue}
             onChange={(event) => setRenameValue(event.target.value)}
             onBlur={commitRename}
@@ -2305,7 +2356,7 @@ function FolderInsertionLine({ position }: { position: 'top' | 'bottom' }) {
   return (
     <div
       className={cn(
-        'pointer-events-none absolute left-1 right-1 z-20 h-0.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.7)]',
+        'pointer-events-none absolute left-1 right-1 z-20 h-0.5 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.55)]',
         position === 'top' ? 'top-0' : 'bottom-0',
       )}
     />
@@ -2323,12 +2374,12 @@ function FolderRootBottomDropZone({ isActive }: { isActive: boolean }) {
       ref={setNodeRef}
       className={cn(
         'relative h-5 transition-colors',
-        (isActive || isOver) && 'bg-blue-500/5',
+        (isActive || isOver) && 'bg-primary/5',
       )}
       aria-hidden
     >
       {isActive && (
-        <div className="pointer-events-none absolute left-1 right-1 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.7)]" />
+        <div className="pointer-events-none absolute left-1 right-1 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.55)]" />
       )}
     </div>
   );
@@ -2346,7 +2397,7 @@ function UnfiledDropZone({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={setNodeRef}
-      className={`min-h-[2rem] rounded-md transition-colors ${isOver ? 'bg-blue-500/10 ring-1 ring-blue-500/30' : ''}`}
+      className={`min-h-[2rem] rounded-md transition-colors ${isOver ? 'bg-primary/10 ring-1 ring-primary/30' : ''}`}
     >
       {children}
     </div>

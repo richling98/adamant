@@ -181,7 +181,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                     }
                                 }}
                             >
-                                <SelectTrigger className='focus:ring-1 focus:ring-blue-500 focus:border-blue-500'>
+                                <SelectTrigger className='focus:ring-1 focus:ring-primary focus:border-primary'>
                                     <SelectValue placeholder="Select provider" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -204,7 +204,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                         saveTranscriptConfig({ ...transcriptModelConfig, model }).catch(() => undefined);
                                     }}
                                 >
-                                    <SelectTrigger className='focus:ring-1 focus:ring-blue-500 focus:border-blue-500'>
+                                    <SelectTrigger className='focus:ring-1 focus:ring-primary focus:border-primary'>
                                         <SelectValue placeholder="Select model" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -247,7 +247,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                             <div className="relative mx-1">
                                 <Input
                                     type={showApiKey ? "text" : "password"}
-                                    className={`pr-24 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isApiKeyLocked ? 'bg-white/5 cursor-not-allowed' : ''
+                                    className={`pr-24 focus:ring-1 focus:ring-primary focus:border-primary ${isApiKeyLocked ? 'bg-white/5 cursor-not-allowed' : ''
                                         }`}
                                     value={isApiKeyLocked && hasStoredApiKey ? '••••••••••••' : apiKey}
                                     onChange={(e) => setApiKey(e.target.value)}
@@ -301,6 +301,5 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
         </div>
     )
 }
-
 
 

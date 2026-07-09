@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core"
 import Analytics from "@/lib/analytics"
 import AnalyticsConsentSwitch from "./AnalyticsConsentSwitch"
 import { useConfig, NotificationSettings } from "@/contexts/ConfigContext"
+import { ThemeSettings } from "./ThemeSettings"
 
 export function PreferenceSettings() {
   const {
@@ -170,6 +171,8 @@ export function PreferenceSettings() {
 
   return (
     <div className="space-y-6">
+      <ThemeSettings />
+
       {/* Notifications Section */}
       <div className="bg-white/5 rounded-lg border border-white/10 p-6">
         <div className="flex items-center justify-between">
@@ -212,8 +215,11 @@ export function PreferenceSettings() {
           </div>
         </div>
 
-        <div className="mt-4 p-3 bg-blue-900/20 rounded-md">
-          <p className="text-xs text-blue-300">
+        <div
+          className="mt-4 p-3 rounded-md"
+          style={{ backgroundColor: 'hsl(var(--primary) / 0.12)' }}
+        >
+          <p className="text-xs" style={{ color: 'hsl(var(--primary) / 0.85)' }}>
             <strong>Note:</strong> Database and models are stored together in your application data directory for unified management.
           </p>
         </div>

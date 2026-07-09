@@ -1,6 +1,6 @@
 ---
-name: create-issue
-description: Quickly capture and create a Linear issue
+name: "create-issue"
+description: "Quickly capture and create a Linear issue"
 ---
 
 # Create Issue

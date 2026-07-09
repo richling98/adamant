@@ -1,6 +1,6 @@
 ---
-name: execute
-description: Execute the implementation plan
+name: "execute"
+description: "Execute the implementation plan"
 ---
 
 # Execute Implementation

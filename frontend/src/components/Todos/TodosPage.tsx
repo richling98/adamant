@@ -149,7 +149,7 @@ export function TodosPage() {
 
   if (loading) {
     return (
-      <div className="p-6 max-w-3xl mx-auto animate-pulse">
+      <div className="min-h-screen bg-background p-6 max-w-3xl mx-auto animate-pulse">
         <div className="h-8 w-48 bg-zinc-800 rounded mb-6" />
         {[1, 2, 3].map((i) => (
           <div key={i} className="flex items-start gap-3 py-2">
@@ -165,7 +165,7 @@ export function TodosPage() {
   const checked = todos.filter((t) => t.is_checked);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="min-h-screen bg-background p-6 max-w-3xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button

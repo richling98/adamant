@@ -215,7 +215,7 @@ export function FolderItem({
         title={folder.name}
         className={cn(
           'flex justify-center items-center w-8 h-8 rounded-md mx-auto my-1 transition-colors cursor-pointer',
-          isOver ? 'bg-blue-500/20' : 'hover:bg-white/10',
+          isOver ? 'bg-primary/15' : 'hover:bg-white/10',
         )}
       >
         <FolderIcon className="h-4 w-4 text-zinc-400" />
@@ -240,7 +240,7 @@ export function FolderItem({
         {...headerListeners}
         className={cn(
           'flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer select-none group',
-          isOver && !isDragging && 'bg-blue-500/10 ring-1 ring-blue-500/30',
+          isOver && !isDragging && 'bg-primary/10 ring-1 ring-primary/30',
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={toggleExpanded}
@@ -263,7 +263,7 @@ export function FolderItem({
         {isRenaming ? (
           <input
             ref={renameInputRef}
-            className="flex-1 bg-transparent text-sm text-white border-b border-blue-500 outline-none px-0.5"
+            className="flex-1 bg-transparent text-sm text-white border-b border-primary outline-none px-0.5"
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={commitRename}

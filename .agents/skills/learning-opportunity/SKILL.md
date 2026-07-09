@@ -1,6 +1,6 @@
 ---
-name: learning-opportunity
-description: Deep technical explanation for learning
+name: "learning-opportunity"
+description: "Deep technical explanation for learning"
 ---
 
 # Learning Opportunity

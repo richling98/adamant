@@ -6,7 +6,7 @@ import { TodosPage } from "@/components/Todos/TodosPage";
 export default function TodosRoute() {
   return (
     <Suspense fallback={
-      <div className="p-6 max-w-3xl mx-auto animate-pulse">
+      <div className="min-h-screen bg-background p-6 max-w-3xl mx-auto animate-pulse">
         <div className="h-8 w-48 bg-zinc-800 rounded mb-6" />
         {[1, 2, 3].map((i) => (
           <div key={i} className="flex items-start gap-3 py-2">

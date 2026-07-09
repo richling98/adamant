@@ -1,6 +1,6 @@
 ---
-name: peer-review
-description: Critically evaluate and append peer review to code-review.md
+name: "peer-review"
+description: "Critically evaluate and append peer review to code-review.md"
 ---
 
 # Peer Review Analysis

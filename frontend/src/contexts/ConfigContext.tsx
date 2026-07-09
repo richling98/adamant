@@ -5,6 +5,7 @@ import { TranscriptModelProps } from '@/components/TranscriptSettings';
 import { SelectedDevices } from '@/components/DeviceSelection';
 import { configService, ModelConfig } from '@/services/configService';
 import { invoke } from '@tauri-apps/api/core';
+import { DEFAULT_THEME, isThemeName, THEME_STORAGE_KEY, type ThemeName } from '@/lib/theme';
 
 export interface OllamaModel {
   name: string;
@@ -60,6 +61,8 @@ interface ConfigContextType {
   // UI preferences
   showConfidenceIndicator: boolean;
   toggleConfidenceIndicator: (checked: boolean) => void;
+  uiTheme: ThemeName;
+  setUiTheme: (theme: ThemeName) => void;
 
   // Ollama models
   models: OllamaModel[];
@@ -118,6 +121,16 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       return saved !== null ? saved === 'true' : true;
     }
     return true;
+  });
+
+  const [uiTheme, setUiThemeState] = useState<ThemeName>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(THEME_STORAGE_KEY);
+      if (isThemeName(saved)) {
+        return saved;
+      }
+    }
+    return DEFAULT_THEME;
   });
 
   // Summary configs
@@ -360,6 +373,22 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     window.dispatchEvent(new CustomEvent('confidenceIndicatorChanged', { detail: checked }));
   }, []);
 
+  const setUiTheme = useCallback((theme: ThemeName) => {
+    setUiThemeState(theme);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    document.body.dataset.theme = uiTheme;
+    document.documentElement.dataset.theme = uiTheme;
+  }, [uiTheme]);
+
   const toggleIsAutoSummary = useCallback((checked: boolean) => {
     setisAutoSummary(checked);
     if (typeof window !== 'undefined') {
@@ -440,6 +469,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     setSelectedLanguage,
     showConfidenceIndicator,
     toggleConfidenceIndicator,
+    uiTheme,
+    setUiTheme,
     models,
     modelOptions,
     error,
@@ -457,6 +488,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     selectedLanguage,
     showConfidenceIndicator,
     toggleConfidenceIndicator,
+    uiTheme,
+    setUiTheme,
     models,
     modelOptions,
     error,
