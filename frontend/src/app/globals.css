@@ -106,6 +106,9 @@
     --theme-accent: 214 92% 63%;
     --theme-accent-soft: 214 92% 70%;
     --theme-glow: 214 92% 58%;
+    --scrollbar-thumb: hsl(214 92% 63% / 0.55);
+    --scrollbar-thumb-hover: hsl(214 92% 63% / 0.85);
+    --scrollbar-track: transparent;
   }
 
   .light {
@@ -133,6 +136,9 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+    --scrollbar-thumb: hsl(0 0% 45% / 0.45);
+    --scrollbar-thumb-hover: hsl(0 0% 35% / 0.75);
+    --scrollbar-track: transparent;
   }
 
   body[data-theme='rune'] {
@@ -158,6 +164,9 @@
     --theme-accent: 214 92% 63%;
     --theme-accent-soft: 214 92% 70%;
     --theme-glow: 214 92% 58%;
+    --scrollbar-thumb: hsl(214 92% 63% / 0.55);
+    --scrollbar-thumb-hover: hsl(214 92% 63% / 0.85);
+    --scrollbar-track: transparent;
     background-image:
       radial-gradient(circle at top left, hsl(214 92% 46% / 0.18), transparent 34%),
       radial-gradient(circle at bottom right, hsl(226 46% 19% / 0.3), transparent 36%);
@@ -186,6 +195,9 @@
     --theme-accent: 248 28% 46%;
     --theme-accent-soft: 248 28% 60%;
     --theme-glow: 248 28% 42%;
+    --scrollbar-thumb: hsl(248 28% 46% / 0.55);
+    --scrollbar-thumb-hover: hsl(248 28% 46% / 0.85);
+    --scrollbar-track: transparent;
     background-image:
       radial-gradient(circle at top left, hsl(248 28% 38% / 0.16), transparent 34%),
       radial-gradient(circle at bottom right, hsl(242 18% 16% / 0.28), transparent 36%);
@@ -214,6 +226,9 @@
     --theme-accent: 32 56% 58%;
     --theme-accent-soft: 34 58% 66%;
     --theme-glow: 32 56% 54%;
+    --scrollbar-thumb: hsl(32 56% 58% / 0.55);
+    --scrollbar-thumb-hover: hsl(32 56% 58% / 0.85);
+    --scrollbar-track: transparent;
     background-image:
       radial-gradient(circle at top left, hsl(32 56% 42% / 0.18), transparent 34%),
       radial-gradient(circle at bottom right, hsl(18 30% 18% / 0.3), transparent 36%);
@@ -242,6 +257,9 @@
     --theme-accent: 151 46% 36%;
     --theme-accent-soft: 151 46% 48%;
     --theme-glow: 151 46% 32%;
+    --scrollbar-thumb: hsl(151 46% 36% / 0.55);
+    --scrollbar-thumb-hover: hsl(151 46% 36% / 0.85);
+    --scrollbar-track: transparent;
     background-image:
       radial-gradient(circle at top left, hsl(151 46% 22% / 0.2), transparent 34%),
       radial-gradient(circle at bottom right, hsl(140 28% 14% / 0.3), transparent 36%);
@@ -277,22 +295,22 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--scrollbar-track);
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(16, 185, 129, 0.4);
+    background: var(--scrollbar-thumb);
     border-radius: 3px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(16, 185, 129, 0.9);
+    background: var(--scrollbar-thumb-hover);
   }
 
   /* Firefox scrollbar */
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: rgba(16, 185, 129, 0.6) transparent;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
 
   /* BlockNote Editor - Override fixed dimensions for responsive layout */

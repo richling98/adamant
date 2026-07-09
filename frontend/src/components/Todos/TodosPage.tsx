@@ -14,6 +14,7 @@ import {
   toggleTodo as apiToggleTodo,
   deleteTodo as apiDeleteTodo,
   createTodo as apiCreateTodo,
+  reorderTodosByDate as apiReorderTodosByDate,
   updateTodo as apiUpdateTodo,
 } from "@/lib/todoApi";
 
@@ -88,6 +89,7 @@ export function TodosPage() {
 
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [focusedTodoId, setFocusedTodoId] = useState<string | null>(null);
 
   const fetchTodos = useCallback(async () => {
     setLoading(true);
@@ -165,6 +167,40 @@ export function TodosPage() {
       toast.error("Failed to create to-do");
     }
   };
+
+  const handleCreateBelow = useCallback(
+    async (todo: Todo) => {
+      try {
+        const newTodo = await apiCreateTodo(null, todo.date, null, null);
+
+        setTodos((prev) => {
+          const next = [...prev];
+          const currentIndex = next.findIndex((item) => item.id === todo.id);
+          if (currentIndex === -1) {
+            return [...prev, newTodo];
+          }
+
+          next.splice(currentIndex + 1, 0, newTodo);
+          return next;
+        });
+
+        const reorderedIds = todos
+          .filter((item) => item.date === todo.date)
+          .map((item) => item.id);
+        const currentIndex = reorderedIds.indexOf(todo.id);
+        if (currentIndex !== -1) {
+          reorderedIds.splice(currentIndex + 1, 0, newTodo.id);
+          await apiReorderTodosByDate(todo.date, reorderedIds);
+        }
+
+        setFocusedTodoId(newTodo.id);
+        fetchTodoDates();
+      } catch (e) {
+        toast.error("Failed to create to-do");
+      }
+    },
+    [fetchTodoDates, todos],
+  );
 
   if (loading) {
     return (
@@ -244,6 +280,8 @@ export function TodosPage() {
                   onToggle={handleToggle}
                   onDelete={handleDelete}
                   onUpdate={handleUpdate}
+                  onCreateBelow={handleCreateBelow}
+                  focusedTodoId={focusedTodoId}
                   defaultExpanded={index === 0}
                 />
               ))}
@@ -275,6 +313,7 @@ export function TodosPage() {
                 onToggle={handleToggle}
                 onDelete={handleDelete}
                 onUpdate={handleUpdate}
+                autoFocus={focusedTodoId === todo.id}
               />
             ))}
           </div>
@@ -295,6 +334,7 @@ export function TodosPage() {
                     onToggle={handleToggle}
                     onDelete={handleDelete}
                     onUpdate={handleUpdate}
+                    autoFocus={focusedTodoId === todo.id}
                   />
                 ))}
               </div>
@@ -318,13 +358,18 @@ function TodoRow({
   onToggle,
   onDelete,
   onUpdate,
+  onCreateBelow,
+  autoFocus = false,
 }: {
   todo: Todo;
   onToggle: (id: string, checked: boolean) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, markdown: string, json: string | null) => void;
+  onCreateBelow?: (todo: Todo) => void | Promise<void>;
+  autoFocus?: boolean;
 }) {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const initialText = (
     todo.content_markdown ||
     todo.source_text ||
@@ -344,6 +389,12 @@ function TodoRow({
     setText(nextText);
     lastSavedTextRef.current = nextText;
   }, [todo.content_json, todo.content_markdown, todo.source_text]);
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [autoFocus]);
 
   const saveTodo = useRef(
     debounce((nextText: string) => {
@@ -374,36 +425,53 @@ function TodoRow({
         background: "transparent",
       }}
     >
-      <input
-        type="checkbox"
-        checked={todo.is_checked}
-        onChange={() => onToggle(todo.id, !todo.is_checked)}
-        className="mt-1 accent-emerald-500 cursor-pointer shrink-0"
-      />
       <div className="flex-1 min-w-0">
-        <input
-          type="text"
-          value={text}
-          onChange={(e) => handleChange(e.target.value)}
-          onBlur={() => saveTodo.flush()}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              (e.currentTarget as HTMLInputElement).blur();
-            }
-          }}
-          className={`w-full bg-transparent border-0 px-0 py-0.5 text-base outline-none placeholder:text-zinc-500 focus:outline-none focus:ring-0 ${
-            todo.is_checked ? "line-through text-zinc-500" : "text-zinc-100"
-          }`}
-          placeholder="Untitled to-do"
-          aria-label="To-do text"
-        />
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={todo.is_checked}
+            onChange={() => onToggle(todo.id, !todo.is_checked)}
+            className="accent-primary cursor-pointer shrink-0"
+          />
+          <input
+            ref={inputRef}
+            type="text"
+            value={text}
+            onChange={(e) => handleChange(e.target.value)}
+            onBlur={() => saveTodo.flush()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const target = e.currentTarget;
+                const atEnd =
+                  typeof target.selectionStart === "number" &&
+                  typeof target.selectionEnd === "number" &&
+                  target.selectionStart === target.value.length &&
+                  target.selectionEnd === target.value.length;
+
+                if (atEnd && onCreateBelow) {
+                  e.preventDefault();
+                  saveTodo.flush();
+                  void onCreateBelow(todo);
+                  return;
+                }
+
+                e.preventDefault();
+                target.blur();
+              }
+            }}
+            className={`flex-1 min-w-0 bg-transparent border-0 px-0 py-0.5 text-base outline-none placeholder:text-zinc-500 focus:outline-none focus:ring-0 ${
+              todo.is_checked ? "line-through text-zinc-500" : "text-zinc-100"
+            }`}
+            placeholder="Untitled to-do"
+            aria-label="To-do text"
+          />
+        </div>
         {todo.meeting_id && todo.meeting_title && (
           <button
             onClick={() =>
               router.push(`/meeting-details?id=${todo.meeting_id}`)
             }
-            className="text-xs text-zinc-500 hover:text-emerald-400 transition-colors mt-0.5"
+            className="text-xs text-zinc-500 hover:text-primary/80 transition-colors mt-0.5"
           >
             from {todo.meeting_title} ↗
           </button>
@@ -436,7 +504,7 @@ function AddTodoRow({
 
   return (
     <div className="flex items-center gap-3 py-1.5 group">
-      <div className="w-4 h-4 rounded border border-zinc-600 shrink-0 mt-0.5" />
+      <div className="w-4 h-4 rounded border border-zinc-600 shrink-0" />
       <input
         type="text"
         value={text}
@@ -453,7 +521,7 @@ function AddTodoRow({
       />
       <button
         onClick={handleSubmit}
-        className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
+        className="text-xs text-primary hover:text-primary/80 transition-colors"
       >
         Add
       </button>
@@ -467,6 +535,8 @@ function TodosDateGroup({
   onToggle,
   onDelete,
   onUpdate,
+  onCreateBelow,
+  focusedTodoId,
   defaultExpanded = false,
 }: {
   date: string;
@@ -474,6 +544,8 @@ function TodosDateGroup({
   onToggle: (id: string, checked: boolean) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, markdown: string, json: string | null) => void;
+  onCreateBelow: (todo: Todo) => void | Promise<void>;
+  focusedTodoId: string | null;
   defaultExpanded?: boolean;
 }) {
   const label = formatDateLabel(date);
@@ -521,6 +593,8 @@ function TodosDateGroup({
                   onToggle={onToggle}
                   onDelete={onDelete}
                   onUpdate={onUpdate}
+                  onCreateBelow={onCreateBelow}
+                  autoFocus={focusedTodoId === todo.id}
                 />
               ))}
             </div>
@@ -541,6 +615,8 @@ function TodosDateGroup({
                     onToggle={onToggle}
                     onDelete={onDelete}
                     onUpdate={onUpdate}
+                    onCreateBelow={onCreateBelow}
+                    autoFocus={focusedTodoId === todo.id}
                   />
                 ))}
               </div>

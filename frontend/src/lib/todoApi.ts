@@ -30,6 +30,10 @@ export async function createTodo(
   return invoke('api_create_todo', { meetingId, date, contentJson, contentMarkdown });
 }
 
+export async function reorderTodosByDate(date: string, todoIds: string[]): Promise<void> {
+  return invoke('api_reorder_todos', { date, todoIds });
+}
+
 export async function updateTodo(
   todoId: string,
   contentJson: string | null,

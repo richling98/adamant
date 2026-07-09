@@ -76,7 +76,7 @@ export function TranscriptPanel({
     : (transcripts?.length || 0);
 
   return (
-    <div className="flex w-full flex-1 min-w-0 min-h-0 border-b border-white/10 xl:border-b-0 xl:border-l xl:border-r bg-card/75 backdrop-blur-xl flex-col relative">
+    <div className="flex w-full flex-1 min-w-0 min-h-0 border-b border-white/10 xl:border-b-0 bg-background flex-col relative">
       {/* Title area */}
       <div className={MEETING_PANE_HEADER_CLASS}>
         <div className={MEETING_PANE_HEADER_ROW_CLASS}>

@@ -763,6 +763,7 @@ pub fn run() {
             api::todos_api::api_get_today_todos,
             api::todos_api::api_get_meeting_todos,
             api::todos_api::api_create_todo,
+            api::todos_api::api_reorder_todos,
             api::todos_api::api_update_todo,
             api::todos_api::api_toggle_todo,
             api::todos_api::api_delete_todo,

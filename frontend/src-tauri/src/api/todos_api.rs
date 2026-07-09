@@ -222,6 +222,26 @@ pub async fn api_create_todo<R: Runtime>(
     })
 }
 
+/// Reorder todos within a date.
+#[tauri::command]
+pub async fn api_reorder_todos<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    date: String,
+    todo_ids: Vec<String>,
+) -> Result<(), String> {
+    log_info!("api_reorder_todos called for date: {}", date);
+    let pool = state.db_manager.pool();
+
+    TodosRepository::reorder(pool, &date, &todo_ids)
+        .await
+        .map(|_| ())
+        .map_err(|e| {
+            log_error!("Failed to reorder todos: {}", e);
+            format!("Failed to reorder todos: {}", e)
+        })
+}
+
 /// Update a todo's rich text content.
 #[tauri::command]
 pub async fn api_update_todo<R: Runtime>(
