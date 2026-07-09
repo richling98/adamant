@@ -18,6 +18,7 @@ import Image from 'next/image';
 export default function Home() {
   const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
   const [hoverStartBtn, setHoverStartBtn] = useState(false);
+  const [hoverTodosBtn, setHoverTodosBtn] = useState(false);
 
   const { transcriptModelConfig } = useConfig();
   const recordingState = useRecordingState();
@@ -181,17 +182,19 @@ export default function Home() {
 
         <button
           onClick={() => router.push('/todos')}
+          onMouseEnter={() => setHoverTodosBtn(true)}
+          onMouseLeave={() => setHoverTodosBtn(false)}
           className="px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
           style={{
-            background: hoverStartBtn ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--primary) / 0.07)',
+            background: hoverTodosBtn ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--primary) / 0.07)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
-            border: `1px solid ${hoverStartBtn ? 'hsl(var(--primary) / 0.75)' : 'hsl(var(--primary) / 0.5)'}`,
+            border: `1px solid ${hoverTodosBtn ? 'hsl(var(--primary) / 0.75)' : 'hsl(var(--primary) / 0.5)'}`,
             color: 'hsl(var(--primary))',
-            boxShadow: hoverStartBtn
+            boxShadow: hoverTodosBtn
               ? '0 0 40px hsl(var(--primary) / 0.22), 0 8px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
               : '0 0 28px hsl(var(--primary) / 0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
-            transform: hoverStartBtn ? 'translateY(-2px) scale(1.03)' : 'translateY(0) scale(1)',
+            transform: hoverTodosBtn ? 'translateY(-2px) scale(1.03)' : 'translateY(0) scale(1)',
           }}
         >
           To dos
