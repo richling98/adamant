@@ -53,19 +53,9 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(({ isCollapsed }, re
               color: 'rgba(255,255,255,0.92)',
               backgroundImage: pillBackground,
               backgroundRepeat: 'no-repeat',
-              backgroundSize: '200% 100%',
-              backgroundPosition: '200% center',
-              animation: 'shimmer 10s ease-in-out infinite',
               boxShadow: pillShadow,
             }}
           >
-            <style>{`
-              @keyframes shimmer {
-                0%   { background-position: 200% center; }
-                50%  { background-position: 0% center; }
-                100% { background-position: 200% center; }
-              }
-            `}</style>
             <img src="/logo.png" alt="Adamant" className="w-8 h-8 object-contain" />
             <span>Adamant</span>
           </span>
