@@ -424,6 +424,16 @@ Output ONLY valid JSON. No preamble, no explanation, no markdown fences."#;
             "measure",
             "calculate",
             "compute",
+            // Decisions / choices
+            "decide",
+            "decide on",
+            "decide whether",
+            "choose",
+            "pick",
+            "determine",
+            "select",
+            "consider",
+            "weigh",
             // Task completion
             "complete",
             "finish",
@@ -542,7 +552,7 @@ Output ONLY valid JSON. No preamble, no explanation, no markdown fences."#;
         ];
         for verb in ACTION_VERBS {
             if text_lower.starts_with(verb) {
-                return true;
+                return !Self::is_obviously_personal_task(text_lower);
             }
         }
 
@@ -551,6 +561,34 @@ Output ONLY valid JSON. No preamble, no explanation, no markdown fences."#;
         // match any rejection pattern, default to rejecting it.
         // "When in doubt, leave it out."
         false
+    }
+
+    /// Reject clearly personal/off-topic items that are not meeting-relevant
+    /// action items, even if they superficially look imperative.
+    fn is_obviously_personal_task(text_lower: &str) -> bool {
+        const PERSONAL_PHRASES: &[&str] = &[
+            "eat cereal",
+            "eat breakfast",
+            "eat lunch",
+            "eat dinner",
+            "go on run",
+            "go running",
+            "go lifting",
+            "lift weights",
+            "go to the gym",
+            "work out",
+            "workout",
+            "do laundry",
+            "wash dishes",
+            "buy groceries",
+            "go shopping",
+            "take a nap",
+            "go to sleep",
+            "watch tv",
+            "play video games",
+        ];
+
+        PERSONAL_PHRASES.iter().any(|phrase| text_lower.contains(phrase))
     }
 
     fn extract_todo_section_items(notes: &str) -> Vec<ExtractedTodoItem> {
@@ -722,5 +760,58 @@ Output ONLY valid JSON. No preamble, no explanation, no markdown fences."#;
             .map_err(|e| format!("Failed to save extracted todos: {}", e))?;
 
         Ok(count)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TodoExtractor;
+
+    #[test]
+    fn manual_notes_todo_filter_accepts_relevant_decision_items() {
+        let notes = r#"### logistics of startup booths
+
+* contract = with AWS, but the contract is with AWS and the startup
+
+### to dos
+
+* write followup email
+
+* eat cereal
+
+* go on run after this meeting
+
+* george washington was president
+
+* write followup email
+
+* decide on AWS sponsorship or not
+
+* figure out openAI partnership
+
+* go lifting after work
+
+* why is chicken tasty?"#;
+
+        let items = TodoExtractor::extract_todo_section_items(notes);
+        let texts: Vec<String> = items.into_iter().map(|item| item.text).collect();
+
+        assert_eq!(
+            texts,
+            vec![
+                "write followup email".to_string(),
+                "write followup email".to_string(),
+                "decide on AWS sponsorship or not".to_string(),
+                "figure out openAI partnership".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn manual_notes_todo_filter_rejects_clear_personal_activities() {
+        assert!(TodoExtractor::is_obviously_personal_task("eat cereal"));
+        assert!(TodoExtractor::is_obviously_personal_task("go on run after this meeting"));
+        assert!(TodoExtractor::is_obviously_personal_task("go lifting after work"));
+        assert!(!TodoExtractor::is_obviously_personal_task("decide on AWS sponsorship or not"));
     }
 }

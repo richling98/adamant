@@ -465,22 +465,28 @@ pub fn run() {
         .manage(audio::init_system_audio_state())
         .manage(summary::summary_engine::ModelManagerState(Arc::new(tokio::sync::Mutex::new(None))))
         .setup(|_app| {
-            // ── Auto-clear WebKit cache on version upgrade (macOS) ───────────
+            // ── Auto-clear WebKit cache on app upgrade (macOS) ───────────────
             // The WKWebView aggressively caches the compiled frontend bundle.
-            // Without this, users who install a new DMG see the old UI until
-            // they manually delete the cache. We detect a version change by
-            // comparing the running version against a `last_version.txt` file
-            // stored in the app data directory. On mismatch we delete the
-            // WebKit cache directory — which is re-created clean on first load —
-            // then update the stored version. This runs before the webview is
-            // created so the fresh assets are loaded on this very launch.
+            // Without this, users who install a new DMG can see stale UI until
+            // they manually delete the cache. We compare a build fingerprint
+            // (version + executable mtime) against a marker stored in app data.
+            // Any mismatch clears the WebKit cache before the webview is created
+            // so the fresh assets are loaded on this very launch.
             #[cfg(target_os = "macos")]
             {
                 let current_version = _app.package_info().version.to_string();
                 if let Ok(data_dir) = _app.path().app_data_dir() {
-                    let version_file = data_dir.join("last_version.txt");
-                    let stored_version = std::fs::read_to_string(&version_file).unwrap_or_default();
-                    if stored_version.trim() != current_version {
+                    let marker_file = data_dir.join("last_bundle_marker.txt");
+                    let exe_marker = std::env::current_exe()
+                        .ok()
+                        .and_then(|path| std::fs::metadata(path).ok())
+                        .and_then(|metadata| metadata.modified().ok())
+                        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|duration| duration.as_secs().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    let current_marker = format!("{}:{}", current_version, exe_marker);
+                    let stored_marker = std::fs::read_to_string(&marker_file).unwrap_or_default();
+                    if stored_marker.trim() != current_marker {
                         // Clear the WebKit disk cache so the new frontend assets are loaded.
                         if let Some(home) = dirs::home_dir() {
                             let webkit_cache = home
@@ -492,17 +498,17 @@ pub fn run() {
                                 } else {
                                     log::info!(
                                         "Cleared WebKit cache for upgrade {} → {}",
-                                        stored_version.trim(),
+                                        stored_marker.trim(),
                                         current_version
                                     );
                                 }
                             }
                         }
-                        // Write the new version so we only do this once per upgrade.
-                        if let Some(parent) = version_file.parent() {
+                        // Write the new marker so we only do this once per build.
+                        if let Some(parent) = marker_file.parent() {
                             let _ = std::fs::create_dir_all(parent);
                         }
-                        let _ = std::fs::write(&version_file, &current_version);
+                        let _ = std::fs::write(&marker_file, &current_marker);
                     }
                 }
             }
