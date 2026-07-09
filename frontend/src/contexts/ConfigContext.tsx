@@ -125,6 +125,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
 
   const [uiTheme, setUiThemeState] = useState<ThemeName>(() => {
     if (typeof window !== 'undefined') {
+      // localStorage is the synchronous fast-path; the async Tauri Store
+      // load happens in the effect below and will correct the value if needed.
       const saved = localStorage.getItem(THEME_STORAGE_KEY);
       if (isThemeName(saved)) {
         return saved;
@@ -132,6 +134,33 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     }
     return DEFAULT_THEME;
   });
+
+  // Load persisted theme from Tauri Store on mount — this survives full app
+  // restarts even when the webview localStorage partition is reset.
+  // Runs once; re-reads localStorage inside the callback to avoid clobbering
+  // a theme change that happened between mount and the async Store load.
+  useEffect(() => {
+    const loadStoredTheme = async () => {
+      try {
+        const { Store } = await import('@tauri-apps/plugin-store');
+        const store = await Store.load('preferences.json');
+        const stored = await store.get<string>(THEME_STORAGE_KEY);
+        if (!isThemeName(stored)) return;
+        // Only override if current localStorage value differs from Store —
+        // this way a user change that happened before Store resolved wins.
+        try {
+          const current = localStorage.getItem(THEME_STORAGE_KEY);
+          if (current === stored) return;
+        } catch {}
+        setUiThemeState(stored);
+        try { localStorage.setItem(THEME_STORAGE_KEY, stored); } catch {}
+      } catch {
+        // Store may not be available (e.g. web-only dev without Tauri)
+      }
+    };
+    loadStoredTheme();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+  }, []);
 
   // Summary configs
   const [isAutoSummary, setisAutoSummary] = useState<boolean>(() => {
@@ -373,10 +402,21 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     window.dispatchEvent(new CustomEvent('confidenceIndicatorChanged', { detail: checked }));
   }, []);
 
+  // Keep localStorage in sync immediately for instant UI response and
+  // as a synchronous fast-path on next launch; Tauri Store is the durable
+  // cross-restart persistence.
   const setUiTheme = useCallback((theme: ThemeName) => {
     setUiThemeState(theme);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(THEME_STORAGE_KEY, theme);
+      try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch {}
+      // Fire-and-forget: persist to Tauri Store so it survives full app restarts
+      import('@tauri-apps/plugin-store').then(async ({ Store }) => {
+        try {
+          const store = await Store.load('preferences.json');
+          await store.set(THEME_STORAGE_KEY, theme);
+          await store.save();
+        } catch {}
+      });
     }
   }, []);
 
