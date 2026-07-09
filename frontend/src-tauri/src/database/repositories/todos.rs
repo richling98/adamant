@@ -25,6 +25,19 @@ impl TodosRepository {
         .await
     }
 
+    pub async fn get_all(pool: &SqlitePool) -> Result<Vec<TodoWithMeeting>, sqlx::Error> {
+        sqlx::query_as::<_, TodoWithMeeting>(
+            "SELECT t.id, t.meeting_id, COALESCE(m.title, '') AS meeting_title, t.date, \
+             t.content_json, t.content_markdown, t.is_checked, t.sort_order, \
+             t.source_text, t.created_at, t.updated_at \
+             FROM todos t \
+             LEFT JOIN meetings m ON t.meeting_id = m.id \
+             ORDER BY t.date DESC, t.sort_order ASC, t.created_at ASC",
+        )
+        .fetch_all(pool)
+        .await
+    }
+
     pub async fn get_dates(pool: &SqlitePool) -> Result<Vec<TodoDateSummary>, sqlx::Error> {
         sqlx::query_as::<_, TodoDateSummary>(
             "SELECT date, COUNT(*) as count, \

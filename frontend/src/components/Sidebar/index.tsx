@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, FolderPlus, Square, CheckSquare, Folder as FolderIcon, FolderOpen } from 'lucide-react';
-import { useRouter, usePathname } from 'next/navigation';
+import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Plus, Search, Pencil, NotebookPen, SearchIcon, X, FolderPlus, Square, CheckSquare, Folder as FolderIcon, FolderOpen, ListTodo } from 'lucide-react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
@@ -111,9 +111,10 @@ const Sidebar: React.FC = () => {
     moveMeetingToFolder,
     refetchMeetings,
     todoDates,
-    todayUncheckedCount,
   } = useSidebar();
   const { uiTheme, setUiTheme } = useConfig();
+  const searchParams = useSearchParams();
+  const activeTodoDate = searchParams.get('date');
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings']));
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -1587,6 +1588,8 @@ const Sidebar: React.FC = () => {
                   {/* ── To Do's section ── */}
                   {(() => {
                     if (todoDates.length === 0) return null;
+                    const totalTodoCount = todoDates.reduce((sum, item) => sum + item.count, 0);
+                    const totalUncheckedCount = todoDates.reduce((sum, item) => sum + item.unchecked, 0);
 
                     return (
                       <>
@@ -1594,42 +1597,33 @@ const Sidebar: React.FC = () => {
                           className="flex items-center justify-between h-8 mt-4 mb-1 cursor-pointer select-none"
                           onClick={toggleTodos}
                         >
-                          <div className="flex items-center gap-1">
-                            <span className="text-zinc-500 flex-shrink-0">
-                              {isTodosExpanded
-                                ? <ChevronDown className="h-3 w-3" />
-                                : <ChevronRight className="h-3 w-3" />}
-                            </span>
-                            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">To Do&apos;s</span>
-                            {todayUncheckedCount > 0 && (
-                              <span className="text-xs text-zinc-500 ml-1">({todayUncheckedCount})</span>
-                            )}
-                          </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-zinc-500 flex-shrink-0">
+                            {isTodosExpanded
+                              ? <ChevronDown className="h-3 w-3" />
+                              : <ChevronRight className="h-3 w-3" />}
+                          </span>
+                          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">To Do&apos;s</span>
                         </div>
+                      </div>
 
                         <div className={cn(
                           'overflow-hidden transition-all duration-200',
                           isTodosExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0',
                         )}>
-                          {/* "Today" quick link */}
-                          <button
-                            onClick={() => router.push('/todos')}
-                            className="flex items-center gap-2 w-full px-2 py-1 text-sm text-zinc-400 hover:text-zinc-200 transition-colors rounded-md hover:bg-white/5"
-                          >
-                            <span className="text-xs">📋</span>
-                            <span>Today</span>
-                            {todayUncheckedCount > 0 && (
-                              <span className="text-xs text-zinc-600">({todayUncheckedCount})</span>
-                            )}
-                          </button>
-
-                          {/* Date groups */}
+                          <TodoAllRow
+                            totalCount={totalTodoCount}
+                            uncheckedCount={totalUncheckedCount}
+                            isActive={pathname === '/todos' && !activeTodoDate}
+                            onNavigate={() => router.push('/todos')}
+                          />
                           {todoDates.map((dateSummary) => (
-                            <TodoDateGroupRow
+                            <TodoDateNavRow
                               key={dateSummary.date}
                               date={dateSummary.date}
                               count={dateSummary.unchecked}
                               totalCount={dateSummary.count}
+                              isActive={pathname === '/todos' && activeTodoDate === dateSummary.date}
                             />
                           ))}
                         </div>
@@ -1942,61 +1936,66 @@ const Sidebar: React.FC = () => {
 };
 
 // ---------------------------------------------------------------------------
-// Helper: date group row for the To Do's sidebar section
+// Helper: To Do's sidebar rows
 // ---------------------------------------------------------------------------
 
-function TodoDateGroupRow({
+function TodoAllRow({
+  totalCount,
+  uncheckedCount,
+  isActive,
+  onNavigate,
+}: {
+  totalCount: number;
+  uncheckedCount: number;
+  isActive: boolean;
+  onNavigate: () => void;
+}) {
+  return (
+    <button
+      onClick={onNavigate}
+      className={cn(
+        "group flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm transition-colors text-left",
+        isActive ? "bg-primary/10 text-zinc-100" : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+      )}
+    >
+      <ListTodo className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+      <span className="flex-1 truncate font-medium">All</span>
+      <span className="text-xs text-zinc-500 flex-shrink-0">({totalCount})</span>
+      {uncheckedCount > 0 && (
+        <span className="text-xs text-zinc-600 flex-shrink-0">· {uncheckedCount} open</span>
+      )}
+    </button>
+  );
+}
+
+function TodoDateNavRow({
   date,
   count,
   totalCount,
+  isActive,
 }: {
   date: string;
   count: number;
   totalCount: number;
+  isActive: boolean;
 }) {
   const router = useRouter();
   const d = new Date(date + "T00:00:00");
   const label = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
-  const storageKey = `sidebar-todos-date-${label}`;
-  const [isExpanded, setIsExpanded] = useState(() => {
-    try {
-      return localStorage.getItem(storageKey) === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  const toggleExpand = () => {
-    const next = !isExpanded;
-    setIsExpanded(next);
-    try { localStorage.setItem(storageKey, String(next)); } catch {}
-  };
 
   return (
-    <div className="ml-2">
-      <button
-        onClick={toggleExpand}
-        className="flex items-center gap-1 w-full px-2 py-0.5 text-sm text-zinc-400 hover:text-zinc-200 transition-colors rounded-md hover:bg-white/5 text-left"
-      >
-        <span className="text-zinc-500 flex-shrink-0">
-          {isExpanded
-            ? <ChevronDown className="h-3 w-3" />
-            : <ChevronRight className="h-3 w-3" />}
-        </span>
-        <span className="truncate">{label}</span>
-        <span className="text-xs text-zinc-600 flex-shrink-0">({count})</span>
-      </button>
-      {isExpanded && (
-        <div className="ml-6">
-          <button
-            onClick={() => router.push(`/todos?date=${date}`)}
-            className="block w-full text-left text-xs text-zinc-500 hover:text-zinc-300 truncate px-1 py-0.5 rounded hover:bg-white/5 transition-colors"
-          >
-            View all {totalCount} item{totalCount !== 1 ? 's' : ''} →
-          </button>
-        </div>
+    <button
+      onClick={() => router.push(`/todos?date=${date}`)}
+      className={cn(
+        "group flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm transition-colors text-left ml-2",
+        isActive ? "bg-primary/10 text-zinc-100" : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
       )}
-    </div>
+    >
+      <Calendar className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+      <span className="flex-1 truncate font-medium">{label}</span>
+      <span className="text-xs text-zinc-500 flex-shrink-0">({count})</span>
+      <span className="text-xs text-zinc-600 flex-shrink-0">· {totalCount} total</span>
+    </button>
   );
 }
 

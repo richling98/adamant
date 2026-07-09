@@ -5,6 +5,10 @@ export async function getTodosByDate(date: string): Promise<Todo[]> {
   return invoke('api_get_todos_by_date', { date });
 }
 
+export async function getAllTodos(): Promise<Todo[]> {
+  return invoke('api_get_all_todos');
+}
+
 export async function getTodoDates(): Promise<TodoDateSummary[]> {
   return invoke('api_get_todo_dates');
 }

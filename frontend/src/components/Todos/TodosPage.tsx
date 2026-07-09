@@ -1,14 +1,15 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ListTodo, Trash2 } from "lucide-react";
 import debounce from "lodash/debounce";
 import { toast } from "sonner";
 import type { Todo } from "@/types";
 import { useSidebar } from "@/components/Sidebar/SidebarProvider";
 import { addDaysToDateKey, localDateKey } from "@/lib/dateKey";
 import {
+  getAllTodos,
   getTodosByDate,
   toggleTodo as apiToggleTodo,
   deleteTodo as apiDeleteTodo,
@@ -80,9 +81,10 @@ export function TodosPage() {
   const router = useRouter();
   const { fetchTodoDates } = useSidebar();
   const dateParam = searchParams.get("date");
+  const viewParam = searchParams.get("view");
   const todayStr = localDateKey();
+  const isAllView = viewParam === "all" || !dateParam;
   const activeDate = dateParam || todayStr;
-  const isToday = activeDate === todayStr;
 
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,18 +92,35 @@ export function TodosPage() {
   const fetchTodos = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getTodosByDate(activeDate);
+      const data = isAllView ? await getAllTodos() : await getTodosByDate(activeDate);
       setTodos(data);
     } catch (e) {
       toast.error("Failed to load to-dos");
     } finally {
       setLoading(false);
     }
-  }, [activeDate]);
+  }, [activeDate, isAllView]);
 
   useEffect(() => {
     fetchTodos();
   }, [fetchTodos]);
+
+  const groupedTodos = useMemo(() => {
+    if (!isAllView) return [];
+
+    const groups = new Map<string, Todo[]>();
+    for (const todo of todos) {
+      if (!groups.has(todo.date)) {
+        groups.set(todo.date, []);
+      }
+      groups.get(todo.date)!.push(todo);
+    }
+
+    return Array.from(groups.entries()).map(([date, items]) => ({
+      date,
+      items,
+    }));
+  }, [todos, isAllView]);
 
   const handleToggle = async (id: string, checked: boolean) => {
     setTodos((prev) =>
@@ -163,6 +182,7 @@ export function TodosPage() {
 
   const unchecked = todos.filter((t) => !t.is_checked);
   const checked = todos.filter((t) => t.is_checked);
+  const totalCount = todos.length;
 
   return (
     <div className="min-h-screen bg-background p-6 max-w-3xl mx-auto">
@@ -174,72 +194,81 @@ export function TodosPage() {
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push(`/todos?date=${subtractDay(activeDate)}`)}
-            className="text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-lg font-semibold text-zinc-100">
-            {formatDateLabel(activeDate)}
-          </h1>
-          <button
-            onClick={() => router.push(`/todos?date=${addDay(activeDate)}`)}
-            className="text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-        {!isToday ? (
-          <button
-            onClick={() => router.push("/todos")}
-            className="text-sm text-emerald-500 hover:text-emerald-400 transition-colors"
-          >
-            Today
-          </button>
-        ) : (
-          <div className="w-16" />
-        )}
-      </div>
-
-      {/* Empty state */}
-      {todos.length === 0 && (
-        <div className="text-center py-16 text-zinc-500">
-          <p className="text-sm">No to-dos for {formatDateLabel(activeDate)}</p>
-          <p className="text-xs mt-1">
-            Run AI cleanup on a meeting to extract action items, or add one
-            manually.
-          </p>
-        </div>
-      )}
-
-      {/* Add todo row */}
-      <AddTodoRow onAdd={handleAdd} />
-
-      {/* Unchecked todos */}
-      <div className="space-y-1">
-        {unchecked.map((todo) => (
-          <TodoRow
-            key={todo.id}
-            todo={todo}
-            onToggle={handleToggle}
-            onDelete={handleDelete}
-            onUpdate={handleUpdate}
-          />
-        ))}
-      </div>
-
-      {/* Completed section */}
-      {checked.length > 0 && (
-        <div className="mt-4">
-          <div className="border-t border-zinc-800 pt-3 mb-2">
-            <span className="text-xs text-zinc-500 uppercase tracking-wider">
-              Completed
-            </span>
+        {isAllView ? (
+          <div className="flex items-center gap-2">
+            <ListTodo className="w-4 h-4 text-primary" />
+            <h1 className="text-lg font-semibold text-zinc-100">All To-Dos</h1>
           </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push(`/todos?date=${subtractDay(activeDate)}`)}
+              className="text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-lg font-semibold text-zinc-100">
+              {formatDateLabel(activeDate)}
+            </h1>
+            <button
+              onClick={() => router.push(`/todos?date=${addDay(activeDate)}`)}
+              className="text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+        <div className="w-16" />
+      </div>
+
+      {isAllView ? (
+        <>
+          {todos.length === 0 ? (
+            <div className="text-center py-16 text-zinc-500">
+              <p className="text-sm">No to-dos found</p>
+              <p className="text-xs mt-1">
+                Run AI cleanup on a meeting to extract action items.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-xs text-zinc-500 uppercase tracking-wider flex items-center justify-between">
+                <span>{totalCount} total</span>
+                <span>{checked.length} completed</span>
+              </div>
+              {groupedTodos.map((group, index) => (
+                <TodosDateGroup
+                  key={group.date}
+                  date={group.date}
+                  todos={group.items}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
+                  onUpdate={handleUpdate}
+                  defaultExpanded={index === 0}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Empty state */}
+          {todos.length === 0 && (
+            <div className="text-center py-16 text-zinc-500">
+              <p className="text-sm">No to-dos for {formatDateLabel(activeDate)}</p>
+              <p className="text-xs mt-1">
+                Run AI cleanup on a meeting to extract action items, or add one
+                manually.
+              </p>
+            </div>
+          )}
+
+          {/* Add todo row */}
+          <AddTodoRow onAdd={handleAdd} />
+
+          {/* Unchecked todos */}
           <div className="space-y-1">
-            {checked.map((todo) => (
+            {unchecked.map((todo) => (
               <TodoRow
                 key={todo.id}
                 todo={todo}
@@ -249,14 +278,36 @@ export function TodosPage() {
               />
             ))}
           </div>
-        </div>
-      )}
 
-      {/* Stats bar */}
-      {todos.length > 0 && (
-        <div className="mt-6 text-xs text-zinc-600">
-          {unchecked.length} unchecked &middot; {checked.length} completed
-        </div>
+          {/* Completed section */}
+          {checked.length > 0 && (
+            <div className="mt-4">
+              <div className="border-t border-zinc-800 pt-3 mb-2">
+                <span className="text-xs text-zinc-500 uppercase tracking-wider">
+                  Completed
+                </span>
+              </div>
+              <div className="space-y-1">
+                {checked.map((todo) => (
+                  <TodoRow
+                    key={todo.id}
+                    todo={todo}
+                    onToggle={handleToggle}
+                    onDelete={handleDelete}
+                    onUpdate={handleUpdate}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Stats bar */}
+          {todos.length > 0 && (
+            <div className="mt-6 text-xs text-zinc-600">
+              {unchecked.length} unchecked &middot; {checked.length} completed
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -406,6 +457,97 @@ function AddTodoRow({
       >
         Add
       </button>
+    </div>
+  );
+}
+
+function TodosDateGroup({
+  date,
+  todos,
+  onToggle,
+  onDelete,
+  onUpdate,
+  defaultExpanded = false,
+}: {
+  date: string;
+  todos: Todo[];
+  onToggle: (id: string, checked: boolean) => void;
+  onDelete: (id: string) => void;
+  onUpdate: (id: string, markdown: string, json: string | null) => void;
+  defaultExpanded?: boolean;
+}) {
+  const label = formatDateLabel(date);
+  const [isExpanded, setIsExpanded] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`todos-all-date-${date}`);
+      if (stored !== null) return stored === 'true';
+    } catch {}
+    return defaultExpanded;
+  });
+
+  const unchecked = todos.filter((t) => !t.is_checked);
+  const checked = todos.filter((t) => t.is_checked);
+  const total = todos.length;
+
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/[0.03]">
+      <button
+        onClick={() => {
+          setIsExpanded((prev) => {
+            const next = !prev;
+            try { localStorage.setItem(`todos-all-date-${date}`, String(next)); } catch {}
+            return next;
+          });
+        }}
+        className="flex items-center gap-2 w-full px-4 py-3 text-left transition-colors hover:bg-white/[0.04]"
+      >
+        <span className="text-zinc-500 flex-shrink-0">
+          {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </span>
+        <span className="flex-1 min-w-0 text-sm font-medium text-zinc-100 truncate">{label}</span>
+        <span className="text-xs text-zinc-500 flex-shrink-0">
+          {total} item{total !== 1 ? 's' : ''}
+        </span>
+      </button>
+
+      <div className={`overflow-hidden transition-all duration-200 ${isExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0'}`}>
+        <div className="px-4 pb-4 pt-1">
+          {unchecked.length > 0 && (
+            <div className="space-y-1">
+              {unchecked.map((todo) => (
+                <TodoRow
+                  key={todo.id}
+                  todo={todo}
+                  onToggle={onToggle}
+                  onDelete={onDelete}
+                  onUpdate={onUpdate}
+                />
+              ))}
+            </div>
+          )}
+
+          {checked.length > 0 && (
+            <div className={unchecked.length > 0 ? 'mt-3' : ''}>
+              <div className="border-t border-zinc-800 pt-3 mb-2">
+                <span className="text-xs text-zinc-500 uppercase tracking-wider">
+                  Completed
+                </span>
+              </div>
+              <div className="space-y-1">
+                {checked.map((todo) => (
+                  <TodoRow
+                    key={todo.id}
+                    todo={todo}
+                    onToggle={onToggle}
+                    onDelete={onDelete}
+                    onUpdate={onUpdate}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

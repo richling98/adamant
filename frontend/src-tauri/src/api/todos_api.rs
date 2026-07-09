@@ -105,6 +105,24 @@ pub async fn api_get_todos_by_date<R: Runtime>(
         })
 }
 
+/// Get all todos, joined with meeting titles and ordered by date.
+#[tauri::command]
+pub async fn api_get_all_todos<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<TodoResponse>, String> {
+    log_info!("api_get_all_todos called");
+    let pool = state.db_manager.pool();
+
+    TodosRepository::get_all(pool)
+        .await
+        .map(|todos| todos.into_iter().map(TodoResponse::from).collect())
+        .map_err(|e| {
+            log_error!("Failed to get all todos: {}", e);
+            format!("Failed to get all todos: {}", e)
+        })
+}
+
 /// Get all dates that have todos, with counts (for sidebar grouping).
 #[tauri::command]
 pub async fn api_get_todo_dates<R: Runtime>(

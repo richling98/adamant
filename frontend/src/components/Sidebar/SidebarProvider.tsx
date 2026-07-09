@@ -5,7 +5,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
 import type { TodoDateSummary } from '@/types';
-import { localDateKey } from '@/lib/dateKey';
 
 
 interface SidebarItem {
@@ -90,7 +89,6 @@ interface SidebarContextType {
   setPendingFolderId: (id: string | null) => void;
   // Todo state
   todoDates: TodoDateSummary[];
-  todayUncheckedCount: number;
   todoRefreshVersion: number;
   fetchTodoDates: () => Promise<void>;
 }
@@ -123,7 +121,6 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   /** When set, the next newly created meeting will be auto-assigned to this folder. */
   const [pendingFolderId, setPendingFolderId] = useState<string | null>(null);
   const [todoDates, setTodoDates] = useState<TodoDateSummary[]>([]);
-  const [todayUncheckedCount, setTodayUncheckedCount] = useState(0);
   const [todoRefreshVersion, setTodoRefreshVersion] = useState(0);
 
   // Tracks whether the user has an active note-taking session open (pencil flow).
@@ -148,14 +145,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     try {
       const dates = await invoke('api_get_todo_dates') as TodoDateSummary[];
       setTodoDates(dates);
-      const todayStr = localDateKey();
-      const todayGroup = dates.find(d => d.date === todayStr);
-      setTodayUncheckedCount(todayGroup?.unchecked ?? 0);
       setTodoRefreshVersion(v => v + 1);
     } catch (error) {
       console.error('Error fetching todo dates:', error);
       setTodoDates([]);
-      setTodayUncheckedCount(0);
     }
   }, []);
 
@@ -490,7 +483,6 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       setPendingFolderId,
       // Todo state
       todoDates,
-      todayUncheckedCount,
       todoRefreshVersion,
       fetchTodoDates,
     }}>

@@ -758,6 +758,7 @@ pub fn run() {
             api::api_move_meeting_to_folder,
             // Todo commands
             api::todos_api::api_get_todos_by_date,
+            api::todos_api::api_get_all_todos,
             api::todos_api::api_get_todo_dates,
             api::todos_api::api_get_today_todos,
             api::todos_api::api_get_meeting_todos,
