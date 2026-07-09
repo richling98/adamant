@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ListTodo, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ListTodo, Trash2 } from "lucide-react";
 import debounce from "lodash/debounce";
 import { toast } from "sonner";
 import type { Todo } from "@/types";
@@ -90,6 +90,7 @@ export function TodosPage() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
   const [focusedTodoId, setFocusedTodoId] = useState<string | null>(null);
+  const [showActionsHelp, setShowActionsHelp] = useState(false);
 
   const fetchTodos = useCallback(async () => {
     setLoading(true);
@@ -233,7 +234,27 @@ export function TodosPage() {
         {isAllView ? (
           <div className="flex items-center gap-2">
             <ListTodo className="w-4 h-4 text-primary" />
-            <h1 className="text-lg font-semibold text-zinc-100">All To-Dos</h1>
+            <h1 className="text-lg font-semibold text-zinc-100">All Actions</h1>
+            <div
+              className="relative flex items-center"
+              onMouseEnter={() => setShowActionsHelp(true)}
+              onMouseLeave={() => setShowActionsHelp(false)}
+            >
+              <button
+                type="button"
+                className="inline-flex items-center text-zinc-500 transition-colors hover:text-zinc-300"
+                aria-label="About actions"
+                aria-expanded={showActionsHelp}
+                onClick={() => setShowActionsHelp((prev) => !prev)}
+              >
+                <CircleHelp className="w-4 h-4" />
+              </button>
+              {showActionsHelp && (
+                <div className="absolute left-1/2 top-full z-50 mt-2 w-72 -translate-x-1/2 rounded-md border border-white/10 bg-primary px-3 py-2 text-sm leading-relaxed text-primary-foreground shadow-xl">
+                  We automatically capture actions and to-do&apos;s from your meetings using AI. You can modify or add actions as you please.
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div className="flex items-center gap-3">
@@ -261,7 +282,7 @@ export function TodosPage() {
         <>
           {todos.length === 0 ? (
             <div className="text-center py-16 text-zinc-500">
-              <p className="text-sm">No to-dos found</p>
+              <p className="text-sm">No actions found</p>
               <p className="text-xs mt-1">
                 Run AI cleanup on a meeting to extract action items.
               </p>
@@ -293,7 +314,7 @@ export function TodosPage() {
           {/* Empty state */}
           {todos.length === 0 && (
             <div className="text-center py-16 text-zinc-500">
-              <p className="text-sm">No to-dos for {formatDateLabel(activeDate)}</p>
+              <p className="text-sm">No actions for {formatDateLabel(activeDate)}</p>
               <p className="text-xs mt-1">
                 Run AI cleanup on a meeting to extract action items, or add one
                 manually.

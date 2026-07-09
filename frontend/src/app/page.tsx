@@ -19,6 +19,7 @@ export default function Home() {
   const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
   const [hoverStartBtn, setHoverStartBtn] = useState(false);
   const [hoverTodosBtn, setHoverTodosBtn] = useState(false);
+  const [hoverChatBtn, setHoverChatBtn] = useState(false);
 
   const { transcriptModelConfig } = useConfig();
   const recordingState = useRecordingState();
@@ -130,6 +131,18 @@ export default function Home() {
     }
   };
 
+  const getHomeButtonStyle = (isHovered: boolean) => ({
+    background: isHovered ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--primary) / 0.07)',
+    backdropFilter: 'blur(24px)',
+    WebkitBackdropFilter: 'blur(24px)',
+    border: `1px solid ${isHovered ? 'hsl(var(--primary) / 0.75)' : 'hsl(var(--primary) / 0.5)'}`,
+    color: 'hsl(var(--primary))',
+    boxShadow: isHovered
+      ? '0 0 40px hsl(var(--primary) / 0.22), 0 8px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
+      : '0 0 28px hsl(var(--primary) / 0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
+    transform: isHovered ? 'translateY(-2px) scale(1.03)' : 'translateY(0) scale(1)',
+  });
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -156,49 +169,46 @@ export default function Home() {
           <h1 className="text-2xl font-semibold text-foreground">Welcome to Adamant</h1>
           <p className="text-sm text-zinc-400">The private and secure AI meeting notetaker.</p>
         </div>
-        <button
-          onClick={() => {
-            setIsMeetingActive(true);
-            Analytics.trackButtonClick('start_new_meeting', 'home_page');
-            router.push('/meeting-details?id=new');
-          }}
-          onMouseEnter={() => setHoverStartBtn(true)}
-          onMouseLeave={() => setHoverStartBtn(false)}
-          className="px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
-          style={{
-            background: hoverStartBtn ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--primary) / 0.07)',
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
-            border: `1px solid ${hoverStartBtn ? 'hsl(var(--primary) / 0.75)' : 'hsl(var(--primary) / 0.5)'}`,
-            color: 'hsl(var(--primary))',
-            boxShadow: hoverStartBtn
-              ? '0 0 40px hsl(var(--primary) / 0.22), 0 8px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
-              : '0 0 28px hsl(var(--primary) / 0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
-            transform: hoverStartBtn ? 'translateY(-2px) scale(1.03)' : 'translateY(0) scale(1)',
-          }}
-        >
-          Start New Meeting
-        </button>
+        <div className="flex flex-col items-center gap-4">
+          <button
+            onClick={() => {
+              setIsMeetingActive(true);
+              Analytics.trackButtonClick('start_new_meeting', 'home_page');
+              router.push('/meeting-details?id=new');
+            }}
+            onMouseEnter={() => setHoverStartBtn(true)}
+            onMouseLeave={() => setHoverStartBtn(false)}
+            className="min-w-[220px] px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
+            style={getHomeButtonStyle(hoverStartBtn)}
+          >
+            Meet
+          </button>
 
-        <button
-          onClick={() => router.push('/todos')}
-          onMouseEnter={() => setHoverTodosBtn(true)}
-          onMouseLeave={() => setHoverTodosBtn(false)}
-          className="px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
-          style={{
-            background: hoverTodosBtn ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--primary) / 0.07)',
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
-            border: `1px solid ${hoverTodosBtn ? 'hsl(var(--primary) / 0.75)' : 'hsl(var(--primary) / 0.5)'}`,
-            color: 'hsl(var(--primary))',
-            boxShadow: hoverTodosBtn
-              ? '0 0 40px hsl(var(--primary) / 0.22), 0 8px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
-              : '0 0 28px hsl(var(--primary) / 0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
-            transform: hoverTodosBtn ? 'translateY(-2px) scale(1.03)' : 'translateY(0) scale(1)',
-          }}
-        >
-          To dos
-        </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push('/todos')}
+              onMouseEnter={() => setHoverTodosBtn(true)}
+              onMouseLeave={() => setHoverTodosBtn(false)}
+              className="min-w-[150px] px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
+              style={getHomeButtonStyle(hoverTodosBtn)}
+            >
+              Actions
+            </button>
+
+            <button
+              onClick={() => {
+                Analytics.trackButtonClick('open_chat', 'home_page');
+                window.dispatchEvent(new CustomEvent('open-floating-chat'));
+              }}
+              onMouseEnter={() => setHoverChatBtn(true)}
+              onMouseLeave={() => setHoverChatBtn(false)}
+              className="min-w-[150px] px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
+              style={getHomeButtonStyle(hoverChatBtn)}
+            >
+              Chat
+            </button>
+          </div>
+        </div>
       </div>
     </motion.div>
   );

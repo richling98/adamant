@@ -179,7 +179,7 @@ const Sidebar: React.FC = () => {
       return next;
     });
   };
-  // Collapse state for the "To Do's" section — persisted across restarts
+  // Collapse state for the "Actions" section — persisted across restarts
   const [isTodosExpanded, setIsTodosExpanded] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('sidebar-todos-collapsed');
@@ -1585,7 +1585,7 @@ const Sidebar: React.FC = () => {
                     </UnfiledDropZone>
                   </div>
 
-                  {/* ── To Do's section ── */}
+                  {/* ── Actions section ── */}
                   {(() => {
                     if (todoDates.length === 0) return null;
                     const totalTodoCount = todoDates.reduce((sum, item) => sum + item.count, 0);
@@ -1603,7 +1603,7 @@ const Sidebar: React.FC = () => {
                               ? <ChevronDown className="h-3 w-3" />
                               : <ChevronRight className="h-3 w-3" />}
                           </span>
-                          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">To Do&apos;s</span>
+                          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Actions</span>
                         </div>
                       </div>
 

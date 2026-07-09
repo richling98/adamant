@@ -76,6 +76,12 @@ export function FloatingChatBubble() {
     }
   }, [open]);
 
+  useEffect(() => {
+    const handleOpenChat = () => setOpen(true);
+    window.addEventListener('open-floating-chat', handleOpenChat);
+    return () => window.removeEventListener('open-floating-chat', handleOpenChat);
+  }, []);
+
   // Keep the chat header synced with changes made in Settings.
   useEffect(() => {
     let cleanup: (() => void) | undefined;
