@@ -1,7 +1,7 @@
 {
     "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
     "productName": "Adamant",
-    "version": "0.8.1",
+    "version": "0.8.2",
     "identifier": "com.adamant.ai",
     "build": {
         "frontendDist": "../out",
@@ -111,7 +111,7 @@
     },
     "plugins": {
         "updater": {
-            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVDQTYzMUQ3ODc5N0M4MkEKUldRcXlKZUgxekdtN09DRkVWSHNpZlJseEVOUmpNd1dDSTNaLzZ3MXJGTnY3WW1pdnlOYjBpbkIK",
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJFOEQ4QTczMUZDMjgwOUIKUldTYmdNSWZjNHFOdnFmTTFrbFhYVEw3UnZQUkFBcHNpUUxlN1NJNEo3ZlFVbHN2UEhBaHVNdEIK",
             "endpoints": [
                 "https://github.com/richling98/adamant/releases/latest/download/latest.json"
             ]
