@@ -30,7 +30,6 @@ const THEME_SWATCHES: Record<(typeof THEME_OPTIONS)[number]['value'], { accent: 
 
 export function ThemeSettings() {
   const { uiTheme, setUiTheme } = useConfig()
-  const currentTheme = THEME_OPTIONS.find((option) => option.value === uiTheme) ?? THEME_OPTIONS[0]
   const [hoveredTheme, setHoveredTheme] = useState<typeof uiTheme | null>(null)
 
   return (
@@ -43,12 +42,7 @@ export function ThemeSettings() {
               Choose a dark theme for Adamant. Each option keeps the interface low-light and shifts the accent tone.
             </p>
           </div>
-          <div className="flex flex-row items-center justify-between gap-3 lg:flex-col lg:items-end lg:justify-start">
-            <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">Current</span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white whitespace-nowrap">
-              {currentTheme.label}
-            </span>
-          </div>
+          <div className="hidden lg:block" />
         </div>
 
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
