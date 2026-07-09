@@ -8,7 +8,7 @@ import MainContent from '@/components/MainContent'
 import AnalyticsProvider from '@/components/AnalyticsProvider'
 import { Toaster, toast } from 'sonner'
 import "sonner/dist/styles.css"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -122,7 +122,9 @@ export default function RootLayout({
                               <OnboardingFlow onComplete={handleOnboardingComplete} />
                             ) : (
                               <div className="flex">
-                                <Sidebar />
+                                <Suspense fallback={null}>
+                                  <Sidebar />
+                                </Suspense>
                                 <MainContent>{children}</MainContent>
                               </div>
                             )}
