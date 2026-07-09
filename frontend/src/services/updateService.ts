@@ -24,6 +24,11 @@ export interface UpdateProgress {
   percentage: number;
 }
 
+export interface UpdateFetchResult {
+  info: UpdateInfo;
+  update: Update | null;
+}
+
 /**
  * Update Service
  * Singleton service for managing app updates
@@ -33,12 +38,7 @@ export class UpdateService {
   private lastCheckTime: number | null = null;
   private readonly CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-  /**
-   * Check for available updates
-   * @param force Force check even if recently checked
-   * @returns Promise with update information
-   */
-  async checkForUpdates(force = false): Promise<UpdateInfo> {
+  private async fetchUpdateStatus(force = false): Promise<UpdateFetchResult> {
     // Prevent concurrent update checks
     if (this.updateCheckInProgress) {
       throw new Error('Update check already in progress');
@@ -51,8 +51,11 @@ export class UpdateService {
     if (process.env.NODE_ENV === 'development') {
       console.debug('Skipping update check in development mode');
       return {
-        available: false,
-        currentVersion,
+        info: {
+          available: false,
+          currentVersion,
+        },
+        update: null,
       };
     }
 
@@ -62,8 +65,11 @@ export class UpdateService {
       if (timeSinceLastCheck < this.CHECK_INTERVAL_MS) {
         console.debug('Skipping update check - checked recently');
         return {
-          available: false,
-          currentVersion,
+          info: {
+            available: false,
+            currentVersion,
+          },
+          update: null,
         };
       }
     }
@@ -76,17 +82,23 @@ export class UpdateService {
 
       if (update?.available) {
         return {
-          available: true,
-          currentVersion,
-          version: update.version,
-          date: update.date,
-          body: update.body,
+          info: {
+            available: true,
+            currentVersion,
+            version: update.version,
+            date: update.date,
+            body: update.body,
+          },
+          update,
         };
       }
 
       return {
-        available: false,
-        currentVersion,
+        info: {
+          available: false,
+          currentVersion,
+        },
+        update: null,
       };
     } catch (error) {
       console.error('Failed to check for updates:', error);
@@ -94,6 +106,16 @@ export class UpdateService {
     } finally {
       this.updateCheckInProgress = false;
     }
+  }
+
+  /**
+   * Check for available updates
+   * @param force Force check even if recently checked
+   * @returns Promise with update information
+   */
+  async checkForUpdates(force = false): Promise<UpdateInfo> {
+    const { info } = await this.fetchUpdateStatus(force);
+    return info;
   }
 
   /**
@@ -107,21 +129,63 @@ export class UpdateService {
     onProgress?: (progress: UpdateProgress) => void
   ): Promise<void> {
     try {
-      // Download the update
-      await update.download();
+      let downloaded = 0;
+      let total = 0;
 
-      // Notify progress if callback provided
-      if (onProgress) {
-        onProgress({ downloaded: 100, total: 100, percentage: 100 });
-      }
+      await update.downloadAndInstall((event) => {
+        if (!onProgress) {
+          return;
+        }
 
-      // Install and relaunch
-      await update.install();
+        switch (event.event) {
+          case 'Started':
+            total = event.data.contentLength || 0;
+            downloaded = 0;
+            onProgress({ downloaded, total, percentage: 0 });
+            break;
+          case 'Progress': {
+            downloaded += event.data.chunkLength || 0;
+            onProgress({
+              downloaded,
+              total,
+              percentage: total > 0 ? Math.round((downloaded / total) * 100) : 0,
+            });
+            break;
+          }
+          case 'Finished':
+            onProgress({
+              downloaded: total,
+              total,
+              percentage: 100,
+            });
+            break;
+        }
+      });
+
       await relaunch();
     } catch (error) {
       console.error('Failed to download/install update:', error);
       throw error;
     }
+  }
+
+  /**
+   * Check for a newer release and install it immediately.
+   * @param force Force a fresh check before downloading
+   * @param onProgress Optional progress callback
+   */
+  async installAvailableUpdate(
+    force = true,
+    onProgress?: (progress: UpdateProgress) => void
+  ): Promise<UpdateInfo> {
+    const { info, update } = await this.fetchUpdateStatus(force);
+
+    if (!info.available || !update) {
+      throw new Error('No update available');
+    }
+
+    await this.downloadAndInstall(update, onProgress);
+    return info;
   }
 
   /**

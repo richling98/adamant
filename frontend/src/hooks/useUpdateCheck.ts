@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { updateService, UpdateInfo } from '@/services/updateService';
 import { showUpdateNotification } from '@/components/UpdateNotification';
 
@@ -17,17 +17,21 @@ export function useUpdateCheck(options: UseUpdateCheckOptions = {}) {
 
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isChecking, setIsChecking] = useState(false);
+  const [hasChecked, setHasChecked] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
 
-  const checkForUpdates = async (force = false) => {
+  const checkForUpdates = useCallback(async (force = false) => {
     // Skip if checked recently (unless forced)
     if (!force && updateService.wasCheckedRecently()) {
       return;
     }
 
     setIsChecking(true);
+    setCheckError(null);
     try {
       const info = await updateService.checkForUpdates(force);
       setUpdateInfo(info);
+      setHasChecked(true);
 
       if (info.available) {
         if (onUpdateAvailable) {
@@ -40,6 +44,8 @@ export function useUpdateCheck(options: UseUpdateCheckOptions = {}) {
       }
     } catch (error) {
       // Silently fail on startup checks to avoid disrupting user experience
+      setHasChecked(true);
+      setCheckError(error instanceof Error ? error.message : 'Failed to check for updates');
       if (force) {
         console.warn('Failed to check for updates:', error);
       } else {
@@ -48,7 +54,7 @@ export function useUpdateCheck(options: UseUpdateCheckOptions = {}) {
     } finally {
       setIsChecking(false);
     }
-  };
+  }, [onUpdateAvailable, showNotification]);
 
   useEffect(() => {
     if (checkOnMount) {
@@ -59,11 +65,13 @@ export function useUpdateCheck(options: UseUpdateCheckOptions = {}) {
 
       return () => clearTimeout(timer);
     }
-  }, [checkOnMount]);
+  }, [checkOnMount, checkForUpdates]);
 
   return {
     updateInfo,
     isChecking,
+    hasChecked,
+    checkError,
     checkForUpdates,
   };
 }
