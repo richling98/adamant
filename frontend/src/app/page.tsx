@@ -131,17 +131,24 @@ export default function Home() {
     }
   };
 
-  const getHomeButtonStyle = (isHovered: boolean) => ({
-    background: isHovered ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--primary) / 0.07)',
+  const getHomeButtonStyle = (isHovered: boolean): React.CSSProperties => ({
+    background: isHovered
+      ? 'hsl(var(--primary) / 0.22)'
+      : 'linear-gradient(135deg, hsl(var(--primary) / 0.18) 0%, hsl(var(--primary) / 0.10) 100%)',
     backdropFilter: 'blur(24px)',
     WebkitBackdropFilter: 'blur(24px)',
-    border: `1px solid ${isHovered ? 'hsl(var(--primary) / 0.75)' : 'hsl(var(--primary) / 0.5)'}`,
-    color: 'hsl(var(--primary))',
+    border: `1.5px solid ${isHovered ? 'hsl(var(--primary) / 0.95)' : 'hsl(var(--primary) / 0.65)'}`,
+    color: isHovered
+      ? 'hsl(0 0% 98%)'
+      : 'hsl(var(--primary-foreground))',
+    fontWeight: 600,
+    letterSpacing: '0.02em',
     boxShadow: isHovered
-      ? '0 0 40px hsl(var(--primary) / 0.22), 0 8px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
-      : '0 0 28px hsl(var(--primary) / 0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
-    transform: isHovered ? 'translateY(-2px) scale(1.03)' : 'translateY(0) scale(1)',
-  });
+      ? '0 0 48px hsl(var(--primary) / 0.38), 0 0 0 1px hsl(var(--primary) / 0.18), 0 12px 32px rgba(0,0,0,0.28), inset 0 1px 0 hsl(0 0% 100% / 0.18)'
+      : '0 0 32px hsl(var(--primary) / 0.20), 0 0 0 1px hsl(var(--primary) / 0.12), 0 6px 18px rgba(0,0,0,0.18), inset 0 1px 0 hsl(0 0% 100% / 0.12)',
+    transform: isHovered ? 'translateY(-2px) scale(1.04)' : 'translateY(0) scale(1)',
+    textShadow: isHovered ? '0 0 18px hsl(var(--primary) / 0.6)' : '0 1px 2px rgba(0,0,0,0.2)',
+  } as React.CSSProperties);
 
   return (
     <motion.div

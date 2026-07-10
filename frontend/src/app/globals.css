@@ -145,124 +145,124 @@
     --background: 216 32% 8%;
     --card: 216 28% 10%;
     --popover: 216 28% 10%;
-    --primary: 214 92% 63%;
-    --primary-foreground: 216 40% 8%;
+    --primary: 214 96% 66%;
+    --primary-foreground: 0 0% 98%;
     --secondary: 216 25% 12%;
     --muted: 216 24% 12%;
-    --accent: 214 92% 63%;
-    --accent-foreground: 216 40% 8%;
+    --accent: 214 96% 66%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 214 78% 58%;
     --destructive-foreground: 216 40% 8%;
     --border: 214 22% 22%;
     --input: 214 22% 18%;
-    --ring: 214 92% 68%;
-    --chart-1: 214 92% 63%;
+    --ring: 214 96% 70%;
+    --chart-1: 214 96% 66%;
     --chart-2: 220 60% 42%;
     --chart-3: 200 52% 35%;
     --chart-4: 188 44% 38%;
     --chart-5: 232 60% 58%;
-    --theme-accent: 214 92% 63%;
-    --theme-accent-soft: 214 92% 70%;
-    --theme-glow: 214 92% 58%;
-    --scrollbar-thumb: hsl(214 92% 63% / 0.55);
-    --scrollbar-thumb-hover: hsl(214 92% 63% / 0.85);
+    --theme-accent: 214 96% 66%;
+    --theme-accent-soft: 214 96% 72%;
+    --theme-glow: 214 96% 60%;
+    --scrollbar-thumb: hsl(214 96% 66% / 0.55);
+    --scrollbar-thumb-hover: hsl(214 96% 66% / 0.85);
     --scrollbar-track: transparent;
     background-image:
-      radial-gradient(circle at top left, hsl(214 92% 46% / 0.18), transparent 34%),
-      radial-gradient(circle at bottom right, hsl(226 46% 19% / 0.3), transparent 36%);
+      radial-gradient(circle at top left, hsl(214 96% 50% / 0.20), transparent 34%),
+      radial-gradient(circle at bottom right, hsl(226 50% 22% / 0.32), transparent 36%);
   }
 
   body[data-theme='mithril'] {
     --background: 242 24% 9%;
     --card: 242 20% 11%;
     --popover: 242 20% 11%;
-    --primary: 248 28% 46%;
-    --primary-foreground: 242 36% 8%;
+    --primary: 252 52% 62%;
+    --primary-foreground: 0 0% 98%;
     --secondary: 242 16% 13%;
     --muted: 242 16% 12%;
-    --accent: 248 28% 46%;
-    --accent-foreground: 242 36% 8%;
+    --accent: 252 52% 62%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 272 48% 56%;
     --destructive-foreground: 242 36% 8%;
     --border: 242 14% 22%;
     --input: 242 14% 18%;
-    --ring: 248 28% 52%;
-    --chart-1: 248 28% 46%;
+    --ring: 252 52% 66%;
+    --chart-1: 252 52% 62%;
     --chart-2: 256 24% 34%;
     --chart-3: 238 22% 30%;
     --chart-4: 260 18% 36%;
     --chart-5: 282 20% 40%;
-    --theme-accent: 248 28% 46%;
-    --theme-accent-soft: 248 28% 60%;
-    --theme-glow: 248 28% 42%;
-    --scrollbar-thumb: hsl(248 28% 46% / 0.55);
-    --scrollbar-thumb-hover: hsl(248 28% 46% / 0.85);
+    --theme-accent: 252 52% 62%;
+    --theme-accent-soft: 252 52% 72%;
+    --theme-glow: 252 52% 56%;
+    --scrollbar-thumb: hsl(252 52% 62% / 0.55);
+    --scrollbar-thumb-hover: hsl(252 52% 62% / 0.85);
     --scrollbar-track: transparent;
     background-image:
-      radial-gradient(circle at top left, hsl(248 28% 38% / 0.16), transparent 34%),
-      radial-gradient(circle at bottom right, hsl(242 18% 16% / 0.28), transparent 36%);
+      radial-gradient(circle at top left, hsl(252 52% 50% / 0.18), transparent 34%),
+      radial-gradient(circle at bottom right, hsl(242 20% 18% / 0.30), transparent 36%);
   }
 
   body[data-theme='bronze'] {
     --background: 28 28% 8%;
     --card: 28 24% 10%;
     --popover: 28 24% 10%;
-    --primary: 32 56% 58%;
-    --primary-foreground: 28 35% 8%;
+    --primary: 32 72% 62%;
+    --primary-foreground: 0 0% 98%;
     --secondary: 28 20% 12%;
     --muted: 28 18% 12%;
-    --accent: 32 56% 58%;
-    --accent-foreground: 28 35% 8%;
+    --accent: 32 72% 62%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 20 72% 58%;
     --destructive-foreground: 28 35% 8%;
     --border: 28 18% 24%;
     --input: 28 18% 19%;
-    --ring: 32 56% 62%;
-    --chart-1: 32 56% 58%;
+    --ring: 32 72% 66%;
+    --chart-1: 32 72% 62%;
     --chart-2: 22 44% 42%;
     --chart-3: 40 40% 36%;
     --chart-4: 18 38% 40%;
     --chart-5: 54 35% 48%;
-    --theme-accent: 32 56% 58%;
-    --theme-accent-soft: 34 58% 66%;
-    --theme-glow: 32 56% 54%;
-    --scrollbar-thumb: hsl(32 56% 58% / 0.55);
-    --scrollbar-thumb-hover: hsl(32 56% 58% / 0.85);
+    --theme-accent: 32 72% 62%;
+    --theme-accent-soft: 34 72% 70%;
+    --theme-glow: 32 72% 58%;
+    --scrollbar-thumb: hsl(32 72% 62% / 0.55);
+    --scrollbar-thumb-hover: hsl(32 72% 62% / 0.85);
     --scrollbar-track: transparent;
     background-image:
-      radial-gradient(circle at top left, hsl(32 56% 42% / 0.18), transparent 34%),
-      radial-gradient(circle at bottom right, hsl(18 30% 18% / 0.3), transparent 36%);
+      radial-gradient(circle at top left, hsl(32 72% 46% / 0.20), transparent 34%),
+      radial-gradient(circle at bottom right, hsl(18 34% 20% / 0.32), transparent 36%);
   }
 
   body[data-theme='adamant'] {
     --background: 150 28% 7%;
     --card: 150 24% 9%;
     --popover: 150 24% 9%;
-    --primary: 151 46% 36%;
-    --primary-foreground: 150 34% 8%;
+    --primary: 142 68% 52%;
+    --primary-foreground: 0 0% 98%;
     --secondary: 150 18% 11%;
     --muted: 150 18% 10%;
-    --accent: 151 46% 36%;
-    --accent-foreground: 150 34% 8%;
+    --accent: 142 68% 52%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 18 68% 56%;
     --destructive-foreground: 150 34% 8%;
     --border: 150 16% 21%;
     --input: 150 16% 17%;
-    --ring: 151 46% 42%;
-    --chart-1: 151 46% 36%;
+    --ring: 142 68% 56%;
+    --chart-1: 142 68% 52%;
     --chart-2: 158 28% 32%;
     --chart-3: 140 22% 28%;
     --chart-4: 166 20% 34%;
     --chart-5: 132 28% 38%;
-    --theme-accent: 151 46% 36%;
-    --theme-accent-soft: 151 46% 48%;
-    --theme-glow: 151 46% 32%;
-    --scrollbar-thumb: hsl(151 46% 36% / 0.55);
-    --scrollbar-thumb-hover: hsl(151 46% 36% / 0.85);
+    --theme-accent: 142 68% 52%;
+    --theme-accent-soft: 142 68% 62%;
+    --theme-glow: 142 68% 48%;
+    --scrollbar-thumb: hsl(142 68% 52% / 0.55);
+    --scrollbar-thumb-hover: hsl(142 68% 52% / 0.85);
     --scrollbar-track: transparent;
     background-image:
-      radial-gradient(circle at top left, hsl(151 46% 22% / 0.2), transparent 34%),
-      radial-gradient(circle at bottom right, hsl(140 28% 14% / 0.3), transparent 36%);
+      radial-gradient(circle at top left, hsl(142 68% 36% / 0.22), transparent 34%),
+      radial-gradient(circle at bottom right, hsl(140 32% 18% / 0.32), transparent 36%);
   }
 }
 

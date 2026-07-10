@@ -61,36 +61,97 @@ pub struct ModelDef {
     pub description: String,
 }
 
+/// Fallback URLs for when primary CDN fails (DNS issues, etc.)
+/// HuggingFace is the most reliable fallback for GGUF models.
+pub fn get_fallback_urls(model_name: &str) -> Vec<String> {
+    match model_name {
+        "gemma3:1b" => vec![
+            "https://huggingface.co/lmstudio-community/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q8_0.gguf".to_string(),
+            "https://huggingface.co/bartowski/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q8_0.gguf".to_string(),
+        ],
+        "gemma3:4b" => vec![
+            "https://huggingface.co/lmstudio-community/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf".to_string(),
+            "https://huggingface.co/bartowski/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf".to_string(),
+        ],
+        "qwen3:1.7b" => vec![
+            "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/main/qwen3-1.7b-q4_k_m.gguf".to_string(),
+            "https://huggingface.co/bartowski/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf".to_string(),
+        ],
+        "deepseek-r1:1.5b" => vec![
+            "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf".to_string(),
+            "https://huggingface.co/lmstudio-community/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf".to_string(),
+        ],
+        _ => vec![],
+    }
+}
+
 /// Get all available built-in AI models
 /// Add new models here - the system will automatically detect and manage them
 pub fn get_available_models() -> Vec<ModelDef> {
     vec![
-        // Gemma 3 1B - Fast tier
+        // Gemma 3 1B - Fast tier (Recommended default for onboarding speed)
         ModelDef {
             name: "gemma3:1b".to_string(),
-            display_name: "Gemma 3 1B (Fast)".to_string(),
+            display_name: "Gemma 3 1B — Fast (Recommended)".to_string(),
             gguf_file: "gemma-3-1b-it-Q8_0.gguf".to_string(),
             template: "gemma3".to_string(),
-            download_url: "https://adamant.towardsgeneralintelligence.com/models/gemma-3-1b-it-Q8_0.gguf".to_string(),
+            download_url: "https://huggingface.co/lmstudio-community/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q8_0.gguf".to_string(),
             size_mb: 1019,
-            context_size: 32768, 
-            layer_count: 26,     
+            context_size: 32768,
+            layer_count: 26,
             sampling: SamplingParams {
                 temperature: 0.2,
                 top_k: 40,
                 top_p: 0.9,
                 stop_tokens: vec!["<end_of_turn>".to_string()],
             },
-            description: "Fastest model. Runs on any hardware with ~1GB RAM. Good for quick summaries.".to_string(),
+            description: "Fastest • ~1 GB download • Runs on any laptop • Good for quick summaries".to_string(),
         },
+        // Qwen3 1.7B — Best balance of smarts + size, Apache 2.0, thinking mode
+        ModelDef {
+            name: "qwen3:1.7b".to_string(),
+            display_name: "Qwen3 1.7B — Smart (Best Value)".to_string(),
+            gguf_file: "qwen3-1.7b-q4_k_m.gguf".to_string(),
+            template: "qwen3".to_string(),
+            download_url: "https://huggingface.co/lmstudio-community/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf".to_string(),
+            size_mb: 1223,
+            context_size: 32768,
+            layer_count: 28,
+            sampling: SamplingParams {
+                temperature: 0.6,
+                top_k: 20,
+                top_p: 0.95,
+                stop_tokens: vec!["<|im_end|>".to_string(), "<|endoftext|>".to_string()],
+            },
+            description: "Smarter • 1.2 GB • Thinking mode • 119 languages • Best quality in this size".to_string(),
+        },
+        // DeepSeek R1 Distill 1.5B — reasoning specialist
+        ModelDef {
+            name: "deepseek-r1:1.5b".to_string(),
+            display_name: "DeepSeek R1 Distill 1.5B — Reasoning".to_string(),
+            gguf_file: "deepseek-r1-distill-qwen-1.5b-q4_k_m.gguf".to_string(),
+            template: "deepseek-r1".to_string(),
+            download_url: "https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf".to_string(),
+            size_mb: 1065,
+            context_size: 32768,
+            layer_count: 28,
+            sampling: SamplingParams {
+                temperature: 0.6,
+                top_k: 40,
+                top_p: 0.95,
+                stop_tokens: vec!["<｜end▁of▁sentence｜>".to_string()],
+            },
+            description: "Deep reasoning • 1.1 GB • Chain-of-thought • Best for complex meetings".to_string(),
+        },
+        // Gemma 3 4B - Balanced tier
         ModelDef {
             name: "gemma3:4b".to_string(),
-            display_name: "Gemma 3 4B (Balanced)".to_string(),
+            display_name: "Gemma 3 4B — Balanced".to_string(),
             gguf_file: "gemma-3-4b-it-Q4_K_M.gguf".to_string(),
             template: "gemma3".to_string(),
-            download_url: "https://adamant.towardsgeneralintelligence.com/models/gemma-3-4b-it-Q4_K_M.gguf".to_string(),
+            download_url: "https://huggingface.co/lmstudio-community/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf".to_string(),
             size_mb: 2374,
-            context_size: 32768, // Supports 128k, but 32k is good for local·
+            context_size: 32768,
             layer_count: 35,
             sampling: SamplingParams {
                 temperature: 0.2,
@@ -98,7 +159,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
                 top_p: 0.9,
                 stop_tokens: vec!["<end_of_turn>".to_string()],
             },
-            description: "Balanced model. Great quality/speed trade-off. Requires ~3.5GB RAM.".to_string(),
+            description: "High quality • 2.4 GB • Needs ~3.5 GB RAM • Best for detailed summaries".to_string(),
         },
     ]
 }
@@ -145,10 +206,32 @@ pub const GEMMA3_TEMPLATE: &str = "\
 <start_of_turn>model
 ";
 
+/// Qwen3 / ChatML-style template — used for Qwen3 and many instruction-tuned models
+/// Uses <|im_start|> / <|im_end|> delimiters. Qwen3 supports thinking mode, but we disable
+/// it for summarization (faster, less verbose) via empty think block.
+pub const QWEN3_TEMPLATE: &str = "\
+<|im_start|>system
+{system_prompt}<|im_end|>
+<|im_start|>user
+{user_prompt}<|im_end|>
+<|im_start|>assistant
+";
+
+/// DeepSeek R1 Distill template (Qwen2-based) — similar to ChatML with <｜begin▁of▁sentence｜> etc.
+/// We use the user role for both system + user merged into user message for simplicity
+/// as some GGUF builds don't have a system template.
+pub const DEEPSEEK_R1_TEMPLATE: &str = "\
+<|im_start|>system
+{system_prompt}<|im_end|>
+<|im_start|>user
+{user_prompt}<|im_end|>
+<|im_start|>assistant
+";
+
 /// Format a prompt using the specified template
 ///
 /// # Arguments
-/// * `template_name` - Template identifier (e.g., "gemma3", "chatml", "llama3")
+/// * `template_name` - Template identifier (e.g., "gemma3", "chatml", "qwen3")
 /// * `system_prompt` - System message (instructions for the model)
 /// * `user_prompt` - User message (actual task/question)
 ///
@@ -161,6 +244,9 @@ pub fn format_prompt(
 ) -> Result<String> {
     let template = match template_name {
         "gemma3" => GEMMA3_TEMPLATE,
+        "qwen3" => QWEN3_TEMPLATE,
+        "deepseek-r1" => DEEPSEEK_R1_TEMPLATE,
+        "chatml" => QWEN3_TEMPLATE, // ChatML is same structure as Qwen3
         _ => return Err(anyhow!("Unknown template: {}", template_name)),
     };
 

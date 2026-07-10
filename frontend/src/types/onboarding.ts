@@ -22,6 +22,8 @@ export interface OnboardingContainerProps {
   onPrevious?: () => void;
   canGoNext?: boolean;
   canGoPrevious?: boolean;
+  hideBottomNav?: boolean;
+  footer?: React.ReactNode;
 }
 
 export interface PermissionRowProps {

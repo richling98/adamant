@@ -469,47 +469,86 @@ impl ModelManager {
             0
         };
 
-        // Download the file with optimized client settings
+        // Build list of URLs to try: primary + fallbacks (HF etc.)
+        let mut urls_to_try: Vec<String> = vec![model_def.download_url.clone()];
+        urls_to_try.extend(crate::summary::summary_engine::models::get_fallback_urls(model_name));
+
+        // Attempt each URL in order — if primary fails with network/DNS error, try fallbacks
         let client = Client::builder()
-            .tcp_nodelay(true) // Disable Nagle's algorithm for faster streaming
-            .pool_max_idle_per_host(1) // Keep connection alive
-            .timeout(Duration::from_secs(3600)) // 1 hour timeout for large files
+            .tcp_nodelay(true)
+            .pool_max_idle_per_host(1)
+            .timeout(Duration::from_secs(3600))
             .connect_timeout(Duration::from_secs(30))
             .build()
             .map_err(|e| anyhow!("Failed to create HTTP client: {}", e))?;
 
-        // Build request with Range header if resuming
-        let mut request = client.get(&model_def.download_url);
-        if existing_size > 0 {
-            log::info!(
-                "Resuming download from byte {} ({:.1} MB)",
-                existing_size,
-                existing_size as f64 / (1024.0 * 1024.0)
-            );
-            request = request.header("Range", format!("bytes={}-", existing_size));
+        let mut last_error: Option<anyhow::Error> = None;
+        let mut response_opt: Option<reqwest::Response> = None;
+        let mut resuming = false;
+        let mut attempted_resume = existing_size > 0;
+
+        for (idx, url) in urls_to_try.iter().enumerate() {
+            if idx > 0 {
+                log::warn!("Retrying download with fallback URL #{}: {}", idx, url);
+            }
+            let mut request = client.get(url);
+            if attempted_resume && existing_size > 0 {
+                log::info!(
+                    "Resuming download from byte {} ({:.1} MB)",
+                    existing_size,
+                    existing_size as f64 / (1024.0 * 1024.0)
+                );
+                request = request.header("Range", format!("bytes={}-", existing_size));
+            }
+
+            match request.send().await {
+                Ok(resp) => {
+                    if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+                        response_opt = Some(resp);
+                        resuming = true;
+                        break;
+                    } else if resp.status().is_success() {
+                        if attempted_resume && existing_size > 0 {
+                            log::warn!("Fallback server doesn't support resume, starting fresh download");
+                            attempted_resume = false;
+                        }
+                        response_opt = Some(resp);
+                        resuming = false;
+                        break;
+                    } else {
+                        let status = resp.status();
+                        log::warn!("Download URL {} returned status {}", url, status);
+                        last_error = Some(anyhow!("Download failed with status: {}", status));
+                        // For 404 try next fallback; for 5xx also try next
+                        continue;
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Failed to start download from {}: {}", url, e);
+                    last_error = Some(anyhow!("Failed to start download: {}", e));
+                    continue;
+                }
+            }
         }
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| anyhow!("Failed to start download: {}", e))?;
+        let response = match response_opt {
+            Some(r) => r,
+            None => {
+                let mut active = self.active_downloads.write().await;
+                active.remove(model_name);
+                let msg = last_error
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "All download URLs failed".to_string());
+                return Err(anyhow!("{}", msg));
+            }
+        };
 
-        // Check response status - 200 OK (full download) or 206 Partial Content (resume)
-        let (total_size, resuming) = if response.status() == reqwest::StatusCode::PARTIAL_CONTENT {
-            // Server supports resume - total size = existing + remaining
+        let total_size = if resuming {
             let remaining = response.content_length().unwrap_or(0);
             log::info!("Server supports resume, {} MB remaining", remaining / (1024 * 1024));
-            (existing_size + remaining, true)
-        } else if response.status().is_success() {
-            // Server doesn't support resume or fresh download
-            if existing_size > 0 {
-                log::warn!("Server doesn't support resume, starting fresh download");
-            }
-            (response.content_length().unwrap_or(0), false)
+            existing_size + remaining
         } else {
-            let mut active = self.active_downloads.write().await;
-            active.remove(model_name);
-            return Err(anyhow!("Download failed with status: {}", response.status()));
+            response.content_length().unwrap_or(0)
         };
 
         log::info!("Total size: {} MB", total_size / (1024 * 1024));

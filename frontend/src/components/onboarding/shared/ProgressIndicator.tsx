@@ -18,7 +18,7 @@ export function ProgressIndicator({ current, total, onStepClick }: ProgressIndic
   const visibleSteps = Array.from({ length: total }, (_, i) => i + 1);
 
   return (
-    <div className="mb-8">
+    <div className="mb-1">
       <div className="flex items-center justify-center gap-2">
         {visibleSteps.map((step, index) => {
           const isActive = step === current;

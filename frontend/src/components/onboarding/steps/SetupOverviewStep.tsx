@@ -32,6 +32,17 @@ export function SetupOverviewStep() {
     { number: 2, title: 'Download Summarization Engine' },
   ];
 
+  const letsGoFooter = (
+    <div className="w-full max-w-xs">
+      <Button
+        onClick={goNext}
+        className="w-full h-11 rounded-xl border-[1.5px] border-lime-300/80 bg-lime-400/10 text-lime-100 hover:border-lime-200 hover:bg-lime-400/20 hover:text-white shadow-[0_0_18px_hsl(80_75%_55%_/_0.22)]"
+      >
+        Let&apos;s Go
+      </Button>
+    </div>
+  );
+
   return (
     <OnboardingContainer
       title="Setup Overview"
@@ -40,31 +51,17 @@ export function SetupOverviewStep() {
       totalSteps={isMac ? 4 : 3}
       showNavigation
       canGoPrevious
+      footer={letsGoFooter}
     >
-      <div className="flex flex-col items-center space-y-10">
-        {/* Steps Card */}
-        <div className="w-full max-w-md rounded-xl border border-white/10 bg-white/[0.06] backdrop-blur-sm p-5">
-          <div className="space-y-4">
-            {steps.map((step) => (
-              <div key={step.number} className="flex items-center gap-4 p-1">
-                <div className="flex-1">
-                  <h3 className="font-medium text-zinc-100">
-                    Step {step.number}: {step.title}
-                  </h3>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* CTA — no GitHub link, cleaner */}
-        <div className="w-full max-w-xs space-y-4">
-          <Button
-            onClick={goNext}
-            className="w-full h-11 rounded-xl border-[1.5px] border-lime-300/80 bg-lime-400/10 text-lime-100 hover:border-lime-200 hover:bg-lime-400/20 hover:text-white shadow-[0_0_18px_hsl(80_75%_55%_/_0.22)]"
-          >
-            Let&apos;s Go
-          </Button>
+      <div className="w-full max-w-md rounded-xl border border-white/10 bg-white/[0.06] backdrop-blur-sm p-5">
+        <div className="space-y-4">
+          {steps.map((st) => (
+            <div key={st.number} className="flex items-center gap-4 p-1">
+              <h3 className="font-medium text-zinc-100">
+                Step {st.number}: {st.title}
+              </h3>
+            </div>
+          ))}
         </div>
       </div>
     </OnboardingContainer>
