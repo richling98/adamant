@@ -1082,47 +1082,26 @@ const Sidebar: React.FC = () => {
             </TooltipContent>
           </Tooltip>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                onMouseEnter={() => setHoverCollapsedSettings(true)}
-                onMouseLeave={() => setHoverCollapsedSettings(false)}
-                className="p-2 rounded-xl transition-all duration-300"
-                title="Settings"
-                style={{
-                  background: isSettingsPage || hoverCollapsedSettings ? 'hsl(var(--primary) / 0.18)' : 'hsl(var(--background) / 0.7)',
-                  backdropFilter: 'blur(20px)',
-                  WebkitBackdropFilter: 'blur(20px)',
-                  border: `1px solid ${hoverCollapsedSettings ? 'hsl(var(--primary) / 0.32)' : 'hsl(var(--border) / 0.85)'}`,
-                  boxShadow: hoverCollapsedSettings
-                    ? '0 0 18px hsl(var(--primary) / 0.16), inset 0 1px 0 rgba(255,255,255,0.12)'
-                    : 'inset 0 1px 0 rgba(255,255,255,0.06)',
-                  transform: hoverCollapsedSettings ? 'scale(1.06)' : 'scale(1)',
-                }}
-              >
-                <Settings className="w-5 h-5 text-foreground/75" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="right" className="w-56">
-              <DropdownMenuLabel>Settings</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={() => router.push('/settings')}>
-                Open Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Theme</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={uiTheme}
-                onValueChange={(value) => setUiTheme(value as ThemeName)}
-              >
-                {THEME_OPTIONS.map((theme) => (
-                  <DropdownMenuRadioItem key={theme.value} value={theme.value}>
-                    {theme.label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <button
+            type="button"
+            onClick={() => router.push('/settings')}
+            onMouseEnter={() => setHoverCollapsedSettings(true)}
+            onMouseLeave={() => setHoverCollapsedSettings(false)}
+            className="p-2 rounded-xl transition-all duration-300"
+            title="Customize"
+            style={{
+              background: isSettingsPage || hoverCollapsedSettings ? 'hsl(var(--primary) / 0.18)' : 'hsl(var(--background) / 0.7)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: `1px solid ${hoverCollapsedSettings ? 'hsl(var(--primary) / 0.32)' : 'hsl(var(--border) / 0.85)'}`,
+              boxShadow: hoverCollapsedSettings
+                ? '0 0 18px hsl(var(--primary) / 0.16), inset 0 1px 0 rgba(255,255,255,0.12)'
+                : 'inset 0 1px 0 rgba(255,255,255,0.06)',
+              transform: hoverCollapsedSettings ? 'scale(1.06)' : 'scale(1)',
+            }}
+          >
+            <Settings className="w-5 h-5 text-foreground/75" />
+          </button>
 
         </div>
       </TooltipProvider>
@@ -1811,48 +1790,27 @@ const Sidebar: React.FC = () => {
         {!isCollapsed && (
 
           <div className="flex-shrink-0 p-2 border-t border-white/10">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  onMouseEnter={() => setHoverExpandedSettings(true)}
-                  onMouseLeave={() => setHoverExpandedSettings(false)}
-                  className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium rounded-xl transition-all duration-300"
-                  style={{
-                    background: hoverExpandedSettings ? 'hsl(var(--primary) / 0.16)' : 'hsl(var(--background) / 0.65)',
-                    backdropFilter: 'blur(24px)',
-                    WebkitBackdropFilter: 'blur(24px)',
-                    border: `1px solid ${hoverExpandedSettings ? 'hsl(var(--primary) / 0.28)' : 'hsl(var(--border) / 0.85)'}`,
-                    color: hoverExpandedSettings ? 'hsl(var(--foreground) / 0.98)' : 'hsl(var(--foreground) / 0.78)',
-                    boxShadow: hoverExpandedSettings
-                      ? '0 4px 20px rgba(0,0,0,0.16), 0 0 14px hsl(var(--primary) / 0.14), inset 0 1px 0 rgba(255,255,255,0.14)'
-                      : '0 2px 16px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08)',
-                    transform: hoverExpandedSettings ? 'translateY(-1px)' : 'translateY(0)',
-                  }}
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  <span>Settings</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={8} className="w-56">
-                <DropdownMenuLabel>Settings</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => router.push('/settings')}>
-                  Open Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Theme</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={uiTheme}
-                  onValueChange={(value) => setUiTheme(value as ThemeName)}
-                >
-                  {THEME_OPTIONS.map((theme) => (
-                    <DropdownMenuRadioItem key={theme.value} value={theme.value}>
-                      {theme.label}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              type="button"
+              onClick={() => router.push('/settings')}
+              onMouseEnter={() => setHoverExpandedSettings(true)}
+              onMouseLeave={() => setHoverExpandedSettings(false)}
+              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium rounded-xl transition-all duration-300"
+              style={{
+                background: hoverExpandedSettings ? 'hsl(var(--primary) / 0.16)' : 'hsl(var(--background) / 0.65)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
+                border: `1px solid ${hoverExpandedSettings ? 'hsl(var(--primary) / 0.28)' : 'hsl(var(--border) / 0.85)'}`,
+                color: hoverExpandedSettings ? 'hsl(var(--foreground) / 0.98)' : 'hsl(var(--foreground) / 0.78)',
+                boxShadow: hoverExpandedSettings
+                  ? '0 4px 20px rgba(0,0,0,0.16), 0 0 14px hsl(var(--primary) / 0.14), inset 0 1px 0 rgba(255,255,255,0.14)'
+                  : '0 2px 16px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08)',
+                transform: hoverExpandedSettings ? 'translateY(-1px)' : 'translateY(0)',
+              }}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              <span>Customize</span>
+            </button>
           </div>
         )}
       </div>
