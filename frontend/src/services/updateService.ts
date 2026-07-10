@@ -75,10 +75,15 @@ export class UpdateService {
     }
 
     this.updateCheckInProgress = true;
-    this.lastCheckTime = Date.now();
+    // NOTE: lastCheckTime is set AFTER check() succeeds, not before.
+    // Setting it before means a failed/throwing check still throttles for 24h,
+    // locking the user out of re-checks.
 
     try {
       const update = await check();
+
+      // Only record the check time after a successful check
+      this.lastCheckTime = Date.now();
 
       if (update?.available) {
         return {

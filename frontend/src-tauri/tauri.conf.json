@@ -1,7 +1,7 @@
 {
     "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
     "productName": "Adamant",
-    "version": "0.8.7",
+    "version": "0.8.8",
     "identifier": "com.adamant.ai",
     "build": {
         "frontendDist": "../out",
@@ -104,7 +104,22 @@
         "macOS": {
             "entitlements": "entitlements.plist",
             "signingIdentity": null,
-            "hardenedRuntime": true
+            "hardenedRuntime": true,
+            "dmg": {
+                "background": "icons/dmg-background.png",
+                "windowSize": {
+                    "width": 660,
+                    "height": 400
+                },
+                "appPosition": {
+                    "x": 180,
+                    "y": 170
+                },
+                "applicationFolderPosition": {
+                    "x": 480,
+                    "y": 170
+                }
+            }
         },
         "windows": {
             "signCommand": "powershell -ExecutionPolicy Bypass -File scripts/sign-windows.ps1 -FilePath %1"

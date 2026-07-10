@@ -36,7 +36,7 @@ export function About() {
         ? 'Checking...'
         : isUpdateAvailable
           ? 'Update and relaunch app'
-          : 'No updates!';
+          : 'Check for updates';
 
   const handleUpdateAction = async () => {
     if (isUpdating || isChecking) {
@@ -49,6 +49,9 @@ export function About() {
     }
 
     if (!isUpdateAvailable) {
+      // Force a fresh re-check — the initial startup check may have run
+      // before a newer release was published, or hit a transient issue.
+      await checkForUpdates(true);
       return;
     }
 
@@ -93,7 +96,7 @@ export function About() {
           variant="outline"
           size="sm"
           className="text-xs w-full justify-center"
-          disabled={isUpdating || isChecking || (!isUpdateAvailable && !checkError)}
+          disabled={isUpdating || isChecking}
         >
           {isUpdating ? (
             <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
@@ -101,8 +104,10 @@ export function About() {
             <RefreshCw className="h-3.5 w-3.5 mr-2" />
           ) : isUpdateAvailable ? (
             <Download className="h-3.5 w-3.5 mr-2" />
+          ) : isInitialCheckPending || isChecking ? (
+            <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
           ) : (
-            <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
+            <RefreshCw className="h-3.5 w-3.5 mr-2" />
           )}
           {buttonLabel}
         </Button>
