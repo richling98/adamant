@@ -106,7 +106,7 @@ export function SettingsModals({
                       <option value="builtin-ai">Built-in AI</option>
                       <option value="claude">Claude</option>
                       <option value="groq">Groq</option>
-                      <option value="nvidia-inference">NVIDIA inference</option>
+                      <option value="nvidia-inference">NVIDIA inference (NVIDIA employees only)</option>
                       <option value="ollama">Ollama</option>
                       <option value="openrouter">OpenRouter</option>
                       <option value="openai">OpenAI</option>

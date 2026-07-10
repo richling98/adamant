@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { Trash2 } from 'lucide-react';
 import {
   ParakeetModelInfo,
   ModelStatus,
@@ -11,6 +12,8 @@ import {
   getModelDisplayName,
   formatFileSize
 } from '../lib/parakeet';
+import { ModelStorageHeader } from '@/components/ModelStorageHeader';
+import { DeleteModelConfirmDialog } from '@/components/DeleteModelConfirmDialog';
 
 interface ParakeetModelManagerProps {
   selectedModel?: string;
@@ -30,6 +33,22 @@ export function ParakeetModelManager({
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [downloadingModels, setDownloadingModels] = useState<Set<string>>(new Set());
+  const [modelsDir, setModelsDir] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ParakeetModelInfo | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const refreshModels = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const list = await ParakeetAPI.getAvailableModels();
+      setModels(list);
+    } catch (e) {
+      console.error('Failed to refresh parakeet models', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
 
   // Refs for stable callbacks
   const onModelSelectRef = useRef(onModelSelect);
@@ -54,6 +73,7 @@ export function ParakeetModelManager({
         await ParakeetAPI.init();
         const modelList = await ParakeetAPI.getAvailableModels();
         setModels(modelList);
+        try { setModelsDir(await ParakeetAPI.getModelsDirectory()); } catch {}
 
         // Auto-select first available model if none selected
         if (!selectedModel) {
@@ -208,6 +228,26 @@ export function ParakeetModelManager({
     };
   }, []); // Empty dependency array - listeners use refs for stable callbacks
 
+  // Auto-refresh on focus / external delete
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState === 'visible') refreshModels(); };
+    const onCustom = () => refreshModels();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshModels(); });
+    window.addEventListener('refresh-ai-models', onCustom as any);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('refresh-ai-models', onCustom as any);
+    };
+  }, [refreshModels]);
+
+  const totalSizeLabel = useMemo(() => {
+    const avail = models.filter(m => m.status === 'Available');
+    if (avail.length === 0) return undefined;
+    const totalMb = avail.reduce((s, m) => s + (m.size_mb || 0), 0);
+    return totalMb >= 1024 ? `${(totalMb/1024).toFixed(1)} GB used` : `${totalMb} MB used`;
+  }, [models]);
+
   const saveModelSelection = async (modelName: string) => {
     try {
       await invoke('api_save_transcript_config', {
@@ -312,25 +352,26 @@ export function ParakeetModelManager({
     });
   };
 
+  const openFolder = async () => {
+    try { await ParakeetAPI.openModelsFolder(); } catch (e) { toast.error(`Failed to open folder: ${String(e)}`); }
+  };
+
   const deleteModel = async (modelName: string) => {
     const displayInfo = getModelDisplayInfo(modelName);
     const displayName = displayInfo?.friendlyName || modelName;
-
+    setIsDeleting(true);
     try {
       await ParakeetAPI.deleteCorruptedModel(modelName);
-
-      // Refresh models list
       const modelList = await ParakeetAPI.getAvailableModels();
       setModels(modelList);
-
+      setDeleteTarget(null);
       toast.success(`${displayName} deleted`, {
         description: 'Model removed to free up space',
         duration: 3000
       });
-
-      // If deleted model was selected, clear selection
       if (selectedModel === modelName && onModelSelect) {
         onModelSelect('');
+        toast.info('Active Parakeet model deleted — please select another.');
       }
     } catch (err) {
       console.error('Failed to delete model:', err);
@@ -338,6 +379,8 @@ export function ParakeetModelManager({
         description: err instanceof Error ? err.message : 'Delete failed',
         duration: 4000
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -370,6 +413,24 @@ export function ParakeetModelManager({
 
   return (
     <div className={`space-y-3 ${className}`}>
+      <ModelStorageHeader
+        title="Parakeet Models"
+        directoryPath={modelsDir}
+        onOpenFolder={openFolder}
+        onRefresh={refreshModels}
+        isRefreshing={isRefreshing}
+        totalSizeLabel={totalSizeLabel}
+      />
+      <DeleteModelConfirmDialog
+        isOpen={!!deleteTarget}
+        modelName={deleteTarget?.name ?? ''}
+        modelDisplayName={deleteTarget ? (getModelDisplayInfo(deleteTarget.name)?.friendlyName ?? deleteTarget.name) : ''}
+        sizeLabel={deleteTarget ? `${deleteTarget.size_mb} MB` : undefined}
+        directoryPath={modelsDir}
+        isDeleting={isDeleting}
+        onCancel={() => !isDeleting && setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteModel(deleteTarget.name)}
+      />
       {/* Recommended Model */}
       {recommendedModel && (
         <ModelCard
@@ -383,7 +444,7 @@ export function ParakeetModelManager({
           }}
           onDownload={() => downloadModel(recommendedModel.name)}
           onCancel={() => cancelDownload(recommendedModel.name)}
-          onDelete={() => deleteModel(recommendedModel.name)}
+          onDelete={() => setDeleteTarget(recommendedModel)}
           isDownloading={downloadingModels.has(recommendedModel.name)}
         />
       )}
@@ -404,7 +465,7 @@ export function ParakeetModelManager({
               }}
               onDownload={() => downloadModel(model.name)}
               onCancel={() => cancelDownload(model.name)}
-              onDelete={() => deleteModel(model.name)}
+              onDelete={() => setDeleteTarget(model)}
               isDownloading={downloadingModels.has(model.name)}
             />
           ))}
@@ -522,12 +583,10 @@ function ModelCard({
                     e.stopPropagation();
                     onDelete();
                   }}
-                  className="text-zinc-500 hover:text-red-400 transition-colors p-1"
-                  title="Delete model to free up space"
+                  className="p-1.5 rounded hover:bg-white/10 text-zinc-400 hover:text-red-400 border border-transparent hover:border-red-500/20 transition-colors"
+                  title="Delete model — frees disk space"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </>
             )}

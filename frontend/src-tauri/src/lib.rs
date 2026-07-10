@@ -787,6 +787,8 @@ pub fn run() {
             summary::summary_engine::builtin_ai_is_model_ready,
             summary::summary_engine::builtin_ai_get_available_summary_model,
             summary::summary_engine::builtin_ai_get_recommended_model,
+            summary::summary_engine::builtin_ai_get_models_directory,
+            summary::summary_engine::builtin_ai_open_models_folder,
             openrouter::get_openrouter_models,
             audio::recording_preferences::get_recording_preferences,
             audio::recording_preferences::set_recording_preferences,

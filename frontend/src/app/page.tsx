@@ -15,13 +15,26 @@ import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
+const PILL_BACKGROUND_BY_THEME: Record<string, string> = {
+  rune: 'linear-gradient(120deg, rgba(22, 28, 47, 0.98) 0%, rgba(33, 43, 68, 0.98) 100%)',
+  mithril: 'linear-gradient(120deg, rgba(23, 22, 39, 0.98) 0%, rgba(41, 38, 61, 0.98) 100%)',
+  bronze: 'linear-gradient(120deg, rgba(39, 25, 14, 0.98) 0%, rgba(60, 42, 22, 0.98) 100%)',
+  adamant: 'linear-gradient(120deg, rgba(10, 28, 20, 0.98) 0%, rgba(18, 50, 37, 0.98) 100%)',
+};
+const PILL_SHADOW_BY_THEME: Record<string, string> = {
+  rune: '0 1px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
+  mithril: '0 1px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.08)',
+  bronze: '0 1px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.08)',
+  adamant: '0 1px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.08)',
+};
+
 export default function Home() {
   const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
   const [hoverStartBtn, setHoverStartBtn] = useState(false);
   const [hoverTodosBtn, setHoverTodosBtn] = useState(false);
   const [hoverChatBtn, setHoverChatBtn] = useState(false);
 
-  const { transcriptModelConfig } = useConfig();
+  const { transcriptModelConfig, uiTheme } = useConfig();
   const recordingState = useRecordingState();
   const { status } = recordingState;
 
@@ -131,23 +144,23 @@ export default function Home() {
     }
   };
 
+  const pillBackground = PILL_BACKGROUND_BY_THEME[uiTheme] ?? PILL_BACKGROUND_BY_THEME.rune;
+  const pillShadow = PILL_SHADOW_BY_THEME[uiTheme] ?? PILL_SHADOW_BY_THEME.rune;
+
+  // Clean 3D pill body like Logo pill, with light-green (primary) outline retained
   const getHomeButtonStyle = (isHovered: boolean): React.CSSProperties => ({
-    background: isHovered
-      ? 'hsl(var(--primary) / 0.22)'
-      : 'linear-gradient(135deg, hsl(var(--primary) / 0.18) 0%, hsl(var(--primary) / 0.10) 100%)',
+    backgroundImage: pillBackground,
+    backgroundRepeat: 'no-repeat',
     backdropFilter: 'blur(24px)',
     WebkitBackdropFilter: 'blur(24px)',
     border: `1.5px solid ${isHovered ? 'hsl(var(--primary) / 0.95)' : 'hsl(var(--primary) / 0.65)'}`,
-    color: isHovered
-      ? 'hsl(0 0% 98%)'
-      : 'hsl(var(--primary-foreground))',
+    color: 'rgba(255,255,255,0.92)',
     fontWeight: 600,
     letterSpacing: '0.02em',
     boxShadow: isHovered
-      ? '0 0 48px hsl(var(--primary) / 0.38), 0 0 0 1px hsl(var(--primary) / 0.18), 0 12px 32px rgba(0,0,0,0.28), inset 0 1px 0 hsl(0 0% 100% / 0.18)'
-      : '0 0 32px hsl(var(--primary) / 0.20), 0 0 0 1px hsl(var(--primary) / 0.12), 0 6px 18px rgba(0,0,0,0.18), inset 0 1px 0 hsl(0 0% 100% / 0.12)',
+      ? `${pillShadow}, 0 0 48px hsl(var(--primary) / 0.32), 0 12px 32px rgba(0,0,0,0.35)`
+      : `${pillShadow}, 0 0 32px hsl(var(--primary) / 0.18), 0 6px 18px rgba(0,0,0,0.22)`,
     transform: isHovered ? 'translateY(-2px) scale(1.04)' : 'translateY(0) scale(1)',
-    textShadow: isHovered ? '0 0 18px hsl(var(--primary) / 0.6)' : '0 1px 2px rgba(0,0,0,0.2)',
   } as React.CSSProperties);
 
   return (
@@ -174,7 +187,7 @@ export default function Home() {
             <Image src="/logo.png" alt="Adamant" width={72} height={72} className="object-contain" />
           </div>
           <h1 className="text-2xl font-semibold text-foreground">Welcome to Adamant</h1>
-          <p className="text-sm text-zinc-400">The private and secure AI meeting notetaker.</p>
+          <p className="text-sm text-zinc-400">Your second brain for everyday work.</p>
         </div>
         <div className="flex flex-col items-center gap-4">
           <button

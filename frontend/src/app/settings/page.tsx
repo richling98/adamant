@@ -67,6 +67,24 @@ export default function SettingsPage() {
     }
   }, [activeTab]);
 
+  // When AI Models tab is active and window regains focus (e.g. user deleted via Finder), trigger refresh in child managers
+  useEffect(() => {
+    if (activeTab !== 'aiModels') return;
+    const triggerRefresh = () => {
+      if (document.visibilityState !== 'hidden') {
+        window.dispatchEvent(new CustomEvent('refresh-ai-models'));
+      }
+    };
+    // Initial refresh when switching to aiModels tab
+    triggerRefresh();
+    window.addEventListener('focus', triggerRefresh);
+    document.addEventListener('visibilitychange', triggerRefresh as any);
+    return () => {
+      window.removeEventListener('focus', triggerRefresh);
+      document.removeEventListener('visibilitychange', triggerRefresh as any);
+    };
+  }, [activeTab]);
+
   return (
     <div className="h-screen bg-background flex flex-col">
       {/* Fixed Header */}

@@ -20,7 +20,7 @@ const PROVIDERS: Array<{ value: Provider; label: string }> = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'groq', label: 'Groq' },
   { value: 'openrouter', label: 'OpenRouter' },
-  { value: 'nvidia-inference', label: 'NVIDIA' },
+  { value: 'nvidia-inference', label: 'NVIDIA inference (NVIDIA employees only)' },
   { value: 'custom-openai', label: 'Custom OpenAI' },
 ];
 

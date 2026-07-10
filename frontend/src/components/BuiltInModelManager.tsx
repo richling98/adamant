@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { Download, RefreshCw, BadgeAlert, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ModelStorageHeader } from '@/components/ModelStorageHeader';
+import { DeleteModelConfirmDialog } from '@/components/DeleteModelConfirmDialog';
+import { BuiltInAIAPI } from '@/lib/builtin-ai';
 
 interface ModelInfo {
   name: string;
@@ -40,14 +43,26 @@ export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInMod
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [downloadProgressInfo, setDownloadProgressInfo] = useState<Record<string, DownloadProgressInfo>>({});
   const [downloadingModels, setDownloadingModels] = useState<Set<string>>(new Set());
+  const [modelsDir, setModelsDir] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ModelInfo | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const fetchModels = async () => {
+  const fetchModels = useCallback(async () => {
     try {
+      setIsRefreshing(true);
       setIsLoading(true);
       const data = (await invoke('builtin_ai_list_models')) as ModelInfo[];
+      // Detect externally deleted models
+      if (hasFetched) {
+        const prevAvailable = new Set(models.filter(m => m.status.type === 'available').map(m => m.name));
+        const nowMissing = data.filter(m => prevAvailable.has(m.name) && m.status.type === 'not_downloaded');
+        if (nowMissing.length > 0) {
+          toast.info(`${nowMissing.map(m => m.display_name || m.name).join(', ')} removed — no longer on disk`);
+        }
+      }
       setModels(data);
 
-      // Auto-select first available model if none selected
       if (data.length > 0 && !selectedModel) {
         const firstAvailable = data.find((m) => m.status.type === 'available');
         if (firstAvailable) {
@@ -60,12 +75,35 @@ export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInMod
     } finally {
       setIsLoading(false);
       setHasFetched(true);
+      setIsRefreshing(false);
     }
-  };
+  }, [hasFetched, models, selectedModel, onModelSelect]);
 
   useEffect(() => {
     fetchModels();
+    BuiltInAIAPI.getModelsDirectory().then(setModelsDir).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-refresh on window focus (detects manual deletion via Finder/Explorer)
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState === 'visible') fetchModels(); };
+    const onCustom = () => fetchModels();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', (e) => { if (document.visibilityState === 'visible') fetchModels(); });
+    window.addEventListener('refresh-ai-models', onCustom as any);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('refresh-ai-models', onCustom as any);
+    };
+  }, [fetchModels]);
+
+  const totalSizeLabel = useMemo(() => {
+    const avail = models.filter(m => m.status.type === 'available');
+    if (avail.length === 0) return undefined;
+    const totalMb = avail.reduce((sum, m) => sum + m.size_mb, 0);
+    return totalMb >= 1024 ? `${(totalMb / 1024).toFixed(1)} GB used` : `${totalMb} MB used`;
+  }, [models]);
 
   // Listen for download progress events
   useEffect(() => {
@@ -238,13 +276,28 @@ export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInMod
   };
 
   const deleteModel = async (modelName: string) => {
+    setIsDeleting(true);
     try {
       await invoke('builtin_ai_delete_model', { modelName });
       toast.success(`Model ${modelName} deleted`);
-      fetchModels();
+      setDeleteTarget(null);
+      await fetchModels();
+      if (selectedModel === modelName) {
+        toast.info('Active summary model deleted — please select another.');
+      }
     } catch (error) {
       console.error('Failed to delete model:', error);
-      toast.error(`Failed to delete ${modelName}`);
+      toast.error(`Failed to delete ${modelName}: ${String(error)}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleOpenFolder = async () => {
+    try {
+      await BuiltInAIAPI.openModelsFolder();
+    } catch (e) {
+      toast.error(`Failed to open folder: ${String(e)}`);
     }
   };
 
@@ -271,9 +324,24 @@ export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInMod
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h4 className="text-sm font-bold">Built-in AI Models</h4>
-      </div>
+      <ModelStorageHeader
+        title="Built-in AI Models"
+        directoryPath={modelsDir}
+        onOpenFolder={handleOpenFolder}
+        onRefresh={fetchModels}
+        isRefreshing={isRefreshing}
+        totalSizeLabel={totalSizeLabel}
+      />
+      <DeleteModelConfirmDialog
+        isOpen={!!deleteTarget}
+        modelName={deleteTarget?.name ?? ''}
+        modelDisplayName={deleteTarget?.display_name}
+        sizeLabel={deleteTarget ? `${deleteTarget.size_mb} MB` : undefined}
+        directoryPath={modelsDir}
+        isDeleting={isDeleting}
+        onCancel={() => !isDeleting && setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteModel(deleteTarget.name)}
+      />
 
       <div className="grid gap-4">
         {models.map((model) => {
@@ -424,7 +492,7 @@ export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInMod
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteModel(model.name);
+                          setDeleteTarget(model);
                         }}
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
@@ -433,15 +501,15 @@ export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInMod
                     </>
                   )}
 
-                  {/* Available - Show small trash icon for all downloaded models */}
+                  {/* Available - Always visible trash icon (not hover-only) */}
                   {isAvailable && !modelIsDownloading && (
                     <button
-                      className="p-2 rounded hover:bg-white/10 transition-colors text-zinc-500 hover:text-red-400"
+                      className="p-2 rounded hover:bg-white/10 transition-colors text-zinc-400 hover:text-red-400 border border-transparent hover:border-red-500/20"
                       onClick={(e) => {
                         e.stopPropagation();
-                        deleteModel(model.name);
+                        setDeleteTarget(model);
                       }}
-                      title="Delete model"
+                      title="Delete model — frees disk space"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>

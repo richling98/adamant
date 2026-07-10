@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { Trash2 } from 'lucide-react';
 import {
   ModelInfo,
   ModelStatus,
@@ -14,6 +15,8 @@ import {
   WhisperAPI
 } from '../lib/whisper';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { ModelStorageHeader } from '@/components/ModelStorageHeader';
+import { DeleteModelConfirmDialog } from '@/components/DeleteModelConfirmDialog';
 
 interface ModelManagerProps {
   selectedModel?: string;
@@ -34,6 +37,10 @@ export function ModelManager({
   const [initialized, setInitialized] = useState(false);
   const [downloadingModels, setDownloadingModels] = useState<Set<string>>(new Set());
   const [hasUserSelection, setHasUserSelection] = useState(false);
+  const [modelsDir, setModelsDir] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ModelInfo | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Refs for stable callbacks
   const onModelSelectRef = useRef(onModelSelect);
@@ -47,6 +54,18 @@ export function ModelManager({
     onModelSelectRef.current = onModelSelect;
     autoSaveRef.current = autoSave;
   }, [onModelSelect, autoSave]);
+
+  const refreshModels = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const list = await WhisperAPI.getAvailableModels();
+      setModels(list);
+    } catch (e) {
+      console.error('Failed to refresh whisper models', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
 
   // Load persisted downloading state from localStorage
   const getPersistedDownloadingModels = (): Set<string> => {
@@ -76,6 +95,7 @@ export function ModelManager({
         setLoading(true);
         await WhisperAPI.init();
         const modelList = await WhisperAPI.getAvailableModels();
+        try { setModelsDir(await WhisperAPI.getModelsDirectory()); } catch {}
 
         // Apply persisted downloading states
         const persistedDownloading = getPersistedDownloadingModels();
@@ -256,6 +276,26 @@ export function ModelManager({
     };
   }, []); // Empty dependency array - listeners use refs for stable callbacks
 
+  // Auto-refresh on focus / manual delete detection
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState === 'visible') refreshModels(); };
+    const onCustom = () => refreshModels();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshModels(); });
+    window.addEventListener('refresh-ai-models', onCustom as any);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('refresh-ai-models', onCustom as any);
+    };
+  }, [refreshModels]);
+
+  const totalSizeLabel = useMemo(() => {
+    const avail = models.filter(m => m.status === 'Available');
+    if (avail.length === 0) return undefined;
+    const totalMb = avail.reduce((s, m) => s + (m.size_mb || 0), 0);
+    return totalMb >= 1024 ? `${(totalMb/1024).toFixed(1)} GB used` : `${totalMb} MB used`;
+  }, [models]);
+
   const saveModelSelection = async (modelName: string) => {
     try {
       await invoke('api_save_transcript_config', {
@@ -359,24 +399,25 @@ export function ModelManager({
     });
   };
 
+  const openFolder = async () => {
+    try { await WhisperAPI.openModelsFolder(); } catch (e) { toast.error(`Failed to open folder: ${String(e)}`); }
+  };
+
   const deleteModel = async (modelName: string) => {
     const displayName = getDisplayName(modelName);
-
+    setIsDeleting(true);
     try {
       await WhisperAPI.deleteCorruptedModel(modelName);
-
-      // Refresh models list
       const modelList = await WhisperAPI.getAvailableModels();
       setModels(modelList);
-
+      setDeleteTarget(null);
       toast.success(`${displayName} deleted`, {
         description: 'Model removed to free up space',
         duration: 3000
       });
-
-      // If deleted model was selected, clear selection
       if (selectedModel === modelName && onModelSelect) {
         onModelSelect('');
+        toast.info('Active Whisper model deleted — please select another.');
       }
     } catch (err) {
       console.error('Failed to delete model:', err);
@@ -384,6 +425,8 @@ export function ModelManager({
         description: err instanceof Error ? err.message : 'Delete failed',
         duration: 4000
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -429,6 +472,24 @@ export function ModelManager({
 
   return (
     <div className={`space-y-3 ${className}`}>
+      <ModelStorageHeader
+        title="Whisper Models"
+        directoryPath={modelsDir}
+        onOpenFolder={openFolder}
+        onRefresh={refreshModels}
+        isRefreshing={isRefreshing}
+        totalSizeLabel={totalSizeLabel}
+      />
+      <DeleteModelConfirmDialog
+        isOpen={!!deleteTarget}
+        modelName={deleteTarget?.name ?? ''}
+        modelDisplayName={deleteTarget ? getDisplayName(deleteTarget.name) : ''}
+        sizeLabel={deleteTarget ? `${deleteTarget.size_mb} MB` : undefined}
+        directoryPath={modelsDir}
+        isDeleting={isDeleting}
+        onCancel={() => !isDeleting && setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteModel(deleteTarget.name)}
+      />
       {/* Basic Models */}
       <div className="space-y-3">
         {basicModels.map((model) => {
@@ -446,7 +507,7 @@ export function ModelManager({
               }}
               onDownload={() => downloadModel(model.name)}
               onCancel={() => cancelDownload(model.name)}
-              onDelete={() => deleteModel(model.name)}
+              onDelete={() => setDeleteTarget(model)}
               isDownloading={downloadingModels.has(model.name)}
               displayName={getDisplayName(model.name)}
             />
@@ -476,7 +537,7 @@ export function ModelManager({
                     }}
                     onDownload={() => downloadModel(model.name)}
                     onCancel={() => cancelDownload(model.name)}
-                    onDelete={() => deleteModel(model.name)}
+                    onDelete={() => setDeleteTarget(model)}
                     isDownloading={downloadingModels.has(model.name)}
                     displayName={getDisplayName(model.name)}
                   />
@@ -525,8 +586,6 @@ function ModelCard({
   isDownloading,
   displayName
 }: ModelCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
-
   const isAvailable = model.status === 'Available';
   const isMissing = model.status === 'Missing';
   const isError = typeof model.status === 'object' && 'Error' in model.status;
@@ -541,8 +600,6 @@ function ModelCard({
       initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       className={`
         relative rounded-lg border-2 transition-all cursor-pointer
         ${isSelected && isAvailable
@@ -613,7 +670,7 @@ function ModelCard({
             </div>
           </div>
 
-          {/* Status/Action */}
+          {/* Status/Action — trash always visible */}
           <div className="ml-4 flex items-center gap-2">
             {isAvailable && (
               <>
@@ -621,26 +678,13 @@ function ModelCard({
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                   <span className="text-xs font-medium">Ready</span>
                 </div>
-                <AnimatePresence>
-                  {isHovered && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ duration: 0.15 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete();
-                      }}
-                      className="text-zinc-500 hover:text-red-400 transition-colors p-1"
-                      title="Delete model to free up space"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </motion.button>
-                  )}
-                </AnimatePresence>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                  className="p-1.5 rounded hover:bg-white/10 text-zinc-400 hover:text-red-400 border border-transparent hover:border-red-500/20 transition-colors"
+                  title="Delete model — frees disk space"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </>
             )}
 

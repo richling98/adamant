@@ -59,6 +59,12 @@ pub async fn builtin_ai_list_models<R: Runtime>(
             .clone()
     };
 
+    // Always re-scan filesystem to detect manual deletion via Finder/Explorer
+    manager
+        .scan_models()
+        .await
+        .map_err(|e| format!("Failed to scan models: {}", e))?;
+
     let models = manager.list_models().await;
     Ok(models)
 }
@@ -377,6 +383,63 @@ pub async fn builtin_ai_get_recommended_model() -> Result<String, String> {
 
     log::info!("Recommended summary model: {} (macOS={}, {}GB RAM)", recommended, is_macos, system_ram_gb);
     Ok(recommended.to_string())
+}
+
+/// Get the built-in models directory path
+#[tauri::command]
+pub fn builtin_ai_get_models_directory<R: Runtime>(app: AppHandle<R>) -> Result<String, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?
+        .join("models")
+        .join("summary");
+    Ok(dir.to_string_lossy().to_string())
+}
+
+/// Open the built-in models folder in system file explorer
+#[tauri::command]
+pub async fn builtin_ai_open_models_folder<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+    let models_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?
+        .join("models")
+        .join("summary");
+
+    if !models_dir.exists() {
+        std::fs::create_dir_all(&models_dir)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    let folder_path = models_dir.to_string_lossy().to_string();
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&folder_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&folder_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&folder_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    log::info!("Opened built-in models folder: {}", folder_path);
+    Ok(())
 }
 
 /// Get total system RAM in gigabytes

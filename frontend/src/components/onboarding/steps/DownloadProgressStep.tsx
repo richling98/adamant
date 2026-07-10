@@ -407,7 +407,9 @@ export function DownloadProgressStep() {
     onDownload: () => void,
   ) => {
     return (
-      <div className="relative rounded-xl border border-white/10 bg-white/[0.06] backdrop-blur-sm p-4 sm:p-5 overflow-visible w-full">
+      <div
+        className={`relative rounded-xl border border-white/10 bg-white/[0.06] backdrop-blur-sm p-4 sm:p-5 overflow-visible w-full flex flex-col h-full ${isDropdownOpen ? 'z-20' : 'z-0'}`}
+      >
         {/* Status badge — top-right opaque */}
         <div className="absolute -top-3 -right-3 z-20">
           {state.status === 'waiting' && <span className="inline-flex rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-medium text-zinc-400">Ready to download</span>}
@@ -424,78 +426,79 @@ export function DownloadProgressStep() {
           {state.status === 'error' && <span className="inline-flex rounded-full border border-red-800 bg-red-950 px-2.5 py-1 text-[11px] font-medium text-red-300">Failed</span>}
         </div>
 
-        <div className="flex items-start gap-3 text-left pr-12 sm:pr-16">
+        {/* Header row: icon + title centered on same midline */}
+        <div className="flex items-center gap-3 text-left pr-12 sm:pr-16">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5">{icon}</div>
-          <div className="min-w-0 flex-1">
-            <h3 className="font-medium text-zinc-100 text-left text-sm sm:text-base">{title}</h3>
-            <div className="mt-2 relative" ref={dropdownRef}>
-              <button
-                type="button"
-                onClick={() => setDropdownOpen(!isDropdownOpen)}
-                className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-left text-sm text-zinc-100 hover:bg-white/10 transition-colors w-full"
-              >
-                <span className="flex-1 truncate font-medium">{selectedLabel}</span>
-                <span className="text-xs text-zinc-400 hidden sm:inline">{size}</span>
-                <ChevronDown className={`h-4 w-4 flex-shrink-0 text-zinc-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {isDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-80 overflow-y-auto rounded-xl border border-white/15 bg-zinc-900 shadow-2xl divide-y divide-white/5">
-                  {options.map((opt) => {
-                    const isSelected = opt.id === (title.includes('Summary') ? selectedSummary.id : selectedTranscription.id);
-                    const hasBadge = (opt as any).badge;
-                    const tagline = (opt as any).desc ?? (opt as any).tier ?? '';
-                    const isRecommended = (opt as any).recommended;
-                    return (
-                      <button
-                        key={opt.id}
-                        onClick={() => onSelect(opt.id)}
-                        className={`flex w-full flex-col gap-1 px-3.5 py-3 text-left text-sm transition-colors hover:bg-white/[0.07] ${isSelected ? 'bg-white/10' : ''}`}
-                      >
-                        <span className="flex items-center gap-2 flex-wrap">
-                          <span className={`font-medium ${isSelected ? 'text-lime-100' : 'text-zinc-100'}`}>{opt.label}</span>
-                          <span className="text-xs text-zinc-500">{opt.size}</span>
-                          {hasBadge && (
-                            <span
-                              className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${
-                                isRecommended
-                                  ? 'bg-lime-400/20 text-lime-200 border border-lime-300/30'
-                                  : (opt as any).badge === 'Best Value'
-                                    ? 'bg-violet-400/15 text-violet-200 border border-violet-300/25'
-                                    : (opt as any).badge === 'Reasoning'
-                                      ? 'bg-amber-400/15 text-amber-200 border border-amber-300/25'
-                                      : 'bg-white/10 text-zinc-300 border border-white/10'
-                              }`}
-                            >
-                              {hasBadge}
-                              {isRecommended ? ' ⭐' : ''}
-                            </span>
-                          )}
-                        </span>
-                        {tagline && (
-                          <span className={`text-xs leading-relaxed ${isSelected ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                            {tagline}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            {(() => {
-              const current = options.find((o) => o.id === (title.includes('Summary') ? selectedSummary.id : selectedTranscription.id));
-              const desc = (current as any)?.desc ?? (current as any)?.tier;
-              return desc ? <p className="mt-2 text-xs text-zinc-400 leading-relaxed">{desc}</p> : null;
-            })()}
-          </div>
+          <h3 className="font-medium text-zinc-100 text-left text-sm sm:text-base leading-none">{title}</h3>
         </div>
 
-        {/* Waiting: show Download button — user must click to start */}
+        {/* Dropdown — full card width so text is readable, aligns with download button right edge */}
+        <div className="mt-3 relative" ref={dropdownRef}>
+          <button
+            type="button"
+            onClick={() => setDropdownOpen(!isDropdownOpen)}
+            className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-left text-sm text-zinc-100 hover:bg-white/10 transition-colors w-full"
+          >
+            <span className="flex-1 truncate font-medium">{selectedLabel}</span>
+            <span className="text-xs text-zinc-400 hidden sm:inline">{size}</span>
+            <ChevronDown className={`h-4 w-4 flex-shrink-0 text-zinc-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isDropdownOpen && (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-xl border border-white/15 bg-zinc-900 shadow-2xl divide-y divide-white/5">
+              {options.map((opt) => {
+                const isSelected = opt.id === (title.includes('Summary') ? selectedSummary.id : selectedTranscription.id);
+                const hasBadge = (opt as any).badge;
+                const tagline = (opt as any).desc ?? (opt as any).tier ?? '';
+                const isRecommended = (opt as any).recommended;
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => onSelect(opt.id)}
+                    className={`flex w-full flex-col gap-1 px-3.5 py-3 text-left text-sm transition-colors hover:bg-white/[0.07] ${isSelected ? 'bg-white/10' : ''}`}
+                  >
+                    <span className="flex items-center gap-2 flex-wrap">
+                      <span className={`font-medium ${isSelected ? 'text-lime-100' : 'text-zinc-100'}`}>{opt.label}</span>
+                      <span className="text-xs text-zinc-500">{opt.size}</span>
+                      {hasBadge && (
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${
+                            isRecommended
+                              ? 'bg-lime-400/20 text-lime-200 border border-lime-300/30'
+                              : (opt as any).badge === 'Best Value'
+                                ? 'bg-violet-400/15 text-violet-200 border border-violet-300/25'
+                                : (opt as any).badge === 'Reasoning'
+                                  ? 'bg-amber-400/15 text-amber-200 border border-amber-300/25'
+                                  : 'bg-white/10 text-zinc-300 border border-white/10'
+                          }`}
+                        >
+                          {hasBadge}
+                          {isRecommended ? ' ⭐' : ''}
+                        </span>
+                      )}
+                    </span>
+                    {tagline && (
+                      <span className={`text-xs leading-relaxed ${isSelected ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                        {tagline}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        {(() => {
+          const current = options.find((o) => o.id === (title.includes('Summary') ? selectedSummary.id : selectedTranscription.id));
+          const desc = (current as any)?.desc ?? (current as any)?.tier;
+          return desc ? <p className="mt-2 text-xs text-zinc-400 leading-relaxed">{desc}</p> : null;
+        })()}
+
+        {/* Waiting: show Download button — full width at bottom with buffer */}
         {state.status === 'waiting' && (
-          <div className="mt-4">
+          <div className="mt-auto pt-4">
             <button
               onClick={onDownload}
-              className="inline-flex items-center gap-2 rounded-lg border border-lime-300/40 bg-lime-400/10 px-4 py-2 text-sm font-medium text-lime-100 hover:bg-lime-400/20 hover:border-lime-300/60 transition-colors"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-lime-300/40 bg-lime-400/10 px-4 py-2.5 text-sm font-medium text-lime-100 hover:bg-lime-400/20 hover:border-lime-300/60 transition-colors"
             >
               <Download className="h-4 w-4" />Download {size}
             </button>
@@ -503,7 +506,7 @@ export function DownloadProgressStep() {
         )}
 
         {state.status === 'downloading' && (
-          <div className="mt-4 space-y-2">
+          <div className="mt-auto pt-4 space-y-2">
             <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
               <div className="h-full rounded-full bg-gradient-to-r from-lime-300 to-lime-100 transition-all duration-300" style={{ width: `${state.progress}%` }} />
             </div>
@@ -517,7 +520,7 @@ export function DownloadProgressStep() {
           </div>
         )}
         {state.status === 'error' && state.error && (
-          <div className="mt-4 rounded-lg border border-red-900 bg-red-950/60 p-3">
+          <div className="mt-auto pt-4 rounded-lg border border-red-900 bg-red-950/60 p-3">
             <p className="text-sm font-medium text-red-300">Download Error</p>
             <p className="mt-1 text-xs text-red-400/80 break-all">{state.error}</p>
             <button onClick={onRetry} className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-white">Try Again</button>
@@ -552,13 +555,11 @@ export function DownloadProgressStep() {
       <style>{`@keyframes lime-shine-continue { 0% { transform: translateX(-120%) skewX(-18deg); opacity: 0; } 45% { opacity: 0.85; } 100% { transform: translateX(220%) skewX(-18deg); opacity: 0; } }`}</style>
       <button
         onClick={handleContinue}
-        disabled={(transcriptionDownloadState.status !== 'completed' || isCompleting)}
+        disabled={transcriptionDownloadState.status !== 'completed' || isCompleting}
         className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl border-[1.5px] border-lime-300/80 bg-lime-400/10 px-6 py-3 text-sm font-semibold text-lime-100 backdrop-blur-sm transition-all hover:border-lime-200 hover:bg-lime-400/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
         style={{ boxShadow: '0 0 0 1px hsl(80 70% 60% / 0.12), 0 0 18px hsl(80 75% 55% / 0.18), inset 0 1px 0 hsl(0 0% 100% / 0.06)' }}
       >
-        <span className="relative z-10 flex items-center gap-2">
-          {isCompleting || transcriptionDownloadState.status !== 'completed' ? <><Loader2 className="h-4 w-4 animate-spin" />Loading</> : 'Continue'}
-        </span>
+        <span className="relative z-10 flex items-center gap-2">Continue</span>
         <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[55%] bg-gradient-to-r from-transparent via-lime-100/40 to-transparent group-[&:not(:disabled)]:animate-[lime-shine-continue_2.8s_ease-in-out_infinite]" />
       </button>
       <button
@@ -569,9 +570,6 @@ export function DownloadProgressStep() {
       >
         I&apos;ll do this later
       </button>
-      <p className="text-[11px] text-zinc-500 text-center leading-relaxed max-w-[280px]">
-        Use cloud models or finish downloading later in Settings.
-      </p>
     </div>
   );
 
@@ -603,8 +601,8 @@ export function DownloadProgressStep() {
       showNavigation
       footer={footerWithBackground}
     >
-      <div className="flex flex-col items-center w-full space-y-5">
-        <div className="w-full max-w-lg space-y-5">
+      <div className="flex flex-col items-center w-full">
+        <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
           {renderModelCard(
             <Mic className="h-5 w-5 text-zinc-300" />,
             'Transcription Engine',

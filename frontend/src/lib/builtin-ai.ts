@@ -95,4 +95,8 @@ export class BuiltInAIAPI {
   static async getModelsDirectory(): Promise<string> {
     return await invoke('builtin_ai_get_models_directory');
   }
+
+  static async openModelsFolder(): Promise<void> {
+    return await invoke('builtin_ai_open_models_folder');
+  }
 }

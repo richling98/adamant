@@ -224,17 +224,19 @@ export function TodosPage() {
   return (
     <div className="min-h-screen bg-background p-6 max-w-3xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      {/* Header: true-centered title using absolute, both left/right sides symmetric */}
+      <div className="relative flex items-center h-10 mb-6">
         <button
           onClick={() => router.back()}
-          className="text-zinc-400 hover:text-zinc-200 transition-colors"
+          className="relative z-10 text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
+
         {isAllView ? (
-          <div className="flex items-center gap-2">
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
             <ListTodo className="w-4 h-4 text-primary" />
-            <h1 className="text-lg font-semibold text-zinc-100">All Actions</h1>
+            <h1 className="text-lg font-semibold text-zinc-100 leading-none">All Actions</h1>
             <div
               className="relative flex items-center"
               onMouseEnter={() => setShowActionsHelp(true)}
@@ -257,7 +259,7 @@ export function TodosPage() {
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-3">
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3">
             <button
               onClick={() => router.push(`/todos?date=${subtractDay(activeDate)}`)}
               className="text-zinc-400 hover:text-zinc-200 transition-colors"
@@ -275,16 +277,16 @@ export function TodosPage() {
             </button>
           </div>
         )}
-        <div className="w-16" />
+
+        <div className="ml-auto w-5 flex-shrink-0" aria-hidden />
       </div>
 
       {isAllView ? (
         <>
           {todos.length === 0 ? (
-            <div className="text-center py-16 text-zinc-500">
-              <p className="text-sm">No actions found</p>
-              <p className="text-xs mt-1">
-                Run AI cleanup on a meeting to extract action items.
+            <div className="flex flex-col items-center py-16 text-center">
+              <p className="text-sm text-zinc-500 leading-relaxed max-w-md">
+                Adamant will automatically capture actions and to-do&apos;s from your meeting notes. Simply run &quot;AI cleanup&quot; on your meetings and Adamant will extract each meeting&apos;s action items.
               </p>
             </div>
           ) : (
