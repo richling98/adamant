@@ -113,6 +113,17 @@ jobs:
           workspaces: ". -> target"
           key: ${{ inputs.platform }}-${{ inputs.target }}-vulkan-v2
 
+      - name: Install OpenSSL (macOS)
+        if: contains(inputs.platform, 'macos')
+        shell: bash
+        run: |
+          brew install openssl@3 || brew upgrade openssl@3
+          OPENSSL_PREFIX="$(brew --prefix openssl@3)"
+          echo "OPENSSL_DIR=${OPENSSL_PREFIX}" >> "$GITHUB_ENV"
+          echo "OPENSSL_INCLUDE_DIR=${OPENSSL_PREFIX}/include" >> "$GITHUB_ENV"
+          echo "OPENSSL_LIB_DIR=${OPENSSL_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=${OPENSSL_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+
       - name: install dependencies (ubuntu 24.04)
         if: contains(inputs.platform, 'ubuntu-24.04')
         run: |
