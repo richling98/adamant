@@ -167,6 +167,31 @@ export function DownloadProgressStep() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const triggerTranscriptionDownload = useCallback(async () => {
+    setTranscriptionDownloadState((p) => ({ ...p, status: 'downloading', error: undefined, progress: 0, downloadedMb: 0, speedMbps: 0 }));
+    try {
+      if (transcriptionEngine === 'parakeet') {
+        await invoke('parakeet_download_model', { modelName: selectedTranscriptionId });
+      } else {
+        await invoke('whisper_init');
+        await invoke('whisper_download_model', { modelName: selectedTranscriptionId });
+      }
+    } catch (e) {
+      setTranscriptionDownloadState((p) => ({ ...p, status: 'error', error: String(e) }));
+      toast.error('Transcription download failed');
+    }
+  }, [selectedTranscriptionId, transcriptionEngine]);
+
+  const triggerSummaryDownload = useCallback(async () => {
+    setSummaryDownloadState((p) => ({ ...p, status: 'downloading', error: undefined, progress: 0, downloadedMb: 0, speedMbps: 0 }));
+    try {
+      await invoke('builtin_ai_download_model', { modelName: selectedSummaryModel });
+    } catch (e) {
+      setSummaryDownloadState((p) => ({ ...p, status: 'error', error: String(e) }));
+      toast.error('Summary model download failed');
+    }
+  }, [selectedSummaryModel]);
+
   const handleRetryTranscription = async () => {
     if (retryingRef.current) return;
     retryingRef.current = true;
@@ -175,7 +200,7 @@ export function DownloadProgressStep() {
       if (transcriptionEngine === 'parakeet') {
         await invoke('parakeet_retry_download', { modelName: selectedTranscriptionId });
       } else {
-        await invoke('whisper_download_model', { modelName: selectedTranscriptionId });
+        await triggerTranscriptionDownload();
       }
     } catch (e) {
       setTranscriptionDownloadState((p) => ({ ...p, status: 'error', error: String(e) }));
@@ -188,15 +213,8 @@ export function DownloadProgressStep() {
   const handleRetrySummary = async () => {
     if (retryingSummaryRef.current) return;
     retryingSummaryRef.current = true;
-    setSummaryDownloadState((p) => ({ ...p, status: 'downloading', error: undefined, progress: 0, downloadedMb: 0, speedMbps: 0 }));
-    try {
-      await invoke('builtin_ai_download_model', { modelName: selectedSummaryModel });
-    } catch (e) {
-      setSummaryDownloadState((p) => ({ ...p, status: 'error', error: String(e) }));
-      toast.error('Summary model download retry failed');
-    } finally {
-      setTimeout(() => { retryingSummaryRef.current = false; }, 2000);
-    }
+    await triggerSummaryDownload();
+    setTimeout(() => { retryingSummaryRef.current = false; }, 2000);
   };
 
   useEffect(() => {
@@ -221,19 +239,13 @@ export function DownloadProgressStep() {
     checkPlatform();
   }, [setSelectedSummaryModel]);
 
+  // Do NOT auto-start downloads — user must pick model and press Download.
+  // We only check if models already exist on disk (completed state handled by initial state).
   useEffect(() => {
-    if (downloadStartedRef.current) return;
+    // No-op: previously auto-downloaded here. Now user-initiated only.
+    // Keep ref true to prevent double effects elsewhere if needed.
     downloadStartedRef.current = true;
-    // Start with default recommended
-    if (!parakeetDownloaded && !summaryModelDownloaded) {
-      setTranscriptionDownloadState((p) => ({ ...p, status: 'downloading' }));
-      setSummaryDownloadState((p) => ({ ...p, status: 'downloading' }));
-      startBackgroundDownloads(true).catch((e) => {
-        console.error('Failed to start downloads:', e);
-        setTranscriptionDownloadState((p) => ({ ...p, status: 'error', error: String(e) }));
-      });
-    }
-  }, [parakeetDownloaded, summaryModelDownloaded, startBackgroundDownloads]);
+  }, []);
 
   // Listen to Parakeet download progress (for any selected parakeet model)
   useEffect(() => {
@@ -320,6 +332,7 @@ export function DownloadProgressStep() {
     return () => { unlisten.then((fn) => fn()); };
   }, [selectedSummaryModel, setSummaryModelDownloaded, SUMMARY_MODEL_IDS]);
 
+  // Only change selection, don't auto-start download. Download button handles it.
   const handleTranscriptionChange = useCallback((id: string) => {
     const opt = TRANSCRIPTION_OPTIONS.find((o) => o.id === id);
     if (!opt) return;
@@ -329,24 +342,9 @@ export function DownloadProgressStep() {
       status: 'waiting', progress: 0, downloadedMb: 0, totalMb: opt.sizeMb, speedMbps: 0,
     });
     setShowTranscriptionDropdown(false);
-    // Trigger new download for selected model
-    if (opt.engine === 'parakeet') {
-      invoke('parakeet_download_model', { modelName: id })
-        .then(() => setTranscriptionDownloadState((p) => ({ ...p, status: 'downloading' as const })))
-        .catch((e) => {
-          console.error('Parakeet download failed to start', e);
-          setTranscriptionDownloadState((p) => ({ ...p, status: 'error' as const, error: String(e) }));
-        });
-    } else {
-      invoke('whisper_init').then(() => invoke('whisper_download_model', { modelName: id }))
-        .then(() => setTranscriptionDownloadState((p) => ({ ...p, status: 'downloading' as const })))
-        .catch((e) => {
-          console.error('Whisper download failed', e);
-          setTranscriptionDownloadState((p) => ({ ...p, status: 'error' as const, error: String(e) }));
-        });
-    }
   }, []);
 
+  // Only change selection, don't auto-download. User clicks Download button.
   const handleSummaryChange = useCallback((id: string) => {
     setSelectedSummaryModel(id);
     const opt = SUMMARY_OPTIONS.find((o) => o.id === id);
@@ -354,9 +352,6 @@ export function DownloadProgressStep() {
       status: 'waiting', progress: 0, downloadedMb: 0, totalMb: opt?.sizeMb ?? 1019, speedMbps: 0,
     });
     setShowSummaryDropdown(false);
-    invoke('builtin_ai_download_model', { modelName: id })
-      .then(() => setSummaryDownloadState((p) => ({ ...p, status: 'downloading' as const })))
-      .catch((e) => setSummaryDownloadState((p) => ({ ...p, status: 'error' as const, error: String(e) })));
   }, [setSelectedSummaryModel]);
 
   const handleContinue = async () => {
@@ -409,16 +404,13 @@ export function DownloadProgressStep() {
     options: SummaryOption[] | TranscriptionOption[],
     onSelect: (id: string) => void,
     onRetry: () => void,
+    onDownload: () => void,
   ) => {
-    const selectedOption = options.find((o) => o.label === selectedLabel || (o as any).id && `${(o as any).label}` === `${selectedLabel}`) ?? options.find((o) => (o as any).label.includes(selectedLabel.split(' ')[0])) ?? options[0];
-    // Use badge from options for the card itself if available
-    const activeOption = options.find((o) => o.id === (title.includes('Summary') ? selectedSummary.id : selectedTranscription.id)) ?? selectedOption;
-
     return (
       <div className="relative rounded-xl border border-white/10 bg-white/[0.06] backdrop-blur-sm p-4 sm:p-5 overflow-visible w-full">
         {/* Status badge — top-right opaque */}
         <div className="absolute -top-3 -right-3 z-20">
-          {state.status === 'waiting' && <span className="inline-flex rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-medium text-zinc-400">Waiting</span>}
+          {state.status === 'waiting' && <span className="inline-flex rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-medium text-zinc-400">Ready to download</span>}
           {state.status === 'downloading' && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />Downloading
@@ -490,7 +482,6 @@ export function DownloadProgressStep() {
                 </div>
               )}
             </div>
-            {/* Trade-off tagline under selector for current choice */}
             {(() => {
               const current = options.find((o) => o.id === (title.includes('Summary') ? selectedSummary.id : selectedTranscription.id));
               const desc = (current as any)?.desc ?? (current as any)?.tier;
@@ -498,6 +489,18 @@ export function DownloadProgressStep() {
             })()}
           </div>
         </div>
+
+        {/* Waiting: show Download button — user must click to start */}
+        {state.status === 'waiting' && (
+          <div className="mt-4">
+            <button
+              onClick={onDownload}
+              className="inline-flex items-center gap-2 rounded-lg border border-lime-300/40 bg-lime-400/10 px-4 py-2 text-sm font-medium text-lime-100 hover:bg-lime-400/20 hover:border-lime-300/60 transition-colors"
+            >
+              <Download className="h-4 w-4" />Download {size}
+            </button>
+          </div>
+        )}
 
         {state.status === 'downloading' && (
           <div className="mt-4 space-y-2">
@@ -567,21 +570,28 @@ export function DownloadProgressStep() {
         I&apos;ll do this later
       </button>
       <p className="text-[11px] text-zinc-500 text-center leading-relaxed max-w-[280px]">
-        You can choose cloud models (OpenAI, Claude, etc.) or finish downloading later in Settings.
+        Use cloud models or finish downloading later in Settings.
       </p>
     </div>
   );
 
+  // Inline hint shown directly under cards (not as floating bottom-left toast)
+  const inlineDownloadHint = parakeetDownloaded && summaryDownloadState.status === 'downloading' ? (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full max-w-lg flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-zinc-300"
+    >
+      <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-zinc-400" />
+      <span>Summary download continues in background — you can Continue.</span>
+    </motion.div>
+  ) : null;
+
   const footerWithBackground = (
-    <>
-      {parakeetDownloaded && !summaryModelDownloaded && (
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-lg rounded-lg border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-zinc-200 flex items-start gap-3 mb-3">
-          <Download className="mt-0.5 h-5 w-5 flex-shrink-0 text-zinc-400" />
-          <div><p className="font-medium">You can continue while this finishes</p><p className="mt-1 text-zinc-400">Summary download will continue in the background.</p></div>
-        </motion.div>
-      )}
+    <div className="flex w-full flex-col items-center gap-3">
+      {inlineDownloadHint}
       {continueFooter}
-    </>
+    </div>
   );
 
   return (
@@ -591,9 +601,6 @@ export function DownloadProgressStep() {
       step={3}
       totalSteps={isMac ? 4 : 3}
       showNavigation
-      // OnboardingContainer now has footer prop — but typed extra via arg spread.
-      // Cast via prop injection
-      // @ts-ignore extra footer
       footer={footerWithBackground}
     >
       <div className="flex flex-col items-center w-full space-y-5">
@@ -610,6 +617,7 @@ export function DownloadProgressStep() {
             TRANSCRIPTION_OPTIONS,
             handleTranscriptionChange,
             handleRetryTranscription,
+            triggerTranscriptionDownload,
           )}
           {renderModelCard(
             <Sparkles className="h-5 w-5 text-zinc-300" />,
@@ -623,6 +631,7 @@ export function DownloadProgressStep() {
             SUMMARY_OPTIONS as any,
             handleSummaryChange,
             handleRetrySummary,
+            triggerSummaryDownload,
           )}
         </div>
       </div>
