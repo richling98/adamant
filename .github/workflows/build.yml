@@ -111,7 +111,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
-          key: ${{ inputs.platform }}-${{ inputs.target }}-vulkan-v2
+          key: ${{ inputs.platform }}-${{ inputs.target }}-openssl-v3
 
       - name: Install OpenSSL (macOS)
         if: contains(inputs.platform, 'macos')
@@ -120,8 +120,13 @@ jobs:
           brew install openssl@3 || brew upgrade openssl@3
           OPENSSL_PREFIX="$(brew --prefix openssl@3)"
           echo "OPENSSL_DIR=${OPENSSL_PREFIX}" >> "$GITHUB_ENV"
+          echo "OPENSSL_ROOT_DIR=${OPENSSL_PREFIX}" >> "$GITHUB_ENV"
           echo "OPENSSL_INCLUDE_DIR=${OPENSSL_PREFIX}/include" >> "$GITHUB_ENV"
           echo "OPENSSL_LIB_DIR=${OPENSSL_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "CMAKE_INCLUDE_PATH=${OPENSSL_PREFIX}/include:${CMAKE_INCLUDE_PATH}" >> "$GITHUB_ENV"
+          echo "CMAKE_LIBRARY_PATH=${OPENSSL_PREFIX}/lib:${CMAKE_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          echo "CPATH=${OPENSSL_PREFIX}/include:${CPATH}" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=${OPENSSL_PREFIX}/lib:${LIBRARY_PATH}" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=${OPENSSL_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
 
       - name: install dependencies (ubuntu 24.04)
