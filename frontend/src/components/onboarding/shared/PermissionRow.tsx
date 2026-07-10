@@ -1,7 +1,6 @@
 import React from 'react';
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import type { PermissionRowProps } from '@/types/onboarding';
 
 export function PermissionRow({ icon, title, description, status, isPending = false, onAction }: PermissionRowProps) {
@@ -18,36 +17,39 @@ export function PermissionRow({ icon, title, description, status, isPending = fa
   return (
     <div
       className={cn(
-        'flex items-center justify-between rounded-2xl border px-6 py-5',
-        'transition-all duration-200',
-        isAuthorized ? 'border-zinc-600 bg-zinc-800' : isDenied ? 'border-red-800 bg-red-950' : 'bg-zinc-900 border-zinc-700'
+        'relative flex items-center justify-between rounded-xl border px-5 py-5 transition-all duration-200 overflow-visible',
+        // Same subtle green glass as transcription/summary cards
+        'border-white/10 bg-white/[0.06] backdrop-blur-sm',
+        isAuthorized && 'border-emerald-400/20 bg-emerald-400/[0.08]',
+        isDenied && 'border-red-900/60 bg-red-950/30',
       )}
     >
-      {/* Left side: Icon + Info */}
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        {/* Icon */}
+      {/* Left: icon + text — always left-aligned */}
+      <div className="flex items-center gap-3 flex-1 min-w-0 text-left">
         <div
           className={cn(
-            'flex size-10 items-center justify-center rounded-full flex-shrink-0',
-            isAuthorized ? 'bg-zinc-700' : isDenied ? 'bg-red-900' : 'bg-zinc-800'
+            'flex h-10 w-10 items-center justify-center rounded-full flex-shrink-0 border',
+            isAuthorized
+              ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-100'
+              : isDenied
+                ? 'border-red-800 bg-red-900/40 text-red-300'
+                : 'border-white/10 bg-white/5 text-zinc-300',
           )}
         >
-          <div className={cn(isAuthorized ? 'text-zinc-100' : isDenied ? 'text-red-400' : 'text-zinc-400')}>{icon}</div>
+          {icon}
         </div>
-
-        {/* Title + Description */}
-        <div className="min-w-0 flex-1">
-          <div className="font-medium truncate text-zinc-100">{title}</div>
-          <div className="text-sm text-muted-foreground">
+        <div className="min-w-0 flex-1 text-left">
+          <div className="font-medium text-zinc-100 text-left">{title}</div>
+          <div className="text-sm text-zinc-400 text-left">
             {isAuthorized ? (
-              <span className="text-green-600 flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
+              <span className="flex items-center gap-1 text-emerald-200">
+                <CheckCircle2 className="h-3.5 w-3.5" />
                 Access Granted
               </span>
             ) : isDenied ? (
-              <span className="text-red-500 flex items-center gap-1">
-                <XCircle className="w-3.5 h-3.5" />
-                Access Denied - Please grant in System Settings
+              <span className="flex items-center gap-1 text-red-400">
+                <XCircle className="h-3.5 w-3.5" />
+                Access Denied — grant in System Settings
               </span>
             ) : (
               <span>{description}</span>
@@ -56,24 +58,35 @@ export function PermissionRow({ icon, title, description, status, isPending = fa
         </div>
       </div>
 
-      {/* Right side: Action button or checkmark */}
-      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+      {/* Right: Enable button or check badge */}
+      <div className="ml-3 flex items-center gap-2 flex-shrink-0">
         {!isAuthorized && (
-          <Button
-            variant={isDenied ? "destructive" : "outline"}
-            size="sm"
+          <button
             onClick={onAction}
             disabled={isChecking}
-            className="min-w-[100px]"
+            className={cn(
+              'inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-all',
+              isDenied
+                ? 'border-red-400/30 bg-red-950 text-red-200 hover:bg-red-900/50'
+                : 'border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10 hover:border-white/25',
+              isChecking && 'opacity-70 cursor-wait',
+            )}
           >
-            {isChecking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isChecking && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {getButtonText()}
-          </Button>
+          </button>
         )}
         {isAuthorized && (
-          <div className="flex size-8 items-center justify-center rounded-full bg-green-100">
-            <CheckCircle2 className="w-4 h-4 text-green-600" />
-          </div>
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-lime-400/40 px-2.5 py-1 text-[11px] font-semibold text-lime-950"
+            style={{
+              background: 'hsl(84 85% 72%)',
+              boxShadow: '0 0 14px hsl(80 80% 55% / 0.45), 0 2px 8px hsl(0 0% 0% / 0.35)',
+            }}
+          >
+            <Check className="h-3.5 w-3.5" />
+            Ready
+          </span>
         )}
       </div>
     </div>

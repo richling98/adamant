@@ -417,6 +417,26 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       setCompleted(true);
       console.debug('[OnboardingContext] Onboarding completed with model:', selectedSummaryModel);
 
+      // Set default theme to adamant (dark green) on first onboarding completion,
+      // but only if the user hasn't already chosen a different theme.
+      // The ConfigContext persistence (Tauri Store + localStorage) will keep it
+      // for all future launches, and the user can change it in Preferences.
+      try {
+        const { Store } = await import('@tauri-apps/plugin-store');
+        const store = await Store.load('preferences.json');
+        const existingTheme = await store.get<string>('adamant-ui-theme');
+        // Only seed adamant if no theme was ever saved — don't override user choice
+        if (!existingTheme) {
+          await store.set('adamant-ui-theme', 'adamant');
+          await store.save();
+          try { localStorage.setItem('adamant-ui-theme', 'adamant'); } catch {}
+          console.debug('[OnboardingContext] Seeded default theme: adamant');
+        }
+      } catch {
+        // Best-effort — don't block onboarding completion if Store unavailable
+        try { if (!localStorage.getItem('adamant-ui-theme')) localStorage.setItem('adamant-ui-theme', 'adamant'); } catch {}
+      }
+
       // Reset the flag so subsequent state updates can be saved
       isCompletingRef.current = false;
     } catch (error) {

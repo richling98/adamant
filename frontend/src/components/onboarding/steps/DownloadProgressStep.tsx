@@ -358,41 +358,55 @@ export function DownloadProgressStep() {
     state: DownloadState,
     modelSize: string
   ) => (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center">
-            {icon}
-          </div>
-          <div>
-            <h3 className="font-medium text-zinc-100">{title}</h3>
-            <p className="text-sm text-zinc-500">{modelSize}</p>
-          </div>
+    <div className="relative rounded-xl border border-white/10 bg-white/[0.06] backdrop-blur-sm p-5 overflow-visible">
+      {/* Status badge — top-right, opaque so card border doesn't show through */}
+      <div className="absolute -top-3 -right-3">
+        {state.status === 'waiting' && (
+          <span className="inline-flex items-center rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-medium text-zinc-400">
+            Waiting
+          </span>
+        )}
+        {state.status === 'downloading' && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Downloading
+          </span>
+        )}
+        {state.status === 'completed' && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-lime-400/40 px-2.5 py-1 text-[11px] font-semibold text-lime-950"
+            style={{
+              background: 'hsl(84 85% 72%)',
+              boxShadow: '0 0 14px hsl(80 80% 55% / 0.45), 0 2px 8px hsl(0 0% 0% / 0.35)',
+            }}
+          >
+            <Check className="h-3.5 w-3.5" />
+            Ready
+          </span>
+        )}
+        {state.status === 'error' && (
+          <span className="inline-flex items-center rounded-full border border-red-800 bg-red-950 px-2.5 py-1 text-[11px] font-medium text-red-300">
+            Failed
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3 text-left">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5">
+          {icon}
         </div>
-        <div>
-          {state.status === 'waiting' && (
-            <span className="text-sm text-zinc-500">Waiting...</span>
-          )}
-          {state.status === 'downloading' && (
-            <Loader2 className="w-5 h-5 text-zinc-300 animate-spin" />
-          )}
-          {state.status === 'completed' && (
-            <div className="w-6 h-6 rounded-full bg-green-900 flex items-center justify-center">
-              <Check className="w-4 h-4 text-green-400" />
-            </div>
-          )}
-          {state.status === 'error' && (
-            <span className="text-sm text-red-400">Failed</span>
-          )}
+        <div className="min-w-0 flex-1 pr-16 text-left">
+          <h3 className="font-medium text-zinc-100 text-left">{title}</h3>
+          <p className="text-sm text-zinc-400 text-left">{modelSize}</p>
         </div>
       </div>
 
       {/* Progress Bar */}
-      {(state.status === 'downloading' || state.status === 'completed') && (
-        <div className="space-y-2">
-          <div className="w-full h-2 bg-zinc-700 rounded-full overflow-hidden">
+      {state.status === 'downloading' && (
+        <div className="mt-4 space-y-2">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full bg-gradient-to-r from-zinc-300 to-white rounded-full transition-all duration-300"
+              className="h-full rounded-full bg-gradient-to-r from-lime-300 to-lime-100 transition-all duration-300"
               style={{ width: `${state.progress}%` }}
             />
           </div>
@@ -402,34 +416,24 @@ export function DownloadProgressStep() {
             </span>
             <div className="flex items-center gap-2">
               {state.speedMbps > 0 && (
-                <span className="text-zinc-500">
-                  {state.speedMbps.toFixed(1)} MB/s
-                </span>
+                <span className="text-zinc-500">{state.speedMbps.toFixed(1)} MB/s</span>
               )}
-              <span className="font-semibold text-zinc-100">
-                {Math.round(state.progress)}%
-              </span>
+              <span className="font-semibold text-zinc-100">{Math.round(state.progress)}%</span>
             </div>
           </div>
         </div>
       )}
 
       {state.status === 'error' && state.error && (
-        <div className="mt-2 p-3 bg-red-950 border border-red-900 rounded-md">
-          <p className="text-sm text-red-400 font-medium">Download Error</p>
-          <p className="text-xs text-red-500 mt-1">{state.error}</p>
-          {(title === 'Transcription Engine' || title === 'Summary Engine') && (
-            <button
-              onClick={title === 'Transcription Engine' ? handleRetryDownload : handleRetrySummaryDownload}
-              className="mt-3 w-full h-9 px-4 bg-zinc-100 hover:bg-white text-zinc-900 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Try Again
-            </button>
-          )}
+        <div className="mt-4 rounded-lg border border-red-900 bg-red-950/60 p-3">
+          <p className="text-sm font-medium text-red-300">Download Error</p>
+          <p className="mt-1 text-xs text-red-400/80">{state.error}</p>
+          <button
+            onClick={title === 'Transcription Engine' ? handleRetryDownload : handleRetrySummaryDownload}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-white"
+          >
+            Try Again
+          </button>
         </div>
       )}
     </div>
@@ -437,30 +441,28 @@ export function DownloadProgressStep() {
 
   return (
     <OnboardingContainer
-      title="Getting things ready"
-      description="You can start using Adamant after downloading the Transcription Engine."
+      title="Your AI models"
+      description="You can start using Adamant after downloading your AI models."
       step={3}
       totalSteps={isMac ? 4 : 3}
+      showNavigation
     >
       <div className="flex flex-col items-center space-y-6">
-        {/* Download Cards */}
-        <div className="w-full max-w-lg space-y-4">
+        <div className="w-full max-w-lg space-y-5">
           {renderDownloadCard(
             'Transcription Engine',
-            <Mic className="w-5 h-5 text-zinc-400" />,
+            <Mic className="h-5 w-5 text-zinc-300" />,
             parakeetState,
-            '~670 MB'
+            '~670 MB',
           )}
-
           {renderDownloadCard(
             'Summary Engine',
-            <Sparkles className="w-5 h-5 text-zinc-400" />,
+            <Sparkles className="h-5 w-5 text-zinc-300" />,
             gemmaState,
-            recommendedModel === 'gemma3:4b' ? '~2.5 GB' : '~806 MB'
+            recommendedModel === 'gemma3:4b' ? '~2.5 GB' : '~806 MB',
           )}
         </div>
 
-        {/* Info Message - Only show when Parakeet is downloaded */}
         <AnimatePresence>
           {parakeetDownloaded && !summaryModelDownloaded && (
             <motion.div
@@ -468,34 +470,49 @@ export function DownloadProgressStep() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="w-full max-w-lg bg-zinc-800 rounded-lg p-4 text-sm text-zinc-200"
+              className="w-full max-w-lg rounded-lg border border-white/10 bg-white/[0.06] p-4 text-sm text-zinc-200"
             >
               <div className="flex items-start gap-3">
-                <Download className="w-5 h-5 text-zinc-400 flex-shrink-0 mt-0.5" />
+                <Download className="mt-0.5 h-5 w-5 flex-shrink-0 text-zinc-400" />
                 <div>
                   <p className="font-medium">You can continue while this finishes</p>
-                  <p className="text-zinc-400 mt-1">
-                    Download will continue in the background.
-                  </p>
+                  <p className="mt-1 text-zinc-400">Download will continue in the background.</p>
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Continue Button */}
+        {/* Continue — lime outlined to match Get Started / Let's Go */}
         <div className="w-full max-w-xs">
-          <Button
+          <style>{`
+            @keyframes lime-shine-continue {
+              0% { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
+              45% { opacity: 0.85; }
+              100% { transform: translateX(220%) skewX(-18deg); opacity: 0; }
+            }
+          `}</style>
+          <button
             onClick={handleContinue}
             disabled={!parakeetDownloaded || isCompleting}
-            className="w-full h-11 bg-zinc-100 hover:bg-white text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl border-[1.5px] border-lime-300/80 bg-lime-400/10 px-6 py-3 text-sm font-semibold text-lime-100 backdrop-blur-sm transition-all hover:border-lime-200 hover:bg-lime-400/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-lime-300/80 disabled:hover:bg-lime-400/10"
+            style={{ boxShadow: '0 0 0 1px hsl(80 70% 60% / 0.12), 0 0 18px hsl(80 75% 55% / 0.18), inset 0 1px 0 hsl(0 0% 100% / 0.06)' }}
           >
-            {(isCompleting || !parakeetDownloaded) ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              'Continue'
-            )}
-          </Button>
+            <span className="relative z-10 flex items-center gap-2">
+              {isCompleting || !parakeetDownloaded ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading
+                </>
+              ) : (
+                'Continue'
+              )}
+            </span>
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-0 w-[55%] bg-gradient-to-r from-transparent via-lime-100/40 to-transparent group-[&:not(:disabled)]:animate-[lime-shine-continue_2.8s_ease-in-out_infinite]"
+            />
+          </button>
         </div>
       </div>
     </OnboardingContainer>

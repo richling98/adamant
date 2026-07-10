@@ -16,16 +16,24 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [isMac, setIsMac] = React.useState(false);
 
   useEffect(() => {
-    // Check if running on macOS
     const checkPlatform = async () => {
+      // In Next.js dev without Tauri, window.__TAURI__ / OS plugin internals are undefined.
+      // Guard against that to avoid crashing the onboarding overlay.
       try {
-        // Dynamic import to avoid SSR issues if any
-        const { platform } = await import('@tauri-apps/plugin-os');
-        setIsMac(platform() === 'macos');
-      } catch (e) {
-        console.error('Failed to detect platform:', e);
-        // Fallback
-        setIsMac(navigator.userAgent.includes('Mac'));
+        // Only attempt Tauri import when actually running inside Tauri webview
+        const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+        if (isTauri) {
+          const { platform } = await import('@tauri-apps/plugin-os');
+          setIsMac(platform() === 'macos');
+          return;
+        }
+      } catch {
+        // fall through to UA fallback
+      }
+      try {
+        setIsMac(typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac'));
+      } catch {
+        setIsMac(false);
       }
     };
     checkPlatform();

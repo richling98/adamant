@@ -31,7 +31,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
 ]
 
-export const DEFAULT_THEME: ThemeName = 'rune'
+export const DEFAULT_THEME: ThemeName = 'adamant'
 
 export function isThemeName(value: string | null | undefined): value is ThemeName {
   return value === 'rune' || value === 'mithril' || value === 'bronze' || value === 'adamant'

@@ -114,8 +114,8 @@ export default function RootLayout({
                             {/* Download progress toast provider - listens for background downloads */}
                             <DownloadProgressToastProvider />
 
-                            {/* Persistent chat bubble — always visible, on top of all content */}
-                            <FloatingChatBubble />
+                            {/* Persistent chat bubble — hidden during onboarding (no meetings to chat about yet) */}
+                            {!showOnboarding && <FloatingChatBubble />}
 
                             {/* Show onboarding or main app */}
                             {showOnboarding ? (

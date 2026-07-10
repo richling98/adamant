@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Mic, Volume2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { PermissionRow } from '../shared';
 import { useOnboarding } from '@/contexts/OnboardingContext';
@@ -25,15 +24,28 @@ export function PermissionsStep() {
     checkPermissions();
   }, [checkPermissions]);
 
+  // Open System Settings helper — Tauri command requires preferencePane arg
+  const openSettings = async (pane: string) => {
+    try {
+      await invoke('open_system_settings', { preferencePane: pane });
+    } catch (e) {
+      console.error('[PermissionsStep] open_system_settings failed:', e);
+      try {
+        const { message } = await import('@tauri-apps/plugin-dialog');
+        await message(`Please enable access in System Settings → Privacy & Security → ${pane === 'Privacy_Microphone' ? 'Microphone' : 'Audio Capture'}`, {
+          title: 'Permission Required',
+          kind: 'info',
+        });
+      } catch {
+        console.debug('[PermissionsStep] Fallback: could not show dialog, check console');
+      }
+    }
+  };
+
   // Request microphone permission
   const handleMicrophoneAction = async () => {
     if (permissions.microphone === 'denied') {
-      // Try to open system settings
-      try {
-        await invoke('open_system_settings');
-      } catch {
-        alert('Please enable microphone access in System Preferences > Security & Privacy > Microphone');
-      }
+      await openSettings('Privacy_Microphone');
       return;
     }
 
@@ -42,13 +54,7 @@ export function PermissionsStep() {
       console.debug('[PermissionsStep] Triggering microphone permission...');
       const granted = await invoke<boolean>('trigger_microphone_permission');
       console.debug('[PermissionsStep] Microphone permission result:', granted);
-
-      if (granted) {
-        setPermissionStatus('microphone', 'authorized');
-      } else {
-        // Permission was denied or dialog was dismissed
-        setPermissionStatus('microphone', 'denied');
-      }
+      setPermissionStatus('microphone', granted ? 'authorized' : 'denied');
     } catch (err) {
       console.error('[PermissionsStep] Failed to request microphone permission:', err);
       setPermissionStatus('microphone', 'denied');
@@ -60,30 +66,20 @@ export function PermissionsStep() {
   // Request system audio permission
   const handleSystemAudioAction = async () => {
     if (permissions.systemAudio === 'denied') {
-      // Try to open system settings
-      try {
-        await invoke('open_system_settings');
-      } catch {
-        alert('Please enable Audio Capture in System Settings → Privacy & Security → Audio Capture');
-      }
+      await openSettings('Privacy_AudioCapture');
       return;
     }
 
     setIsPending(true);
     try {
       console.debug('[PermissionsStep] Triggering Audio Capture permission...');
-      // Backend creates Core Audio tap, captures audio, and verifies it's not silence
-      // Returns true if permission granted and audio verified, false if denied (silence)
       const granted = await invoke<boolean>('trigger_system_audio_permission_command');
       console.debug('[PermissionsStep] System audio permission result:', granted);
-
+      setPermissionStatus('systemAudio', granted ? 'authorized' : 'denied');
       if (granted) {
-        setPermissionStatus('systemAudio', 'authorized');
-        console.debug('[PermissionsStep] Audio Capture permission verified - audio is not silence');
+        console.debug('[PermissionsStep] Audio Capture verified — not silence');
       } else {
-        // Permission was denied (audio is silence)
-        setPermissionStatus('systemAudio', 'denied');
-        console.debug('[PermissionsStep] Audio Capture permission denied - audio is silence');
+        console.debug('[PermissionsStep] Audio Capture denied — silence');
       }
     } catch (err) {
       console.error('[PermissionsStep] Failed to request system audio permission:', err);
@@ -116,9 +112,8 @@ export function PermissionsStep() {
       title="Grant Permissions"
       description="Adamant needs access to your microphone and system audio to record meetings"
       step={4}
-      hideProgress={true}
-      showNavigation={allPermissionsGranted}
-      canGoNext={allPermissionsGranted}
+      hideProgress={false}
+      showNavigation
     >
       <div className="max-w-lg mx-auto space-y-6">
         {/* Permission Rows */}
@@ -145,21 +140,37 @@ export function PermissionsStep() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col gap-3 pt-4">
-          <Button onClick={handleFinish} disabled={!allPermissionsGranted} className="w-full h-11">
-            Finish Setup
-          </Button>
+        <div className="flex flex-col items-center gap-3 pt-2">
+          <style>{`
+            @keyframes lime-shine-finish {
+              0% { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
+              45% { opacity: 0.85; }
+              100% { transform: translateX(220%) skewX(-18deg); opacity: 0; }
+            }
+          `}</style>
+          <button
+            onClick={handleFinish}
+            disabled={!allPermissionsGranted}
+            className="group relative flex w-full max-w-xs items-center justify-center gap-2 overflow-hidden rounded-xl border-[1.5px] border-lime-300/80 bg-lime-400/10 px-6 py-3 text-sm font-semibold text-lime-100 backdrop-blur-sm transition-all hover:border-lime-200 hover:bg-lime-400/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ boxShadow: '0 0 0 1px hsl(80 70% 60% / 0.12), 0 0 18px hsl(80 75% 55% / 0.18), inset 0 1px 0 hsl(0 0% 100% / 0.06)' }}
+          >
+            <span className="relative z-10">Finish Setup</span>
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-0 w-[55%] bg-gradient-to-r from-transparent via-lime-100/40 to-transparent group-[&:not(:disabled)]:animate-[lime-shine-finish_2.8s_ease-in-out_infinite]"
+            />
+          </button>
 
           <button
             onClick={handleSkip}
-            className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="text-sm text-zinc-400 transition-colors hover:text-lime-200 hover:brightness-[1.35]"
           >
-            I'll do this later
+            I&apos;ll do this later
           </button>
 
           {!allPermissionsGranted && (
-            <p className="text-xs text-center text-muted-foreground">
-              Recording won't work without permissions. You can grant them later in settings.
+            <p className="max-w-md text-center text-xs text-zinc-500">
+              Recording won&apos;t work without permissions. You can grant them later in settings.
             </p>
           )}
         </div>
