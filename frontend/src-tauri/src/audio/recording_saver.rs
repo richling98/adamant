@@ -20,6 +20,7 @@ pub struct TranscriptSegment {
     pub display_time: String,   // Formatted time for display like "[02:15]"
     pub confidence: f32,
     pub sequence_id: u64,
+    pub source: String,
 }
 
 /// Meeting metadata written to metadata.json alongside transcripts
@@ -134,6 +135,7 @@ impl RecordingSaver {
             display_time: "[00:00]".to_string(),
             confidence: 1.0,
             sequence_id: 0,
+            source: "unknown".to_string(),
         };
         self.add_transcript_segment(segment);
     }

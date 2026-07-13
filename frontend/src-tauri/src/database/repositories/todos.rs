@@ -223,6 +223,61 @@ impl TodosRepository {
         Ok(result.rows_affected())
     }
 
+    /// Atomically replaces AI-extracted actions for one meeting.
+    ///
+    /// Manual Actions-page entries are protected by the `source_text IS NOT NULL`
+    /// predicate. If any insert fails, the transaction rolls back so prior AI
+    /// actions remain visible instead of being partially erased.
+    pub async fn replace_extracted_for_meeting(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        extraction_run_id: &str,
+        items: &[NewTodoItem],
+    ) -> Result<Option<usize>, sqlx::Error> {
+        let mut transaction = pool.begin().await?;
+
+        let current_run: Option<(Option<String>,)> = sqlx::query_as(
+            "SELECT todo_extraction_run_id FROM summary_processes WHERE meeting_id = ?",
+        )
+        .bind(meeting_id)
+        .fetch_optional(&mut *transaction)
+        .await?;
+
+        if current_run.and_then(|row| row.0).as_deref() != Some(extraction_run_id) {
+            transaction.rollback().await?;
+            return Ok(None);
+        }
+
+        sqlx::query("DELETE FROM todos WHERE meeting_id = ? AND source_text IS NOT NULL")
+            .bind(meeting_id)
+            .execute(&mut *transaction)
+            .await?;
+
+        for item in items {
+            let id = format!("todo-{}", Uuid::new_v4());
+            let now = Utc::now().to_rfc3339();
+            sqlx::query(
+                "INSERT INTO todos (id, meeting_id, date, content_json, content_markdown, \
+                 is_checked, sort_order, source_text, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)",
+            )
+            .bind(&id)
+            .bind(&item.meeting_id)
+            .bind(&item.date)
+            .bind(&item.content_json)
+            .bind(&item.content_markdown)
+            .bind(item.sort_order)
+            .bind(&item.source_text)
+            .bind(&now)
+            .bind(&now)
+            .execute(&mut *transaction)
+            .await?;
+        }
+
+        transaction.commit().await?;
+        Ok(Some(items.len()))
+    }
+
     /// Get a single todo by ID
     pub async fn get_by_id(pool: &SqlitePool, id: &str) -> Result<Option<TodoModel>, sqlx::Error> {
         sqlx::query_as::<_, TodoModel>("SELECT * FROM todos WHERE id = ?")

@@ -102,7 +102,11 @@ impl SummaryProcessesRepository {
                 result_backup = result,
                 result_backup_timestamp = excluded.updated_at,
                 result = result,
-                error = NULL
+                error = NULL,
+                todo_extraction_status = 'pending',
+                todo_extraction_count = 0,
+                todo_extraction_error = NULL,
+                todo_extraction_run_id = NULL
             "#
         )
         .bind(meeting_id)
@@ -149,6 +153,49 @@ impl SummaryProcessesRepository {
             meeting_id
         );
         Ok(())
+    }
+
+    pub async fn start_todo_extraction(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        run_id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let rows = sqlx::query(
+            "UPDATE summary_processes SET todo_extraction_status = 'processing', \
+             todo_extraction_count = 0, todo_extraction_error = NULL, todo_extraction_run_id = ? \
+             WHERE meeting_id = ? AND status = 'completed'",
+        )
+        .bind(run_id)
+        .bind(meeting_id)
+        .execute(pool)
+        .await?
+        .rows_affected();
+
+        Ok(rows > 0)
+    }
+
+    pub async fn finish_todo_extraction(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        run_id: &str,
+        status: &str,
+        count: i64,
+        error: Option<&str>,
+    ) -> Result<bool, sqlx::Error> {
+        let rows = sqlx::query(
+            "UPDATE summary_processes SET todo_extraction_status = ?, todo_extraction_count = ?, \
+             todo_extraction_error = ? WHERE meeting_id = ? AND todo_extraction_run_id = ?",
+        )
+        .bind(status)
+        .bind(count)
+        .bind(error)
+        .bind(meeting_id)
+        .bind(run_id)
+        .execute(pool)
+        .await?
+        .rows_affected();
+
+        Ok(rows > 0)
     }
 
     pub async fn update_process_failed(

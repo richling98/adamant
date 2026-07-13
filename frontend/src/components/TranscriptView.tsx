@@ -288,6 +288,7 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts, isR
                     {transcript.audio_start_time !== undefined
                       ? formatRecordingTime(transcript.audio_start_time)
                       : transcript.timestamp}
+                    {transcript.speaker === 'mic' && <span className="ml-1 text-primary">[you]</span>}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>

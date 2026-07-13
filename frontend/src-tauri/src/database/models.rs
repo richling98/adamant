@@ -86,6 +86,9 @@ pub struct Transcript {
     pub audio_start_time: Option<f64>,
     pub audio_end_time: Option<f64>,
     pub duration: Option<f64>,
+    // "mic" is the Adamant user in the v1 channel-attribution model;
+    // "system" is another meeting participant.
+    pub speaker: Option<String>,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -103,6 +106,10 @@ pub struct SummaryProcess {
     pub metadata: Option<String>,      // JSON
     pub result_backup: Option<String>, // Backup of result before regeneration
     pub result_backup_timestamp: Option<chrono::DateTime<chrono::Utc>>, // When backup was created
+    pub todo_extraction_status: String,
+    pub todo_extraction_count: i64,
+    pub todo_extraction_error: Option<String>,
+    pub todo_extraction_run_id: Option<String>,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]

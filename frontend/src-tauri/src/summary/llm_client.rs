@@ -26,6 +26,11 @@ pub struct ChatRequest {
     pub temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top_p: Option<f32>,
+    // Ollama supports a "format": "json" field that forces JSON output mode.
+    // This is critical for small local models that otherwise drift out of
+    // JSON format after generating one or two items.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
 }
 
 // Generic structure for OpenAI-compatible API chat responses
@@ -228,14 +233,21 @@ pub async fn generate_summary(
 
     // Build request body based on provider
     let request_body = if provider != &LLMProvider::Claude {
-        // Apply optional parameters; CustomOpenAI exposes all three, other
-        // OpenAI-compatible providers honour max_tokens to prevent runaway
-        // repetition (especially with local Ollama models on long contexts).
-        let (max_tokens_val, temperature_val, top_p_val) = if provider == &LLMProvider::CustomOpenAI
-        {
-            (max_tokens, temperature, top_p)
+        // Pass through all provided parameters. Callers that don't want
+        // to set a parameter pass None, which is skipped during serialization.
+        // This fixes a bug where extraction temperature (0.1) was silently
+        // discarded for Ollama, causing the model to use its default 0.8
+        // temperature — too high for structured extraction.
+        let (max_tokens_val, temperature_val, top_p_val) =
+            (max_tokens, temperature, top_p);
+
+        // Ollama supports a "format": "json" field that forces structured
+        // JSON output. This is essential for small local models that would
+        // otherwise produce one JSON item and then drift into prose.
+        let format_val = if provider == &LLMProvider::Ollama {
+            Some("json".to_string())
         } else {
-            (max_tokens, None, None)
+            None
         };
 
         serde_json::json!(ChatRequest {
@@ -253,6 +265,7 @@ pub async fn generate_summary(
             max_tokens: max_tokens_val,
             temperature: temperature_val,
             top_p: top_p_val,
+            format: format_val,
         })
     } else {
         serde_json::json!(ClaudeRequest {

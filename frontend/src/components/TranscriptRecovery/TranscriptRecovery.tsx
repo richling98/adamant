@@ -238,6 +238,7 @@ export function TranscriptRecovery({
                           return (
                             <div key={index} className="text-sm">
                               <span className="text-muted-foreground">[{getTimestamp()}]</span>{' '}
+                              {transcript.source === 'mic' && <span className="text-primary">[you] </span>}
                               <span>{transcript.text}</span>
                             </div>
                           );

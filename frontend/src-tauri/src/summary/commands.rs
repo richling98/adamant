@@ -18,6 +18,12 @@ pub struct SummaryResponse {
     pub end: Option<String>,
     pub data: Option<serde_json::Value>,
     pub error: Option<String>,
+    #[serde(rename = "todoExtractionStatus")]
+    pub todo_extraction_status: String,
+    #[serde(rename = "todoExtractionCount")]
+    pub todo_extraction_count: i64,
+    #[serde(rename = "todoExtractionError")]
+    pub todo_extraction_error: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -123,6 +129,9 @@ pub async fn api_get_summary<R: Runtime>(
                 end: process.end_time.map(|t| t.to_rfc3339()),
                 data,
                 error,
+                todo_extraction_status: process.todo_extraction_status,
+                todo_extraction_count: process.todo_extraction_count,
+                todo_extraction_error: process.todo_extraction_error,
             };
 
             log_info!(
@@ -151,6 +160,9 @@ pub async fn api_get_summary<R: Runtime>(
                 end: None,
                 data: None,
                 error: None,
+                todo_extraction_status: "idle".to_string(),
+                todo_extraction_count: 0,
+                todo_extraction_error: None,
             })
         }
         Err(e) => {

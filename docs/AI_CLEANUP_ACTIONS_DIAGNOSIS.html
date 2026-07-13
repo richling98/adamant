@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Adamant AI Cleanup Actions Diagnosis</title>
+  <style>
+    :root { --bg:#0b1020; --panel:#121a2d; --panel2:#18233b; --text:#e8edf7; --muted:#aab7cc; --line:#2b3a58; --accent:#7dd3fc; --good:#86efac; --warn:#fcd34d; --bad:#fca5a5; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:linear-gradient(135deg,#080d19,#101a31 55%,#0b1020); color:var(--text); font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:1120px; margin:0 auto; padding:48px 24px 80px; }
+    h1,h2,h3 { line-height:1.2; letter-spacing:-.02em; }
+    h1 { font-size:clamp(2rem,5vw,3.6rem); margin:0 0 16px; }
+    h2 { font-size:1.75rem; margin:44px 0 16px; padding-top:18px; border-top:1px solid var(--line); }
+    h3 { font-size:1.15rem; margin:26px 0 8px; color:var(--accent); }
+    p { max-width:88ch; }
+    .subtitle { color:var(--muted); font-size:1.12rem; max-width:78ch; }
+    .card { background:rgba(18,26,45,.9); border:1px solid var(--line); border-radius:14px; padding:22px 24px; margin:18px 0; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+    .stat strong { display:block; font-size:1.55rem; color:var(--accent); }
+    .stat span { color:var(--muted); }
+    .badge { display:inline-block; border-radius:999px; padding:3px 10px; font-size:.78rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+    .bad { color:#fee2e2; background:#7f1d1d; } .warn { color:#fef3c7; background:#713f12; } .good { color:#dcfce7; background:#14532d; }
+    code, pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    code { color:#bae6fd; }
+    pre { overflow:auto; white-space:pre-wrap; background:#09101e; border:1px solid var(--line); border-radius:10px; padding:16px; color:#d8e2f2; }
+    table { width:100%; border-collapse:collapse; margin:14px 0; font-size:.94rem; }
+    th,td { text-align:left; vertical-align:top; padding:12px; border-bottom:1px solid var(--line); }
+    th { color:var(--accent); background:rgba(24,35,59,.75); }
+    ul,ol { padding-left:24px; } li { margin:7px 0; }
+    .callout { border-left:4px solid var(--accent); background:rgba(125,211,252,.08); padding:14px 18px; margin:18px 0; }
+    .danger { border-left-color:var(--bad); background:rgba(252,165,165,.08); }
+    .small { color:var(--muted); font-size:.9rem; }
+    a { color:var(--accent); }
+    @media (max-width:640px) { main { padding:28px 14px 56px; } .card { padding:17px; } th,td { padding:8px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="badge warn">Engineering diagnosis</span>
+    <h1>AI Cleanup Actions Are Not Reliably Captured</h1>
+    <p class="subtitle">A code-level diagnosis of why the “Weekly Team Meeting” example produces no visible actions, how the current workflow differs from the intended human workflow, and the implementation plan to make action capture dependable.</p>
+    <p class="small">Repository examined: Adamant. Primary path: native Tauri/Rust summary pipeline, not the legacy FastAPI path. Report date: July 13, 2026.</p>
+  </header>
+
+  <section class="grid">
+    <div class="card stat"><strong>Primary root cause</strong><span>The committed extractor does not recognize the heading “next steps and actions”.</span></div>
+    <div class="card stat"><strong>Secondary root cause</strong><span>The committed extractor skips transcript LLM extraction whenever notes yield any items.</span></div>
+    <div class="card stat"><strong>Visibility bug</strong><span>Actions are saved asynchronously after summary completion, but the UI refreshes at summary completion.</span></div>
+    <div class="card stat"><strong>Expected result</strong><span>Three unchecked actions linked to the Weekly Team Meeting.</span></div>
+  </section>
+
+  <h2>Layman’s Overview</h2>
+  <div class="card">
+    <p>Adamant currently uses two different “secretaries”. The first secretary creates polished meeting notes. The second secretary creates the Actions list. The first secretary is explicitly told not to create an Action Items section, so the Actions page depends entirely on the second secretary.</p>
+    <p>The second secretary currently has two problems. It looks for a narrowly defined heading instead of understanding the meaning of a heading, and older code tells it to stop reading the transcript if it found anything in the notes. In the example, the heading is written as <code>next steps and actions</code>, which is understandable to a person but not an exact match for the current heading list. The bullets therefore never reach the action detector.</p>
+    <p>The fix is to give one extraction pass both complete sources: all manual notes and the complete transcript. The model should be told to behave like a meeting secretary: identify concrete next steps, commitments, follow-ups, and assigned tasks; ignore facts, takeaways, announcements, and strategy unless they create a specific task. A small deterministic parser can remain as a fallback, but it must never be the gate that prevents the full-source pass.</p>
+  </div>
+
+  <h2>What Happens Today</h2>
+  <ol>
+    <li>The user clicks <code>Generate AI Cleanup</code> in <code>frontend/src/components/MeetingDetails/SummaryGeneratorButtonGroup.tsx</code>.</li>
+    <li><code>useSummaryGeneration.handleGenerateSummary</code> fetches every transcript page, obtains live notes or persisted notes, formats the transcript, and invokes <code>api_process_transcript</code>.</li>
+    <li><code>frontend/src-tauri/src/summary/commands.rs</code> stores transcript chunks and starts a background summary task.</li>
+    <li><code>summary/processor.rs</code> generates the polished Markdown summary. Its system prompt explicitly says <strong>“Do not include Action Items.”</strong> This is intentional, but it means the summary response is not the source of truth for actions.</li>
+    <li>After the summary is saved, <code>summary/service.rs</code> spawns a separate best-effort <code>TodoExtractor</code> task.</li>
+    <li><code>summary/todo_extractor.rs</code> first parses specially headed note sections, then may call an LLM over the transcript, filters the result, deletes prior extracted rows, and inserts new rows into <code>todos</code>.</li>
+    <li>The Actions page reads those rows through <code>api_get_all_todos</code> or <code>api_get_todos_by_date</code>. The homepage only provides the navigation entry point; it does not render the individual actions.</li>
+  </ol>
+
+  <h2>Reproduction With The Reported Meeting</h2>
+  <div class="card">
+    <h3>Manual notes supplied</h3>
+    <pre>### important takeaways
+    <h3>Current committed-code result</h3>
+    <ol>
+      <li><code>extract_todo_section_items</code> sees <code>### important takeaways</code>, but “important takeaways” is not an exact recognized heading.</li>
+      <li>It then sees <code>### next steps and actions</code>. The current matcher recognizes exact normalized headings such as <code>next steps</code> and <code>actions</code>, but not the combined phrase <code>next steps and actions</code>.</li>
+      <li>Because the combined heading is not recognized, the parser never enters todo mode and reads zero bullets from the notes.</li>
+      <li>The transcript contains an unrelated mathematical explanation and no explicit commitments. Even if the transcript LLM pass runs, a correctly behaving model should return an empty array for that transcript.</li>
+      <li>Therefore the three explicit note actions are lost before persistence.</li>
+    </ol>
+  </div>
+  <div class="callout danger"><strong>Important version distinction:</strong> the current working tree contains an uncommitted improvement that always runs transcript extraction and adds more heading variants. However, it still does not recognize the exact combined heading in this report. The last committed version also had the stronger bug described below: accepted note actions caused transcript extraction to be skipped entirely. This explains why a shipped build can fail even when a newer local tree looks partially fixed.</div>
+
+  <h2>Root Cause Analysis</h2>
+  <table>
+    <thead><tr><th>Severity</th><th>Finding</th><th>Evidence</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge bad">P0</span></td><td>Heading matching is exact, not semantic.</td><td><code>todo_extractor.rs:780-806</code> uses <code>matches!</code> against exact normalized strings. “next steps and actions” is absent.</td><td>All three bullets are ignored. This alone reproduces the reported failure.</td></tr>
+      <tr><td><span class="badge bad">P0</span></td><td>Notes and transcript are not sent to one unified action-extraction prompt.</td><td><code>build_extraction_prompt</code> receives only <code>transcript</code>. Notes are handled by a separate narrow parser.</td><td>The system does not implement the requested “human secretary reads everything” workflow. Meaningful note structure can be lost before the model sees it.</td></tr>
+      <tr><td><span class="badge bad">P0</span></td><td>Committed code suppresses transcript extraction when note parsing returns any items.</td><td>In <code>HEAD</code>, <code>extract_todos_from_sources</code> branches on <code>note_items.is_empty()</code>.</td><td>Actions present only in the transcript disappear whenever notes contain one accepted item. This is a completeness bug.</td></tr>
+      <tr><td><span class="badge warn">P1</span></td><td>LLM output parsing is brittle.</td><td><code>parse_extraction_response</code> requires the entire response to be a JSON array. Any preamble or malformed fence fails parsing.</td><td>A valid model decision can become zero saved actions. The failure is non-fatal and only logged as a warning.</td></tr>
+      <tr><td><span class="badge warn">P1</span></td><td>Post-LLM action filtering is overly restrictive.</td><td><code>is_action_item</code> requires a known imperative prefix. It rejects natural forms such as “Jane will send…” unless normalized first.</td><td>Legitimate commitments can be discarded after the LLM finds them.</td></tr>
+      <tr><td><span class="badge warn">P1</span></td><td>Extraction is best-effort and detached from cleanup completion.</td><td><code>service.rs:361-398</code> spawns extraction and logs errors without changing the cleanup status.</td><td>The UI can say cleanup completed while zero actions are present, with no user-facing explanation.</td></tr>
+      <tr><td><span class="badge warn">P1</span></td><td>Sidebar refresh can race the async insert.</td><td><code>SidebarProvider.tsx:385-389</code> refreshes todo dates when summary status becomes completed. Extraction is spawned after summary save and may not have inserted rows yet.</td><td>The homepage/sidebar can show no action count even if extraction succeeds moments later. An already mounted <code>TodosPage</code> also only fetches on mount/filter changes.</td></tr>
+      <tr><td><span class="badge good">P2</span></td><td>Persistence itself is mostly sound.</td><td><code>TodosRepository::batch_insert</code> stores meeting-linked extracted rows. <code>delete_extracted_by_meeting</code> limits replacement to rows with non-null <code>source_text</code>.</td><td>The database is unlikely to be the primary cause. Manual standalone todos are protected from regeneration.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Why The Transcript Does Not Rescue This Example</h2>
+  <p>The transcript is unrelated to the meeting notes and contains no commitments such as “I will send”, “we need to schedule”, or “follow up with”. A secretary should correctly ignore it. The actions are unambiguous only because they exist in the manual notes. This is precisely why manual notes must be a first-class input to the same extraction workflow, not an optional pre-filter.</p>
+  <p>The current transcript prompt also says to extract only explicit personal commitment language. That is a reasonable false-positive safeguard for spoken transcript text, but it is not sufficient for handwritten action lists, where imperative bullets are the explicit task language. The source type needs to be communicated to the extractor.</p>
+
+  <h2>Recommended Design</h2>
+  <div class="callout"><strong>Target behavior:</strong> when AI Cleanup is requested, run one action-extraction step over the complete manual notes plus the complete transcript. Treat manual action sections and imperative bullets as high-confidence evidence. Treat transcript commitments, assignments, follow-ups, deadlines, and decisions that create work as evidence. Return structured actions with text, owner, deadline, confidence, and source.</div>
+  <h3>Proposed extraction contract</h3>
+  <pre>Return only valid JSON:
+{
+  "actions": [
+    {
+      "text": "Send a follow-up email to Jane",
+      "owner": null,
+      "deadline": null,
+      "source": "manual_notes",
+      "confidence": 0.99
+    }
+  ]
+}
+
+Rules:
+- Read both sources completely before deciding.
+- Preserve explicit manual-note actions, including imperative bullets.
+- Extract concrete tasks, follow-ups, commitments, assignments, and deadlines.
+- Do not extract facts, metrics, announcements, takeaways, opinions, or strategy by themselves.
+- Do not invent owners, deadlines, or task details.
+- Return [] only when no concrete action exists.</pre>
+  <p>For the supplied notes, the expected normalized actions are:</p>
+  <ul>
+    <li>Send follow-up email to Jane</li>
+    <li>Send meeting transcript to Ron</li>
+    <li>Schedule next week’s call</li>
+  </ul>
+
+  <h2>Few-Shot Extraction Examples</h2>
+  <div class="callout"><strong>How to use these examples:</strong> provide examples like these in the action-extraction prompt or its test fixture. They demonstrate the desired judgment: extract only concrete, high-signal actions grounded in the notes or transcript. They do not authorize the model to infer, embellish, or create plausible next steps.</div>
+
+  <div class="card">
+    <h3>Example 1: Actions in manual notes, transcript has no actions</h3>
+    <p><strong>Manual notes</strong></p>
+    <pre>### key takeaways
+* Customer retention improved this quarter.
+* The enterprise segment is growing.
+
+### next steps
+* Send the revised proposal to Maya.
+* Book a pricing review for Thursday.</pre>
+    <p><strong>Transcript</strong></p>
+    <pre>[00:04] We reviewed the retention dashboard and the enterprise pipeline.
+[00:18] The enterprise segment has been growing steadily.
+[00:31] We also looked at the pricing history.</pre>
+    <p><strong>Expected actions</strong></p>
+    <pre>[
+  {"text":"Send the revised proposal to Maya","owner":null,"deadline":null,"source":"manual_notes","confidence":0.99},
+  {"text":"Book a pricing review for Thursday","owner":null,"deadline":"Thursday","source":"manual_notes","confidence":0.99}
+]</pre>
+    <p class="small">Do not turn “enterprise segment is growing” or “reviewed the pricing history” into actions. They are facts or discussion topics.</p>
+  </div>
+
+  <div class="card">
+    <h3>Example 2: Actions in transcript, notes contain context only</h3>
+    <p><strong>Manual notes</strong></p>
+    <pre>### important takeaways
+* The launch is targeted for September.
+* The onboarding flow needs to be simpler.</pre>
+    <p><strong>Transcript</strong></p>
+    <pre>[00:42] I will rewrite the onboarding email and send it to the team by Friday.
+[00:51] Daniel, can you schedule the customer pilot review for next Tuesday?
+[01:03] Yes, I will schedule that review.</pre>
+    <p><strong>Expected actions</strong></p>
+    <pre>[
+  {"text":"Rewrite the onboarding email and send it to the team","owner":"speaker","deadline":"Friday","source":"transcript","confidence":0.98},
+  {"text":"Schedule the customer pilot review","owner":"Daniel","deadline":"next Tuesday","source":"transcript","confidence":0.99}
+]</pre>
+    <p class="small">The launch date and onboarding-flow observation are not actions. The model may use them as context, but it must not convert them into invented tasks.</p>
+  </div>
+
+  <div class="card">
+    <h3>Example 3: Same action appears in notes and transcript</h3>
+    <p><strong>Manual notes</strong></p>
+    <pre>### actions
+* Follow up with Alex about the security review.</pre>
+    <p><strong>Transcript</strong></p>
+    <pre>[00:27] I’ll follow up with Alex about the security review after this meeting.
+[00:34] That sounds good.</pre>
+    <p><strong>Expected actions</strong></p>
+    <pre>[
+  {"text":"Follow up with Alex about the security review","owner":"speaker","deadline":null,"source":"manual_notes_and_transcript","confidence":0.99}
+]</pre>
+    <p class="small">Return one action, not two. Merge duplicate evidence and keep the most specific owner or deadline only when it is explicitly supported.</p>
+  </div>
+
+  <div class="card">
+    <h3>Example 4: Assigned action in manual notes with mixed takeaways</h3>
+    <p><strong>Manual notes</strong></p>
+    <pre>### important takeaways
+* Q3 revenue increased by 23%.
+* The new CTO starts next Monday.
+
+### next steps and actions
+* Jane, send the follow-up email.
+* Ron: share the transcript with legal.
+* Schedule next week’s team call.</pre>
+    <p><strong>Transcript</strong></p>
+    <pre>[00:06] Revenue was up this quarter.
+[00:19] Our new CTO starts next Monday.
+[00:33] Jane, please send the follow-up email after we finish.
+[00:41] Ron, can you share the transcript with legal?
+[00:49] We should meet again next week.</pre>
+    <p><strong>Expected actions</strong></p>
+    <pre>[
+  {"text":"Send the follow-up email","owner":"Jane","deadline":null,"source":"manual_notes_and_transcript","confidence":0.99},
+  {"text":"Share the transcript with legal","owner":"Ron","deadline":null,"source":"manual_notes_and_transcript","confidence":0.99},
+  {"text":"Schedule next week’s team call","owner":null,"deadline":"next week","source":"manual_notes_and_transcript","confidence":0.98}
+]</pre>
+    <p class="small">Do not create actions for the revenue result or CTO start date. “We should meet again next week” supports the explicitly noted scheduling action, but by itself would not justify inventing a meeting title, attendees, or exact date.</p>
+  </div>
+
+  <div class="card">
+    <h3>Example 5: High-confidence transcript commitment with no manual action heading</h3>
+    <p><strong>Manual notes</strong></p>
+    <pre>### discussion
+* We need to reduce the number of support escalations.</pre>
+    <p><strong>Transcript</strong></p>
+    <pre>[00:12] I’ll pull the top ten escalation examples and circulate them before Friday.
+[00:25] We can use those examples in the next process review.</pre>
+    <p><strong>Expected actions</strong></p>
+    <pre>[
+  {"text":"Pull the top ten escalation examples and circulate them","owner":"speaker","deadline":"before Friday","source":"transcript","confidence":0.99}
+]</pre>
+    <p class="small">The support-escalation goal is not itself a task. The explicit “I’ll pull ... and circulate ...” commitment is.</p>
+  </div>
+
+  <div class="card">
+    <h3>Example 6: No action should be invented</h3>
+    <p><strong>Manual notes</strong></p>
+    <pre>### takeaways
+* Marketing spend decreased by 15%.
+* The product launch is the Q4 priority.
+* The new CTO starts Monday.</pre>
+    <p><strong>Transcript</strong></p>
+    <pre>[00:08] We reviewed the marketing budget.
+[00:21] The Q4 product launch remains the main priority.
+[00:35] The new CTO starts Monday.</pre>
+    <p><strong>Expected actions</strong></p>
+    <pre>[]</pre>
+    <p class="small">Do not invent “prepare a launch plan”, “send the budget”, “welcome the CTO”, or “schedule a kickoff”. Those may sound reasonable, but no source explicitly says to do them.</p>
+  </div>
+
+  <h3>Few-shot rules to encode in the prompt</h3>
+  <ul>
+    <li>Manual notes and transcript are equally important source material, but their language differs: imperative bullets are strong evidence in notes, while explicit commitments and assignments are strong evidence in speech.</li>
+    <li>Extract an action only when the source explicitly states a task, commitment, assignment, follow-up, or deadline.</li>
+    <li>Use surrounding context to resolve references such as “send it”, but do not add details that are not present.</li>
+    <li>Merge duplicate actions across notes and transcript rather than creating duplicate rows.</li>
+    <li>Facts, metrics, announcements, goals, priorities, opinions, and discussion topics are not actions by themselves.</li>
+    <li>When evidence is ambiguous, omit the item. A missed low-confidence implication is preferable to a fabricated task.</li>
+  </ul>
+
+  <h2>User-Only Action Capture</h2>
+  <div class="callout danger"><strong>New requirement:</strong> an action should be saved only when it is relevant to the Adamant user. A transcript may contain many valid tasks assigned to other attendees, but those tasks must not clutter the user's personal Actions list. This requires speaker attribution and action ownership to be modeled separately from ordinary text extraction.</div>
+  <div class="callout"><strong>V1 product decision:</strong> use the audio capture path as the speaker distinction. Treat speech from the Adamant user's microphone as <code>adamant_user</code> and speech from system audio as <code>other_participant</code>. This is intentionally a practical convention for the normal remote-meeting setup, not biometric-grade speaker identification. Room recordings with multiple people on one microphone are an accepted v1 limitation.</div>
+  <div class="callout"><strong>Transcript display decision:</strong> every transcript segment attributed to the Adamant user must include <code>[you]</code> immediately after its timestamp. Example: <code>[00:42] [you] I will send the revised proposal to Maya.</code> Other-participant segments may retain the existing timestamp-only format, or use an internal non-displayed role label for extraction. The visible marker is specifically intended to make the user's own speech obvious when reviewing a recording transcript.</div>
+
+  <h3>What the current system can and cannot know</h3>
+  <table>
+    <thead><tr><th>Question</th><th>Current answer</th><th>Consequence</th></tr></thead>
+    <tbody>
+      <tr><td>Was this audio captured from the microphone or system audio?</td><td>The audio pipeline knows this internally before mixing, but the label is discarded before transcription. Transcription receives mixed audio.</td><td>There is no reliable per-transcript source label today.</td></tr>
+      <tr><td>Which words were spoken by which voice?</td><td>Active Whisper output has no speaker ID or diarization field. An old migration adds <code>transcripts.speaker</code>, but active models and inserts do not use it.</td><td>The LLM receives an unattributed transcript and cannot reliably identify “I” versus another participant.</td></tr>
+      <tr><td>Which speaker is the Adamant user?</td><td>There is no current voice profile or link between the user's account/profile and a spoken voice.</td><td>Speaker diarization alone is insufficient. It can say “Speaker 1” and “Speaker 2”, not “this is the owner of the Actions list”.</td></tr>
+      <tr><td>Can manual notes identify user-owned actions?</td><td>Usually, but not always. Imperative bullets without an owner are likely the note-taker's tasks; explicit names such as “Jane: send...” belong to Jane.</td><td>Notes need ownership rules and conservative handling of ambiguous assignments.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Why microphone versus system audio is useful, but not enough</h3>
+  <p>In a typical remote meeting, the microphone is the Adamant user's voice and system audio contains the other participants. That makes separate audio paths the most practical first signal. However, it is not an identity guarantee:</p>
+  <ul>
+    <li>A second person in the room can speak into the user's microphone.</li>
+    <li>Echo, monitoring, or a meeting application can send the user's voice back through system audio.</li>
+    <li>Some setups capture all meeting audio through one input device, so every participant appears as microphone audio.</li>
+    <li>Screen-captured or browser audio can contain media, announcements, or unrelated speech.</li>
+    <li>A user may join from a phone or another device, making the expected channel assignment different.</li>
+  </ul>
+  <p>For v1, the architecture should use the audio source directly: microphone speech is user speech and system-audio speech is other-participant speech. More advanced diarization or voice matching can remain future hardening, rather than blocking the first implementation.</p>
+
+  <h3>Recommended attribution model</h3>
+  <p>Each transcript segment should carry attribution metadata before it reaches the action extractor:</p>
+  <pre>{
+  "text": "I will send the revised proposal to Maya by Friday.",
+  "audio_start_time": 42.1,
+  "audio_end_time": 47.8,
+  "audio_source": "microphone",
+  "speaker_id": "speaker_0",
+  "speaker_role": "adamant_user",
+  "speaker_confidence": 0.96,
+  "attribution_method": "channel_prior",
+  "display_prefix": "[you]"
+}</pre>
+  <p>The formatted transcript sent to the action extractor and shown in the transcript view should preserve the marker:</p>
+  <pre>[00:18] [other] We reviewed the customer pipeline.
+[00:42] [you] I will send the revised proposal to Maya by Friday.
+[00:51] [other] That sounds good.</pre>
+  <p><code>[you]</code> is the required user-facing marker. An <code>[other]</code> marker may be used internally or displayed if the product later wants symmetrical speaker labeling, but it is not required for this request.</p>
+  <p>Recommended values:</p>
+  <ul>
+    <li><code>audio_source</code>: <code>microphone</code>, <code>system</code>, or <code>mixed/unknown</code>.</li>
+    <li><code>speaker_id</code>: a meeting-local anonymous label such as <code>speaker_0</code>; do not store raw voice embeddings in the transcript or send them to an LLM.</li>
+    <li><code>speaker_role</code>: <code>adamant_user</code>, <code>other_participant</code>, <code>unknown</code>, or <code>overlap</code>.</li>
+    <li><code>speaker_confidence</code>: a bounded confidence score from the attribution layer, not the language model.</li>
+    <li><code>attribution_method</code>: <code>channel_prior</code>, <code>diarization</code>, <code>enrolled_voice_profile</code>, <code>manual_correction</code>, or <code>unknown</code>.</li>
+  </ul>
+
+  <h3>How v1 identifies the Adamant user</h3>
+  <ol>
+    <li><strong>Preserve channel provenance.</strong> Keep microphone and system audio separate through VAD and transcription, rather than mixing them before Whisper.</li>
+    <li><strong>Label microphone segments.</strong> Emit <code>audio_source: microphone</code>, <code>speaker_role: adamant_user</code>, and a display prefix of <code>[you]</code>.</li>
+    <li><strong>Label system segments.</strong> Emit <code>audio_source: system</code> and <code>speaker_role: other_participant</code>. Multiple remote participants can share this role; v1 does not need to distinguish Jane from Ron.</li>
+    <li><strong>Use manual notes as an independent user-owned source.</strong> Treat an unowned imperative in the user's notes as user-owned by default, while excluding note items explicitly assigned to another named person.</li>
+    <li><strong>Keep an explicit limitation.</strong> If multiple people speak into the same microphone, v1 will attribute that speech to the user. This is acceptable for the expected use case and should be documented rather than hidden.</li>
+  </ol>
+
+  <div class="callout"><strong>Scope boundary:</strong> v1 does not require diarization, voice enrollment, or user confirmation. Those are future options if real-world feedback shows that shared-room recordings create enough false user actions to justify the added model, storage, and privacy complexity.</div>
+
+  <h3>User-only extraction policy</h3>
+  <p>The action extractor should receive all source material, but it should be given an explicit ownership policy. It should not simply delete every action spoken by someone other than the user, because manual notes can summarize an action the user agreed to perform without using first-person wording.</p>
+  <pre>Ownership policy:
+1. Include a transcript action when the attributed speaker_role is adamant_user.
+2. Exclude a transcript action when speaker_role is other_participant and the action belongs to that speaker.
+3. Exclude actions assigned explicitly to another named person unless the notes explicitly say the user owns or must coordinate that task.
+4. Treat an imperative bullet in the user's manual notes with no named owner as user-owned.
+5. Treat a named owner in manual notes as authoritative: "Jane: send..." is Jane's action, not the user's.
+6. If speaker attribution or ownership is unknown, omit the action rather than guess.
+7. Never invent a user action merely because a goal, priority, decision, or topic implies that work should happen.</pre>
+
+  <h3>Speaker-aware examples</h3>
+  <div class="card">
+    <p><strong>Manual notes</strong></p>
+    <pre>### actions
+* Send the follow-up email to Jane.
+* Jane will send the contract to legal.</pre>
+    <p><strong>Attributed transcript</strong></p>
+    <pre>[00:12] [speaker=other_participant, role=other] I will send the contract to legal.
+[00:26] [speaker=adamant_user, role=adamant_user] I will send the follow-up email to Jane.</pre>
+    <p><strong>Expected user actions</strong></p>
+    <pre>[
+  {"text":"Send the follow-up email to Jane","owner":"adamant_user","source":"manual_notes_and_transcript","confidence":0.99}
+]</pre>
+    <p class="small">The contract action is valid for the meeting but belongs to another participant, so it is not added to this user's Actions list.</p>
+  </div>
+  <div class="card">
+    <p><strong>Manual notes</strong></p>
+    <pre>### next steps
+* Review the vendor quote.
+* Chris to update the implementation timeline.</pre>
+    <p><strong>Attributed transcript</strong></p>
+    <pre>[00:10] [speaker=adamant_user, role=adamant_user] I need to review the vendor quote tonight.
+[00:22] [speaker=other_participant, role=other] Chris, can you update the implementation timeline?</pre>
+    <p><strong>Expected user actions</strong></p>
+    <pre>[
+  {"text":"Review the vendor quote","owner":"adamant_user","deadline":"tonight","source":"manual_notes_and_transcript","confidence":0.99}
+]</pre>
+    <p class="small">The manual note confirms the user's review task. Chris's assigned timeline task is excluded.</p>
+  </div>
+  <div class="card">
+    <p><strong>Manual notes</strong></p>
+    <pre>### discussion
+* We need to improve onboarding.
+* The customer asked about reporting.</pre>
+    <p><strong>Attributed transcript</strong></p>
+    <pre>[00:14] [speaker=unknown, role=unknown] We should probably prepare a better onboarding guide.
+[00:31] [speaker=other_participant, role=other] I can send more reporting details next week.</pre>
+    <p><strong>Expected user actions</strong></p>
+    <pre>[]</pre>
+    <p class="small">The first statement is an ambiguous suggestion from an unknown speaker. The second belongs to another participant. Neither is a high-confidence user action.</p>
+  </div>
+
+  <h3>Recommended implementation phases</h3>
+  <ol>
+    <li><strong>Phase 1: preserve channel provenance.</strong> Modify the audio pipeline so microphone and system streams are not mixed before separate VAD/transcription branches, or run a parallel source-preserving transcription path. Add source and timestamps to emitted and persisted transcript segments.</li>
+    <li><strong>Phase 2: add v1 attribution fields and display formatting.</strong> Add <code>audio_source</code>, <code>speaker_role</code>, <code>speaker_confidence</code>, <code>attribution_method</code>, and the derived <code>display_prefix</code> to Rust models, API responses, frontend types, exports, and the migration path. The transcript renderer must format user segments as <code>[timestamp] [you] text</code>. The existing <code>speaker</code> column is not enough and currently appears unused. Use <code>channel_prior</code> as the attribution method.</li>
+    <li><strong>Phase 3: make ownership a first-class extraction field.</strong> Return <code>owner_scope</code> as <code>adamant_user</code>, <code>other_participant</code>, or <code>unknown</code>. Persist only <code>adamant_user</code> actions into the personal Actions table by default.</li>
+    <li><strong>Phase 4: apply the full-source action prompt.</strong> Give the LLM the complete manual notes and the complete attributed transcript, including <code>[you]</code> markers. Include microphone/user segments for user-owned action extraction and system/other segments only as context for resolving references. Never let a system-audio action become the user's action merely because it sounds important.</li>
+    <li><strong>Phase 5: validate the expected setup.</strong> Test normal remote meetings, microphone-only speech, system-only speech, mixed source ordering, manual note ownership, and exact visible formatting such as <code>[00:42] [you]</code>. Document shared-room attribution as a known v1 limitation.</li>
+    <li><strong>Future Phase 6: optional diarization and enrollment.</strong> Only if product feedback shows material problems, evaluate the legacy Pyannote-related code, local voice profiles, or user confirmation. These are not prerequisites for the v1 build.</li>
+  </ol>
+
+  <h3>Risks and recommended safeguards</h3>
+  <ul>
+    <li><strong>False user attribution:</strong> v1 uses the documented microphone-as-user channel prior. Do not describe this as biometric identification; diarization or enrollment is future hardening only.</li>
+    <li><strong>Shared-room recordings:</strong> v1 attributes microphone speech to the user by design. Document this limitation and measure real-world impact before adding confirmation or a more complex model.</li>
+    <li><strong>Overlapping speech:</strong> v1 follows the source channel label. If overlap detection is already available, it may lower confidence, but it must not block the v1 implementation.</li>
+    <li><strong>Privacy:</strong> keep voice embeddings local, encrypt them if persisted, provide deletion, and do not include biometric vectors in LLM prompts or analytics.</li>
+    <li><strong>Missing attribution in old meetings:</strong> use the conservative legacy policy and label those actions as inferred from notes, not as speaker-verified.</li>
+    <li><strong>Ownership versus responsibility:</strong> “send the transcript to Ron” may be the user's task even though Ron is named as the recipient. Parse grammatical responsibility, not just named entities.</li>
+  </ul>
+
+  <h3>Tests required for user-only actions</h3>
+  <table>
+    <thead><tr><th>Scenario</th><th>Expected result</th></tr></thead>
+    <tbody>
+      <tr><td>User says “I will send the proposal”; other says “I will update the deck.”</td><td>Save only the proposal action.</td></tr>
+      <tr><td>User-attributed segment starts at 00:42.</td><td>Transcript displays exactly <code>[00:42] [you] ...</code>.</td></tr>
+      <tr><td>Other-participant segment starts at 00:51.</td><td>It must not receive the <code>[you]</code> marker.</td></tr>
+      <tr><td>Manual note says “Send follow-up to Jane”; transcript has no attribution.</td><td>Save it as user-owned manual-note action.</td></tr>
+      <tr><td>Manual note says “Jane: send contract.”</td><td>Exclude it from the user's Actions list.</td></tr>
+      <tr><td>User says “send the transcript to Ron.”</td><td>Save it as the user's action; Ron is the recipient, not the owner.</td></tr>
+      <tr><td>Other participant says “you should send the invoice.”</td><td>Save only if the segment is confidently attributed to the other participant and the utterance is an explicit assignment to the user; otherwise mark unknown or require confirmation.</td></tr>
+      <tr><td>Unknown speaker says “we should prepare a plan.”</td><td>Exclude; it is ambiguous and may be a group suggestion.</td></tr>
+      <tr><td>Microphone contains another person in the room.</td><td>V1 treats the speech as user speech by design; document this limitation and consider diarization only in future hardening.</td></tr>
+      <tr><td>User and another participant speak simultaneously.</td><td>Use the microphone/system channel label in v1; document that shared-microphone overlap may be attributed to the user.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Clear Implementation Steps</h2>
+  <ol>
+    <li>
+      <strong>Step 1: Preserve microphone and system-audio provenance.</strong>
+      <p>Change the audio flow in <code>frontend/src-tauri/src/audio/pipeline.rs</code> so the microphone and system ring-buffer windows remain identifiable when they enter transcription. The current pipeline mixes both windows, runs VAD on the mixed signal, and sends the resulting segment to Whisper as <code>DeviceType::Microphone</code>. The v1 implementation should either run two source-specific VAD/transcription branches or retain source-span metadata while processing a mixed segment. The preferred design is two branches because it avoids pretending a mixed segment has one speaker.</p>
+      <p>Maintain the existing mixed path for the saved recording if necessary; the source-preserving path is specifically for transcript attribution. Preserve recording-relative start/end timestamps so source-specific segments can be merged back into chronological order.</p>
+      <p><strong>Deliverable:</strong> every final transcript segment has an unambiguous <code>audio_source</code> value of <code>microphone</code> or <code>system</code>, plus the same timing fields already used for playback synchronization.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> Adamant currently pours both sides of the conversation into one bucket before writing the transcript. This step keeps two labels on the audio so Adamant knows whether each sentence came from your microphone or from the meeting audio coming back through your computer.</p>
+    </li>
+    <li>
+      <strong>Step 2: Carry attribution through the Rust transcript event.</strong>
+      <p>Extend <code>TranscriptUpdate</code> in <code>frontend/src-tauri/src/audio/transcription/worker.rs</code> with <code>audio_source</code>, <code>speaker_role</code>, <code>speaker_confidence</code>, and <code>attribution_method</code>. For v1, microphone segments receive <code>speaker_role: adamant_user</code>; system segments receive <code>speaker_role: other_participant</code>. Set <code>attribution_method: channel_prior</code>. Do not add diarization or voice embeddings to this first implementation.</p>
+      <p>Keep the generic <code>source: "Audio"</code> field only for compatibility if required, but stop using it for action ownership. The new fields must be present on final events and must not be lost when partial transcript events are replaced by final events.</p>
+      <p><strong>Deliverable:</strong> the emitted event itself tells the frontend which side of the meeting produced the text.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> each line of the live transcript gets a small internal note saying “this came from you” or “this came from the other side of the call.”</p>
+    </li>
+    <li>
+      <strong>Step 3: Persist the attribution metadata.</strong>
+      <p>Update the transcript database migration and active Rust models in <code>frontend/src-tauri/src/database/models.rs</code>, the transcript repository insert path, API response types, frontend <code>Transcript</code> types, recording exports, and any transcript recovery code. The existing <code>20251110000001_add_speaker_field.sql</code> migration is not sufficient because it only adds a legacy <code>speaker</code> column and is not wired into the active model or insert path.</p>
+      <p>Use explicit fields rather than overloading one string:</p>
+      <pre>audio_source       TEXT NOT NULL       -- microphone | system | unknown
+speaker_role       TEXT NOT NULL       -- adamant_user | other_participant | unknown
+speaker_confidence REAL NOT NULL       -- 0.0 to 1.0
+attribution_method TEXT NOT NULL       -- channel_prior for v1</pre>
+      <p>For old meetings that have no metadata, use <code>unknown</code> rather than guessing after the fact. Preserve backward compatibility when reading old rows.</p>
+      <p><strong>Deliverable:</strong> closing and reopening a meeting does not remove the source label, and exported transcripts contain the same attribution information.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> the “you” label must not disappear when you leave the meeting page. Adamant needs to save it alongside each transcript line so it can use it later for cleanup and action extraction.</p>
+    </li>
+    <li>
+      <strong>Step 4: Render the visible <code>[you]</code> marker.</strong>
+      <p>Update the transcript formatting path used by the meeting transcript view and by cleanup input. A user-attributed line must render as <code>[timestamp] [you] text</code>, for example <code>[00:42] [you] I will send the proposal by Friday.</code>. Do not add <code>[you]</code> based on text such as “I”; derive it only from the persisted <code>speaker_role</code>.</p>
+      <p>Use one shared formatter so the live transcript, reopened transcript, exported transcript, and LLM input do not disagree. System-audio lines may remain timestamp-only in the visible UI, but the internal extraction representation must retain <code>speaker_role: other_participant</code>.</p>
+      <p><strong>Deliverable:</strong> user speech is visually obvious in the recording transcript, and the same marker appears in the attributed transcript supplied to the action extractor.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> when you review the transcript, your own words will visibly look like <code>[00:42] [you] ...</code>, so you can immediately tell which parts Adamant considers your speech.</p>
+    </li>
+    <li>
+      <strong>Step 5: Build one complete action-extraction input.</strong>
+      <p>In <code>useSummaryGeneration.ts</code> and <code>todo_extractor.rs</code>, pass one structured extraction input containing the full manual-note Markdown and the full chronologically ordered transcript with attribution markers. Do not extract actions from the polished AI summary because <code>processor.rs</code> intentionally forbids an Action Items section and because a summary may omit operational details.</p>
+      <p>The input should make source boundaries explicit:</p>
+      <pre>=== MANUAL NOTES ===
+...complete user notes...
+=== END MANUAL NOTES ===
+
+=== ATTRIBUTED TRANSCRIPT ===
+[00:18] [other] We reviewed the customer pipeline.
+[00:42] [you] I will send the proposal to Maya by Friday.
+=== END ATTRIBUTED TRANSCRIPT ===</pre>
+      <p><strong>Deliverable:</strong> the model can see everything the human secretary would see, while also knowing which transcript lines came from the user.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> give the AI the entire notebook and the entire conversation, not just the cleaned-up summary, and clearly highlight your own spoken lines.</p>
+    </li>
+    <li>
+      <strong>Step 6: Define and enforce user ownership rules.</strong>
+      <p>Change the extraction contract so each candidate has an <code>owner_scope</code>: <code>adamant_user</code>, <code>other_participant</code>, or <code>unknown</code>. Save only <code>adamant_user</code> candidates to the personal Actions table. A microphone line is user-owned by v1 policy. A system-audio line is not user-owned by default, even if it contains a very clear task.</p>
+      <p>Apply the manual-note rule separately: an unowned imperative in the user's notes, such as “send follow-up email to Jane,” is user-owned by default. A named assignment such as “Jane: send the contract” is other-owned. The parser must distinguish a recipient from an owner: “send the transcript to Ron” belongs to the user; “Ron: send the transcript” belongs to Ron.</p>
+      <p>When ownership is unknown, omit the action from the personal list. Do not turn group language such as “we should prepare a plan” into a user action.</p>
+      <p><strong>Deliverable:</strong> the Actions page contains the user's concrete work, not every task mentioned in the meeting.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> Adamant should ask “is this something you need to do?” before adding it. A task for Jane, Ron, or the group should not become your personal to-do just because it was discussed.</p>
+    </li>
+    <li>
+      <strong>Step 7: Remove the note-parser gate and combine evidence.</strong>
+      <p>In <code>TodoExtractor::extract_todos_from_sources</code>, never use <code>note_items.is_empty()</code> to decide whether transcript extraction runs. Run the unified LLM pass whenever either source has content. Keep deterministic note parsing as a high-confidence candidate source, then merge it with transcript candidates and apply ownership filtering and deduplication.</p>
+      <p>This directly fixes the committed bug where one accepted note item prevents the transcript from being examined. It also ensures a meeting with actions in both sources produces the union of those actions rather than whichever source happened to be checked first.</p>
+      <p><strong>Deliverable:</strong> notes-only, transcript-only, and mixed-source meetings all follow the same complete extraction path.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> finding one task in your notes must not make Adamant stop reading the conversation. It should read both, then combine the useful information.</p>
+    </li>
+    <li>
+      <strong>Step 8: Make manual-note recognition tolerant and safe.</strong>
+      <p>Expand heading recognition beyond exact equality so <code>next steps and actions</code>, <code>important takeaways</code>, <code>decisions / follow-ups</code>, and punctuation variants are handled. Normalize case, punctuation, repeated whitespace, and apostrophe variants before classification.</p>
+      <p>Do not treat every bullet under every heading as a task. Keep the action check that rejects facts and takeaways, but allow natural imperative and assignment forms. Add exact tests for the reported notes, including the curly apostrophe in “next’s week” and the combined heading.</p>
+      <p><strong>Deliverable:</strong> the three actions in the Weekly Team Meeting example are extracted even though the heading is written as <code>next steps and actions</code>.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> Adamant should understand common ways people label an action section instead of requiring one exact phrase.</p>
+    </li>
+    <li>
+      <strong>Step 9: Make the LLM output structured, conservative, and recoverable.</strong>
+      <p>Use a response schema with <code>text</code>, <code>owner_scope</code>, <code>owner</code>, <code>deadline</code>, <code>source</code>, and <code>confidence</code>. Require valid JSON, but make the parser resilient to common provider behavior such as Markdown fences or a short preamble. Validate types, reject empty or excessively long text, clamp confidence to a valid range, and reject unknown ownership values.</p>
+      <p>Keep safety filters for questions, completed activities, corporate strategy, and obvious personal chores, but remove the requirement that every valid action begin with a fixed verb list. Attribution and explicit source evidence are stronger signals than a growing verb allowlist.</p>
+      <p><strong>Deliverable:</strong> a model formatting mistake does not silently erase good actions, and a legitimate sentence such as “I will send...” is not rejected merely because it does not begin with an imperative verb.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> ask the AI to return a predictable checklist, tolerate harmless formatting mistakes, and avoid throwing away a real task because it was phrased naturally.</p>
+    </li>
+    <li>
+      <strong>Step 10: Merge duplicates without losing ownership detail.</strong>
+      <p>Normalize candidate text for comparison by removing superficial punctuation differences, normalizing whitespace, and handling curly versus straight apostrophes. When manual notes and transcript describe the same action, keep one row. Prefer the manual-note wording when it is clearer, and enrich it with an explicitly supported owner or deadline from the transcript.</p>
+      <p>Never merge two different actions merely because they share a verb. “Send the proposal to Maya” and “Send the transcript to Ron” must remain separate. Deduplication must happen after ownership classification so an other-participant task cannot overwrite a user-owned task.</p>
+      <p><strong>Deliverable:</strong> the Actions page has one accurate row per user action, with no duplicate note/transcript copies.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> if you wrote a task down and also said it aloud, show it once, with the clearest wording and any confirmed due date.</p>
+    </li>
+    <li>
+      <strong>Step 11: Make extraction status and UI refresh reliable.</strong>
+      <p>The current summary task saves the polished summary and then starts todo extraction asynchronously. Change the lifecycle so the UI knows the difference between “summary finished” and “actions finished.” Either await extraction before the final completed event or emit a dedicated <code>todos-updated</code> event after database insertion.</p>
+      <p>Update <code>SidebarProvider</code> to refresh counts from that event and update an already mounted <code>TodosPage</code> without requiring navigation. Display a non-blocking status such as “3 actions captured” or “AI Cleanup finished, but action capture was unavailable.” Do not make the summary fail merely because the optional action pass failed, but do not hide the failure from the user.</p>
+      <p><strong>Deliverable:</strong> after clicking Generate AI Cleanup, the user can see when actions were actually saved and does not need to reload the homepage.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> do not announce that everything is finished while Adamant is still quietly working on the Actions list. Tell the user when the actions are ready and refresh the list automatically.</p>
+    </li>
+    <li>
+      <strong>Step 12: Preserve manual actions and regeneration behavior.</strong>
+      <p>Keep extracted rows distinguishable from manually created Actions-page rows. Extracted rows should retain <code>meeting_id</code> and non-null <code>source_text</code>. Standalone manual rows should retain <code>meeting_id = null</code> and <code>source_text = null</code>. Regeneration may delete and recreate extracted rows for the same meeting, but it must never delete standalone manual rows.</p>
+      <p>When ownership filtering produces zero actions, clear only the prior extracted rows for that meeting if the extraction completed successfully. If the LLM call or parser fails, preserve the previous extracted rows and report the failure so a transient outage does not erase useful data.</p>
+      <p><strong>Deliverable:</strong> regeneration updates AI-derived actions without destroying user-entered actions or losing the previous list on a temporary model error.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> Adamant can replace its own guesses when you regenerate, but it must never delete a task you personally typed. If the AI has a temporary problem, keep the old list rather than wiping it out.</p>
+    </li>
+    <li>
+      <strong>Step 13: Test the complete path before release.</strong>
+      <p>Add Rust unit tests for source labels, note heading recognition, ownership rules, JSON parsing, merge/deduplication, and preservation of manual rows. Add integration tests that create transcript segments from both sources, run extraction, and assert the exact saved rows. Add frontend tests for the visible <code>[you]</code> marker, partial-to-final transcript replacement, the <code>todos-updated</code> refresh event, and the completed/error status copy.</p>
+      <p>Manually test a normal remote call, a notes-only meeting, a transcript-only meeting, a meeting with both sources, an other-participant task, a user task sent to another person, a regenerated meeting, and a temporary model failure.</p>
+      <p><strong>Release gate:</strong> the supplied Weekly Team Meeting example must save exactly three user actions: send the follow-up email to Jane, send the transcript to Ron, and schedule next week's call. It must not save the transcript's unrelated mathematical discussion as an action.</p>
+      <p class="callout"><strong>Layman’s translation:</strong> test the whole experience, not just the AI prompt. Confirm that the right words are marked as yours, the right tasks appear, other people's tasks stay out, and nothing disappears after regeneration.</p>
+    </li>
+  </ol>
+
+  <h2>Verification Plan</h2>
+  <table>
+    <thead><tr><th>Test</th><th>Expected result</th></tr></thead>
+    <tbody>
+      <tr><td>Exact supplied notes, unrelated transcript</td><td>Three saved actions; all unchecked; linked to Weekly Team Meeting.</td></tr>
+      <tr><td>Notes with “next steps and actions” heading</td><td>Heading is recognized even when combined with other section words.</td></tr>
+      <tr><td>Transcript-only commitments</td><td>Transcript actions are captured when notes are empty.</td></tr>
+      <tr><td>Notes actions plus transcript actions</td><td>Both sets are present; duplicates collapse to one row.</td></tr>
+      <tr><td>Facts and takeaways only</td><td>No false action rows.</td></tr>
+      <tr><td>Malformed or fenced model response</td><td>Parser either recovers safely or reports extraction failure without deleting existing actions.</td></tr>
+      <tr><td>Regeneration</td><td>Old extracted rows for that meeting are replaced; standalone manual rows remain.</td></tr>
+      <tr><td>UI timing</td><td>After cleanup finishes, sidebar count and an already-open Actions page update without navigation or reload.</td></tr>
+    </tbody>
+  </table>
+  <p>The current Rust extractor tests pass, but they do not include the exact “next steps and actions” example, an end-to-end database assertion, a model parse failure, or the UI refresh race. Those are the highest-value missing tests.</p>
+
+  <h2>Conclusion</h2>
+  <div class="card">
+    <p>This is not primarily an LLM intelligence problem. The supplied actions are clear enough that a human or a simple parser should capture them. The main failure is upstream: the current pipeline can discard the notes before the model sees them, and its exact heading matcher does discard this specific note section. The older shipped branch additionally suppresses transcript extraction under the wrong condition.</p>
+    <p>Implementing the unified full-source extractor, broadening note-section handling, removing the skip gate, making parsing tolerant but validated, and synchronizing the UI with actual todo persistence will produce the intended result: AI Cleanup behaves like a secretary who reads all meeting material and reports the concrete next steps, while avoiding facts and generic takeaways.</p>
+  </div>
+  <p class="small">Key files reviewed: <code>frontend/src/hooks/meeting-details/useSummaryGeneration.ts</code>, <code>frontend/src-tauri/src/summary/commands.rs</code>, <code>frontend/src-tauri/src/summary/service.rs</code>, <code>frontend/src-tauri/src/summary/processor.rs</code>, <code>frontend/src-tauri/src/summary/todo_extractor.rs</code>, <code>frontend/src-tauri/src/database/repositories/todos.rs</code>, <code>frontend/src/components/Todos/TodosPage.tsx</code>, and <code>frontend/src/components/Sidebar/SidebarProvider.tsx</code>.</p>
+</main>
+</body>
+</html>

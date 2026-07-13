@@ -4,6 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { usePathname, useRouter } from 'next/navigation';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { toast } from 'sonner';
 import type { TodoDateSummary } from '@/types';
 
 
@@ -155,30 +157,60 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   // Extract fetchMeetings as a reusable function.
   // Preserves folder_id so meetings can be grouped under their folder.
   const fetchMeetings = React.useCallback(async () => {
-    if (serverAddress) {
-      try {
-        const data = await invoke('api_get_meetings') as Array<{ id: string; title: string; created_at?: string; folder_id?: string | null }>;
-        const transformed: CurrentMeeting[] = data.map((m) => ({
-          id: m.id,
-          title: m.title,
-          created_at: m.created_at,
-          folder_id: m.folder_id ?? null,
-        }));
-        setMeetings(transformed);
-        Analytics.trackBackendConnection(true);
-      } catch (error) {
-        console.error('Error fetching meetings:', error);
-        setMeetings([]);
-        Analytics.trackBackendConnection(false, error instanceof Error ? error.message : 'Unknown error');
-      }
+    try {
+      const data = await invoke('api_get_meetings') as Array<{ id: string; title: string; created_at?: string; folder_id?: string | null }>;
+      const transformed: CurrentMeeting[] = data.map((m) => ({
+        id: m.id,
+        title: m.title,
+        created_at: m.created_at,
+        folder_id: m.folder_id ?? null,
+      }));
+      setMeetings(transformed);
+      Analytics.trackBackendConnection(true);
+    } catch (error) {
+      console.error('Error fetching meetings:', error);
+      setMeetings([]);
+      Analytics.trackBackendConnection(false, error instanceof Error ? error.message : 'Unknown error');
     }
-  }, [serverAddress]);
+  }, []);
 
   useEffect(() => {
     fetchMeetings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     fetchFolders();
     fetchTodoDates();
-  }, [serverAddress, fetchMeetings, fetchFolders, fetchTodoDates]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Todo rows are committed asynchronously after AI Cleanup. Refresh only when
+  // the backend confirms that extraction has reached a terminal database state.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    void listen<{ status: string; count: number; error?: string }>('todos-updated', (event) => {
+      void fetchTodoDates();
+      if (event.payload.status === 'completed') {
+        if (event.payload.count === 0) {
+          toast.info('No personal actions found');
+        } else {
+          toast.success(
+            event.payload.count === 1 ? '1 action captured' : `${event.payload.count} actions captured`,
+          );
+        }
+      } else if (event.payload.status === 'failed') {
+        toast.warning(event.payload.error || 'AI Cleanup finished, but action capture was unavailable');
+      }
+    }).then((cleanup) => {
+      unlisten = cleanup;
+    }).catch((error) => {
+      console.error('Failed to listen for todo updates:', error);
+    });
+
+    return () => unlisten?.();
+  }, [fetchTodoDates]);
 
   // Folder CRUD helpers — each refreshes both meetings and folders after mutation.
 

@@ -9,7 +9,7 @@ use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
@@ -75,7 +75,7 @@ impl SummaryService {
     /// * `custom_prompt` - Optional user-provided context
     /// * `template_id` - Template identifier (e.g., "daily_standup", "standard_meeting")
     pub async fn process_transcript_background<R: tauri::Runtime>(
-        _app: AppHandle<R>,
+        app: AppHandle<R>,
         pool: SqlitePool,
         meeting_id: String,
         text: String,
@@ -232,7 +232,7 @@ impl SummaryService {
         };
 
         // Get app data directory for BuiltInAI provider
-        let app_data_dir = _app.path().app_data_dir().ok();
+        let app_data_dir = app.path().app_data_dir().ok();
 
         // Fetch meeting metadata for the prompt header
         let meeting_model = MeetingsRepository::get_meeting_metadata(&pool, &meeting_id)
@@ -358,7 +358,32 @@ impl SummaryService {
                         );
                     }
 
-                    // --- Best-effort todo extraction ---
+                    // Action extraction has its own lifecycle. The summary remains
+                    // successful if this optional pass fails, but the UI is notified.
+                    let todo_run_id = uuid::Uuid::new_v4().to_string();
+                    let todo_started = match SummaryProcessesRepository::start_todo_extraction(
+                        &pool,
+                        &meeting_id,
+                        &todo_run_id,
+                    )
+                    .await {
+                        Ok(started) => started,
+                        Err(e) => {
+                            warn!("Unable to start todo extraction status for {}: {}", meeting_id, e);
+                            let _ = app.emit("todos-updated", serde_json::json!({
+                                "meetingId": meeting_id,
+                                "status": "failed",
+                                "count": 0,
+                                "error": "Action extraction was unavailable",
+                            }));
+                            return;
+                        }
+                    };
+                    if !todo_started {
+                        warn!("Todo extraction status was superseded for meeting {}", meeting_id);
+                        return;
+                    }
+
                     let pool_todo = pool.clone();
                     let meeting_id_todo = meeting_id.clone();
                     let title_todo = meeting_title.unwrap_or("Untitled").to_string();
@@ -373,6 +398,7 @@ impl SummaryService {
                     let ollama_ep_todo = ollama_endpoint.clone();
                     let custom_ep_todo = custom_openai_endpoint.clone();
                     let app_dir_todo = app_data_dir.clone();
+                    let app_todo = app.clone();
 
                     tokio::spawn(async move {
                         match crate::summary::todo_extractor::TodoExtractor::extract_todos_from_sources(
@@ -389,11 +415,57 @@ impl SummaryService {
                             custom_ep_todo.as_deref(),
                             app_dir_todo.as_ref(),
                             None,
+                            &todo_run_id,
                         )
                         .await
                         {
-                            Ok(count) => info!("Extracted {} todos for meeting {}", count, meeting_id_todo),
-                            Err(e) => warn!("Todo extraction skipped for {} (non-fatal): {}", meeting_id_todo, e),
+                            Ok(count) => {
+                                let finished = SummaryProcessesRepository::finish_todo_extraction(
+                                    &pool_todo,
+                                    &meeting_id_todo,
+                                    &todo_run_id,
+                                    "completed",
+                                    count as i64,
+                                    None,
+                                )
+                                .await;
+                                match finished {
+                                    Ok(true) => {
+                                        info!("Extracted {} user-owned todos for meeting {}", count, meeting_id_todo);
+                                        let _ = app_todo.emit("todos-updated", serde_json::json!({
+                                            "meetingId": meeting_id_todo,
+                                            "status": "completed",
+                                            "count": count,
+                                        }));
+                                    }
+                                    Ok(false) => info!("Discarded stale todo extraction for meeting {}", meeting_id_todo),
+                                    Err(e) => warn!("Failed to finalize todo extraction for {}: {}", meeting_id_todo, e),
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Todo extraction failed for {} (non-fatal): {}", meeting_id_todo, e);
+                                match SummaryProcessesRepository::finish_todo_extraction(
+                                    &pool_todo,
+                                    &meeting_id_todo,
+                                    &todo_run_id,
+                                    "failed",
+                                    0,
+                                    Some("Action extraction was unavailable"),
+                                )
+                                .await
+                                {
+                                    Ok(true) => {
+                                        let _ = app_todo.emit("todos-updated", serde_json::json!({
+                                            "meetingId": meeting_id_todo,
+                                            "status": "failed",
+                                            "count": 0,
+                                            "error": "Action extraction was unavailable",
+                                        }));
+                                    }
+                                    Ok(false) => info!("Discarded stale failed todo extraction for meeting {}", meeting_id_todo),
+                                    Err(db_error) => warn!("Failed to record todo extraction error for {}: {}", meeting_id_todo, db_error),
+                                }
+                            }
                         }
                     });
                 }
