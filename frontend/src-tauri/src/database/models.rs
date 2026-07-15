@@ -54,6 +54,17 @@ pub struct TodoWithMeeting {
     pub updated_at: DateTimeUtc,
 }
 
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct WikiMetadata {
+    pub meeting_id: String,
+    pub compiled_at: String,
+    pub is_stale: bool,
+    pub token_count: Option<i64>,
+    pub model: Option<String>,
+    pub version: i64,
+    pub error: Option<String>,
+}
+
 /// Summary of todos grouped by date for sidebar display
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct TodoDateSummary {

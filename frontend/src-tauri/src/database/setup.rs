@@ -3,6 +3,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use super::manager::DatabaseManager;
 use super::repositories::setting::SettingsRepository;
+use crate::chat::compilation_scheduler::CompilationScheduler;
 use crate::state::AppState;
 
 /// Initialize database on app startup
@@ -50,7 +51,10 @@ pub async fn initialize_database_on_startup(app: &AppHandle) -> Result<(), Strin
             .map_err(|e| format!("Failed to seed default model config: {}", e))?;
         }
 
-        app.manage(AppState { db_manager });
+        app.manage(AppState {
+            db_manager,
+            wiki_scheduler: CompilationScheduler::new(),
+        });
         info!("Database initialized successfully");
     }
 

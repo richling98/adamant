@@ -5,3 +5,4 @@ pub mod summary;
 pub mod todos;
 pub mod transcript;
 pub mod transcript_chunk;
+pub mod wiki;

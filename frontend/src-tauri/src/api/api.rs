@@ -1173,7 +1173,7 @@ pub async fn api_save_meeting_title<R: Runtime>(
 
 #[tauri::command]
 pub async fn api_save_transcript<R: Runtime>(
-    _app: AppHandle<R>,
+    app: AppHandle<R>,
     state: tauri::State<'_, AppState>,
     meeting_title: String,
     transcripts: Vec<serde_json::Value>,
@@ -1245,6 +1245,15 @@ pub async fn api_save_transcript<R: Runtime>(
             // the transcript save.
             if let Err(e) = crate::search::fts::refresh_meeting_fts(pool, &meeting_id).await {
                 log_warn!("FTS refresh failed for meeting {} (search may be stale): {}", meeting_id, e);
+            }
+
+            // Schedule wiki compilation (debounced 5s, non-blocking).
+            if let Ok(app_data_dir) = app.path().app_data_dir() {
+                state.wiki_scheduler.schedule(
+                    pool.clone(),
+                    app_data_dir,
+                    meeting_id.clone(),
+                ).await;
             }
 
             Ok(serde_json::json!({
@@ -2000,7 +2009,7 @@ pub async fn api_move_meeting_to_folder<R: Runtime>(
 /// Saves or updates a note for a meeting
 #[tauri::command]
 pub async fn api_save_note<R: Runtime>(
-    _app: AppHandle<R>,
+    app: AppHandle<R>,
     state: tauri::State<'_, AppState>,
     meeting_id: String,
     content_json: String,
@@ -2068,6 +2077,15 @@ pub async fn api_save_note<R: Runtime>(
         log_warn!("FTS refresh failed after note save for meeting {}: {}", meeting_id, e);
     }
 
+    // Schedule wiki compilation (debounced 5s, non-blocking).
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        state.wiki_scheduler.schedule(
+            pool.clone(),
+            app_data_dir,
+            meeting_id.clone(),
+        ).await;
+    }
+
     Ok(serde_json::json!({
         "version": 1,
         "updated_at": now.to_rfc3339(),
@@ -2096,7 +2114,6 @@ pub async fn api_chat_with_meetings<R: Runtime>(
 ) -> Result<String, String> {
     log_info!("api_chat_with_meetings called: message_len={}", message.len());
 
-    // Resolve the app data directory (needed for BuiltInAI provider)
     let app_data_dir = app.path().app_data_dir().ok();
 
     crate::chat::handler::chat_with_meetings(
@@ -2105,6 +2122,170 @@ pub async fn api_chat_with_meetings<R: Runtime>(
         &message,
         &history,
         date_range_days,
+        &app,
     )
     .await
+}
+
+/// v2 chat endpoint with structured citations (ADA-8 second brain).
+///
+/// Returns a `ChatResponse { answer, cited_meeting_ids }` instead of a plain
+/// string. The answer may include a SOURCES line parsed into cited_meeting_ids.
+/// Uses wiki articles for context when available, falling back to raw transcripts.
+#[tauri::command]
+pub async fn api_chat_with_meetings_v2<R: Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    message: String,
+    history: Vec<crate::chat::handler::ChatMessage>,
+    date_range_days: Option<i64>,
+) -> Result<crate::chat::handler::ChatResponse, String> {
+    log_info!("api_chat_with_meetings_v2 called: message_len={}", message.len());
+
+    let app_data_dir = app.path().app_data_dir().ok();
+
+    crate::chat::handler::chat_with_meetings_v2(
+        &state,
+        app_data_dir,
+        &message,
+        &history,
+        date_range_days,
+        &app,
+    )
+    .await
+}
+
+// ===== WIKI COMPILATION COMMANDS =====
+
+/// Re-compile a single meeting into a wiki article.
+#[tauri::command]
+pub async fn api_recompile_wiki<R: Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+) -> Result<String, String> {
+    log_info!("api_recompile_wiki called: meeting_id={}", meeting_id);
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+
+    crate::chat::wiki_compiler::compile_meeting(
+        state.db_manager.pool(),
+        &app_data_dir,
+        &meeting_id,
+    )
+    .await
+}
+
+/// Re-compile all stale wiki articles and any meetings not yet compiled.
+/// Returns a summary of what was done.
+#[tauri::command]
+pub async fn api_recompile_wiki_all<R: Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    log_info!("api_recompile_wiki_all called");
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+
+    let pool = state.db_manager.pool();
+
+    // Collect meeting IDs to compile: stale entries + uncached meetings
+    use crate::database::repositories::wiki::WikiMetadataRepository;
+
+    let stale_meta = WikiMetadataRepository::get_stale(pool)
+        .await
+        .map_err(|e| format!("Failed to fetch stale wiki metadata: {e}"))?;
+
+    let uncached_ids = WikiMetadataRepository::get_uncached_meeting_ids(pool)
+        .await
+        .map_err(|e| format!("Failed to fetch uncached meeting ids: {e}"))?;
+
+    if stale_meta.is_empty() && uncached_ids.is_empty() {
+        return Ok("All wiki articles are up to date.".to_string());
+    }
+
+    let mut succeeded = 0usize;
+    let mut failed = 0usize;
+
+    for meta in &stale_meta {
+        match crate::chat::wiki_compiler::compile_meeting(pool, &app_data_dir, &meta.meeting_id).await {
+            Ok(_) => succeeded += 1,
+            Err(e) => {
+                log_warn!("Re-compile failed for {}: {}", meta.meeting_id, e);
+                failed += 1;
+            }
+        }
+    }
+
+    for id in &uncached_ids {
+        match crate::chat::wiki_compiler::compile_meeting(pool, &app_data_dir, id).await {
+            Ok(_) => succeeded += 1,
+            Err(e) => {
+                log_warn!("Compile failed for {}: {}", id, e);
+                failed += 1;
+            }
+        }
+    }
+
+    Ok(format!("Compiled {succeeded} articles. {failed} failed."))
+}
+
+/// Get wiki compilation status (count of ready, stale, and total articles).
+#[derive(Serialize)]
+pub struct WikiStatus {
+    pub ready: i64,
+    pub stale: i64,
+    pub total: i64,
+}
+
+#[tauri::command]
+pub async fn api_get_wiki_status(
+    state: tauri::State<'_, AppState>,
+) -> Result<WikiStatus, String> {
+    let pool = state.db_manager.pool();
+    let all = crate::database::repositories::wiki::WikiMetadataRepository::get_all(pool)
+        .await
+        .map_err(|e| format!("Failed to get wiki status: {e}"))?;
+
+    let total_meetings = crate::database::repositories::meeting::MeetingsRepository::count_all_meetings(pool)
+        .await
+        .map_err(|e| format!("Failed to count meetings: {e}"))?;
+
+    let stale = all.iter().filter(|m| m.is_stale).count() as i64;
+    let ready = all.iter().filter(|m| !m.is_stale && m.error.is_none()).count() as i64;
+
+    Ok(WikiStatus { ready, stale, total: total_meetings })
+}
+
+/// Schedule a wiki compilation for a meeting (debounced).
+/// This is the trigger point that frontend callers (or internal code) use to
+/// enqueue a meeting for compilation after save/transcribe events.
+#[tauri::command]
+pub async fn api_schedule_wiki_compilation<R: Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+) -> Result<(), String> {
+    log_info!("api_schedule_wiki_compilation called: meeting_id={}", meeting_id);
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+
+    let pool = state.db_manager.pool().clone();
+
+    // Fire and forget — the scheduler handles the debounce and cancellation.
+    state
+        .wiki_scheduler
+        .schedule(pool, app_data_dir, meeting_id)
+        .await;
+
+    Ok(())
 }

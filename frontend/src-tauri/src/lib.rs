@@ -769,6 +769,15 @@ pub fn run() {
             api::todos_api::api_delete_todo,
             // Chat with meetings command (ADA-8)
             api::api_chat_with_meetings,
+            api::api_chat_with_meetings_v2,
+            // Wiki compilation commands (ADA-8 second brain)
+            api::api_recompile_wiki,
+            api::api_recompile_wiki_all,
+            api::api_get_wiki_status,
+            api::api_schedule_wiki_compilation,
+            // Wiki folder commands
+            chat::wiki_fs::get_wiki_directory,
+            chat::wiki_fs::open_wiki_folder,
             // Summary commands
             summary::api_process_transcript,
             summary::api_get_summary,

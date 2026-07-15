@@ -313,15 +313,17 @@ pub async fn builtin_ai_get_available_summary_model<R: Runtime>(
     // Get all available models
     let all_models = manager.list_models().await;
 
-    // Find first available summary model
+    // Find first available summary model (higher priority = preferred)
     let available = all_models
         .iter()
         .filter(|m| matches!(m.status, crate::summary::summary_engine::model_manager::ModelStatus::Available))
         .max_by_key(|m| {
             match m.name.as_str() {
-                "gemma3:4b" => 2,
-                "gemma3:1b" => 1,
-                _ => 0,
+                "gemma4:e4b" => 5,  // Highest priority — best quality
+                "gemma4:e2b" => 4,  // Great quality, low VRAM
+                "gemma3:4b" => 3,
+                "gemma3:1b" => 2,
+                _ => 1,
             }
         })
         .map(|m| m.name.clone());
@@ -362,23 +364,23 @@ pub async fn init_model_manager_at_startup<R: Runtime>(
 
 
 /// Get recommended summary model based on platform and system RAM
-/// macOS + >16GB RAM → gemma3:4b (2.5 GB, balanced)
+/// All platforms + >16GB RAM → qwen3:1.7b (1.2 GB, best all-around)
+/// All platforms + >8GB RAM  → qwen3:1.7b (1.2 GB, best all-around)
+/// macOS + >16GB RAM → gemma4:e4b (3.8 GB, premium)
 /// Otherwise → gemma3:1b (1019 MB, fast)
 #[tauri::command]
 pub async fn builtin_ai_get_recommended_model() -> Result<String, String> {
-    // Get system RAM in GB
     let system_ram_gb = get_system_ram_gb()?;
-
-    // Check if running on macOS
     let is_macos = cfg!(target_os = "macos");
 
     log::info!("System RAM detected: {} GB, Platform: {}", system_ram_gb, if is_macos { "macOS" } else { "other" });
 
-    // Recommend model: gemma3:4b only on macOS with >16GB RAM
-    let recommended = if is_macos && system_ram_gb > 16 {
-        "gemma3:4b"       // macOS + >16GB RAM: gemma3:4b (2.5 GB, balanced)
+    let recommended = if system_ram_gb >= 16 && is_macos {
+        "gemma4:e4b"      // macOS + >16GB RAM: gemma4:e4b (3.8 GB, premium)
+    } else if system_ram_gb >= 8 {
+        "qwen3:1.7b"      // >8GB RAM: qwen3:1.7b (1.2 GB, best all-around)
     } else {
-        "gemma3:1b"       // All other cases: gemma3:1b (806 MB, fast)
+        "gemma3:1b"       // Low-RAM machines: gemma3:1b (1019 MB, fast)
     };
 
     log::info!("Recommended summary model: {} (macOS={}, {}GB RAM)", recommended, is_macos, system_ram_gb);
