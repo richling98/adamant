@@ -6,4 +6,7 @@
 ///
 /// The underlying LLM is the same one the user already configured for
 /// summaries — no extra setup required.
+pub mod compilation_scheduler;
 pub mod handler;
+pub mod wiki_compiler;
+pub mod wiki_fs;
