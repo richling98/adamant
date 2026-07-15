@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { Switch } from "./ui/switch"
-import { FolderOpen } from "lucide-react"
+import { FolderOpen, Info } from "lucide-react"
 import { invoke } from "@tauri-apps/api/core"
 import Analytics from "@/lib/analytics"
 import AnalyticsConsentSwitch from "./AnalyticsConsentSwitch"
@@ -133,7 +133,7 @@ export function PreferenceSettings() {
     return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
   };
 
-  const handleOpenFolder = async (folderType: 'database' | 'models' | 'recordings') => {
+  const handleOpenFolder = async (folderType: 'database' | 'models' | 'recordings' | 'wiki') => {
     try {
       switch (folderType) {
         case 'database':
@@ -144,6 +144,9 @@ export function PreferenceSettings() {
           break;
         case 'recordings':
           await invoke('open_recordings_folder');
+          break;
+        case 'wiki':
+          await invoke('open_wiki_folder');
           break;
       }
 
@@ -207,6 +210,31 @@ export function PreferenceSettings() {
             </div>
             <button
               onClick={() => handleOpenFolder('recordings')}
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-white/20 rounded-md hover:bg-white/10 transition-colors text-zinc-300"
+            >
+              <FolderOpen className="w-4 h-4" />
+              Open Folder
+            </button>
+          </div>
+
+          {/* Wiki Location */}
+          <div className="p-4 border border-white/10 rounded-lg bg-white/5">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="font-medium text-white">Second Brain Wiki</div>
+                <div className="relative group">
+                  <Info className="w-4 h-4 text-zinc-400 cursor-help group-hover:text-zinc-300" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs leading-normal rounded-md bg-zinc-800 text-zinc-100 border border-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 text-center">
+                    All your meetings intelligently connected like a personal wikipedia
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="text-sm text-zinc-400 mb-3 break-all font-mono text-xs">
+              {storageLocations?.wiki || 'Loading...'}
+            </div>
+            <button
+              onClick={() => handleOpenFolder('wiki')}
               className="flex items-center gap-2 px-3 py-2 text-sm border border-white/20 rounded-md hover:bg-white/10 transition-colors text-zinc-300"
             >
               <FolderOpen className="w-4 h-4" />

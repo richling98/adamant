@@ -18,6 +18,7 @@ export interface StorageLocations {
   database: string;
   models: string;
   recordings: string;
+  wiki: string;
 }
 
 export interface NotificationSettings {
@@ -463,16 +464,18 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       }
 
       // Load storage locations
-      const [dbDir, modelsDir, recordingsDir] = await Promise.all([
+      const [dbDir, modelsDir, recordingsDir, wikiDir] = await Promise.all([
         invoke<string>('get_database_directory'),
         invoke<string>('whisper_get_models_directory'),
-        invoke<string>('get_default_recordings_folder_path')
+        invoke<string>('get_default_recordings_folder_path'),
+        invoke<string>('get_wiki_directory')
       ]);
 
       setStorageLocations({
         database: dbDir,
         models: modelsDir,
-        recordings: recordingsDir
+        recordings: recordingsDir,
+        wiki: wikiDir
       });
 
       // Mark as loaded

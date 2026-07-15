@@ -271,7 +271,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       (event) => {
         const { model, progress, downloaded_mb, total_mb, speed_mbps, status } = event.payload;
         // Check if this is the selected summary model (gemma3:1b or gemma3:4b)
-        if (model === selectedSummaryModel || model === 'gemma3:1b' || model === 'gemma3:4b') {
+        if (model === selectedSummaryModel || model === 'gemma3:1b' || model === 'gemma3:4b' || model === 'gemma4:e2b' || model === 'gemma4:e4b' || model === 'qwen3:1.7b' || model === 'deepseek-r1:1.5b') {
           setSummaryModelProgress(progress);
           setSummaryModelProgressInfo({
             percent: progress,
