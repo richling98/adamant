@@ -16,6 +16,7 @@
 !.yarn/releases
 !.yarn/versions
 *.mp4
+!website/assets/hero-video-v5.mp4
 
 # testing
 /coverage

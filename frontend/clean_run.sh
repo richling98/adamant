@@ -95,6 +95,17 @@ else
   echo "No production models directory found — skipping model symlink."
 fi
 
+# Build llama-helper sidecar with current llama-cpp-2
+echo "Building llama-helper sidecar..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+(cd "$SCRIPT_DIR/.." && cargo build -p llama-helper)
+HELPER_SRC="$SCRIPT_DIR/../target/debug/llama-helper"
+HELPER_DEST="$SCRIPT_DIR/src-tauri/binaries/llama-helper-aarch64-apple-darwin"
+if [ -f "$HELPER_SRC" ]; then
+  cp "$HELPER_SRC" "$HELPER_DEST"
+  echo "llama-helper copied to binaries dir."
+fi
+
 if [[ "$(uname)" == "Darwin" ]]; then
   echo "Building Tauri app bundle (dev mode — uses isolated app data: com.adamant.ai.dev)..."
   DEV_APP_NAME="Adamant Dev"
