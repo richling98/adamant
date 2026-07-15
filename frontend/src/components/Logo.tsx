@@ -32,34 +32,48 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(({ isCollapsed }, re
   const pillBorder = pillBorderByTheme[uiTheme] ?? pillBorderByTheme.rune;
   const pillShadow = pillShadowByTheme[uiTheme] ?? pillShadowByTheme.rune;
 
+  const [hasMounted, setHasMounted] = React.useState(false);
+  React.useEffect(() => { setHasMounted(true); }, []);
+
+  // Radix Dialog generates random useId-based aria-controls which cause
+  // hydration mismatches in the sidebar (meetings count differs between SSR
+  // and client). Render a plain button until mounted, then hydrate to Dialog.
+  const collapsedBtn = (
+    <button
+      ref={ref}
+      className="flex items-center justify-center mb-2 cursor-pointer bg-transparent border-none p-0 hover:opacity-80 transition-opacity"
+      aria-label="Open Adamant info"
+    >
+      <img src="/logo-collapsed.png" alt="Adamant" className="w-8 h-8 object-contain" />
+    </button>
+  );
+
+  const expandedBtn = (
+    <span
+      className="flex items-center justify-center gap-2 text-lg text-center border rounded-full font-semibold mb-2 block cursor-pointer px-4 py-2 backdrop-blur-md relative overflow-hidden"
+      style={{
+        borderColor: pillBorder,
+        color: 'rgba(255,255,255,0.92)',
+        backgroundImage: pillBackground,
+        backgroundRepeat: 'no-repeat',
+        boxShadow: pillShadow,
+      }}
+    >
+      <img src="/logo.png" alt="Adamant" className="w-8 h-8 object-contain" />
+      <span>Adamant</span>
+    </span>
+  );
+
+  if (!hasMounted) {
+    return isCollapsed ? collapsedBtn : expandedBtn;
+  }
+
   return (
     <Dialog aria-describedby={undefined}>
       {isCollapsed ? (
-        <DialogTrigger asChild>
-          <button
-            ref={ref}
-            className="flex items-center justify-center mb-2 cursor-pointer bg-transparent border-none p-0 hover:opacity-80 transition-opacity"
-            aria-label="Open Adamant info"
-          >
-            <img src="/logo-collapsed.png" alt="Adamant" className="w-8 h-8 object-contain" />
-          </button>
-        </DialogTrigger>
+        <DialogTrigger asChild>{collapsedBtn}</DialogTrigger>
       ) : (
-        <DialogTrigger asChild>
-          <span
-            className="flex items-center justify-center gap-2 text-lg text-center border rounded-full font-semibold mb-2 block cursor-pointer px-4 py-2 backdrop-blur-md relative overflow-hidden"
-            style={{
-              borderColor: pillBorder,
-              color: 'rgba(255,255,255,0.92)',
-              backgroundImage: pillBackground,
-              backgroundRepeat: 'no-repeat',
-              boxShadow: pillShadow,
-            }}
-          >
-            <img src="/logo.png" alt="Adamant" className="w-8 h-8 object-contain" />
-            <span>Adamant</span>
-          </span>
-        </DialogTrigger>
+        <DialogTrigger asChild>{expandedBtn}</DialogTrigger>
       )}
       <DialogContent>
         <VisuallyHidden>

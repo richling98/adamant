@@ -9,6 +9,7 @@ import AnalyticsProvider from '@/components/AnalyticsProvider'
 import { Toaster, toast } from 'sonner'
 import "sonner/dist/styles.css"
 import { useState, useEffect, Suspense } from 'react'
+import { usePathname } from 'next/navigation'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -38,6 +39,7 @@ export default function RootLayout({
 }) {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingCompleted, setOnboardingCompleted] = useState(false)
+  const pathname = usePathname()
 
   useEffect(() => {
     // Check onboarding status first
@@ -114,8 +116,8 @@ export default function RootLayout({
                             {/* Download progress toast provider - listens for background downloads */}
                             <DownloadProgressToastProvider />
 
-                            {/* Persistent chat bubble — hidden during onboarding (no meetings to chat about yet) */}
-                            {!showOnboarding && <FloatingChatBubble />}
+                            {/* Persistent chat bubble — hidden during onboarding or on the Savant page */}
+                            {!showOnboarding && pathname !== '/memory' && <FloatingChatBubble />}
 
                             {/* Show onboarding or main app */}
                             {showOnboarding ? (
