@@ -62,37 +62,53 @@ type SummaryOption = {
 };
 const SUMMARY_OPTIONS: SummaryOption[] = [
   {
-    id: 'gemma3:1b',
-    label: 'Gemma 3 1B',
-    size: '~1.0 GB',
-    sizeMb: 1019,
-    desc: '⚡ Fastest • Quickest download • Any laptop • Good for quick summaries',
+    id: 'qwen3:1.7b',
+    label: 'Qwen3 1.7B (Recommended)',
+    size: '~1.2 GB',
+    sizeMb: 1223,
+    desc: 'speed = ⭐⭐⭐⭐ • intelligence = ⭐⭐⭐ • space required = ~1.2 GB',
     badge: 'Recommended',
     recommended: true,
   },
   {
-    id: 'qwen3:1.7b',
-    label: 'Qwen3 1.7B',
-    size: '~1.2 GB',
-    sizeMb: 1223,
-    desc: '🧠 Smartest in size • Thinking mode • 119 languages • Apache 2.0 • Best value',
-    badge: 'Best Value',
+    id: 'gemma4:e2b',
+    label: 'Gemma 4 E2B (Recommended)',
+    size: '~2.4 GB',
+    sizeMb: 2400,
+    desc: 'speed = ⭐⭐⭐ • intelligence = ⭐⭐⭐⭐ • space required = ~2.4 GB',
+    badge: 'Recommended',
+    recommended: true,
   },
   {
-    id: 'deepseek-r1:1.5b',
-    label: 'DeepSeek R1 Distill 1.5B',
-    size: '~1.1 GB',
-    sizeMb: 1065,
-    desc: '🔬 Deep reasoning • Chain-of-thought • Best for complex meetings & decisions',
-    badge: 'Reasoning',
+    id: 'gemma4:e4b',
+    label: 'Gemma 4 E4B',
+    size: '~3.8 GB',
+    sizeMb: 3760,
+    desc: 'speed = ⭐⭐ • intelligence = ⭐⭐⭐⭐⭐ • space required = ~3.8 GB',
+    badge: 'Premium',
   },
   {
     id: 'gemma3:4b',
     label: 'Gemma 3 4B',
     size: '~2.4 GB',
     sizeMb: 2374,
-    desc: '💎 Highest quality • Most detailed summaries • Needs ~3.5 GB RAM',
+    desc: 'speed = ⭐⭐⭐ • intelligence = ⭐⭐⭐ • space required = ~2.4 GB',
     badge: 'Balanced',
+  },
+  {
+    id: 'deepseek-r1:1.5b',
+    label: 'DeepSeek R1 Distill 1.5B',
+    size: '~1.1 GB',
+    sizeMb: 1065,
+    desc: 'speed = ⭐⭐⭐ • intelligence = ⭐⭐⭐ • space required = ~1.1 GB',
+    badge: 'Reasoning',
+  },
+  {
+    id: 'gemma3:1b',
+    label: 'Gemma 3 1B',
+    size: '~1.0 GB',
+    sizeMb: 1019,
+    desc: 'speed = ⭐⭐⭐⭐⭐ • intelligence = ⭐⭐ • space required = ~1.0 GB',
   },
 ];
 
@@ -309,7 +325,7 @@ export function DownloadProgressStep() {
   }, [selectedTranscriptionId, setParakeetDownloaded]);
 
   // Summary progress — handle all summary model ids including qwen3 and deepseek
-  const SUMMARY_MODEL_IDS = useMemo(() => ['gemma3:1b', 'gemma3:4b', 'qwen3:1.7b', 'deepseek-r1:1.5b'], []);
+  const SUMMARY_MODEL_IDS = useMemo(() => ['gemma3:1b', 'gemma3:4b', 'qwen3:1.7b', 'deepseek-r1:1.5b', 'gemma4:e2b', 'gemma4:e4b'], []);
   useEffect(() => {
     const unlisten = listen<{
       model: string; progress: number; downloaded_mb?: number; total_mb?: number; speed_mbps?: number; status: string; error?: string;
@@ -468,7 +484,9 @@ export function DownloadProgressStep() {
                                 ? 'bg-violet-400/15 text-violet-200 border border-violet-300/25'
                                 : (opt as any).badge === 'Reasoning'
                                   ? 'bg-amber-400/15 text-amber-200 border border-amber-300/25'
-                                  : 'bg-white/10 text-zinc-300 border border-white/10'
+                                  : (opt as any).badge === 'Premium'
+                                    ? 'bg-blue-400/15 text-blue-200 border border-blue-300/25'
+                                    : 'bg-white/10 text-zinc-300 border border-white/10'
                           }`}
                         >
                           {hasBadge}

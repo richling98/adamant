@@ -81,6 +81,12 @@ pub fn get_fallback_urls(model_name: &str) -> Vec<String> {
             "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf".to_string(),
             "https://huggingface.co/lmstudio-community/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf".to_string(),
         ],
+        "gemma4:e2b" => vec![
+            "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-UD-Q2_K_XL.gguf".to_string(),
+        ],
+        "gemma4:e4b" => vec![
+            "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-UD-Q2_K_XL.gguf".to_string(),
+        ],
         _ => vec![],
     }
 }
@@ -92,7 +98,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
         // Gemma 3 1B - Fast tier (Recommended default for onboarding speed)
         ModelDef {
             name: "gemma3:1b".to_string(),
-            display_name: "Gemma 3 1B — Fast (Recommended)".to_string(),
+            display_name: "Gemma 3 1B — Fast".to_string(),
             gguf_file: "gemma-3-1b-it-Q8_0.gguf".to_string(),
             template: "gemma3".to_string(),
             download_url: "https://huggingface.co/lmstudio-community/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q8_0.gguf".to_string(),
@@ -105,12 +111,12 @@ pub fn get_available_models() -> Vec<ModelDef> {
                 top_p: 0.9,
                 stop_tokens: vec!["<end_of_turn>".to_string()],
             },
-            description: "Fastest • ~1 GB download • Runs on any laptop • Good for quick summaries".to_string(),
+            description: "speed = ⭐⭐⭐⭐⭐ • intelligence = ⭐⭐ • space required = ~1.0 GB".to_string(),
         },
         // Qwen3 1.7B — Best balance of smarts + size, Apache 2.0, thinking mode
         ModelDef {
             name: "qwen3:1.7b".to_string(),
-            display_name: "Qwen3 1.7B — Smart (Best Value)".to_string(),
+            display_name: "Qwen3 1.7B — Smart (Recommended)".to_string(),
             gguf_file: "qwen3-1.7b-q4_k_m.gguf".to_string(),
             template: "qwen3".to_string(),
             download_url: "https://huggingface.co/lmstudio-community/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf".to_string(),
@@ -123,7 +129,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
                 top_p: 0.95,
                 stop_tokens: vec!["<|im_end|>".to_string(), "<|endoftext|>".to_string()],
             },
-            description: "Smarter • 1.2 GB • Thinking mode • 119 languages • Best quality in this size".to_string(),
+            description: "speed = ⭐⭐⭐⭐ • intelligence = ⭐⭐⭐⭐ • space required = ~1.2 GB".to_string(),
         },
         // DeepSeek R1 Distill 1.5B — reasoning specialist
         ModelDef {
@@ -141,7 +147,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
                 top_p: 0.95,
                 stop_tokens: vec!["<｜end▁of▁sentence｜>".to_string()],
             },
-            description: "Deep reasoning • 1.1 GB • Chain-of-thought • Best for complex meetings".to_string(),
+            description: "speed = ⭐⭐⭐ • intelligence = ⭐⭐⭐⭐ • space required = ~1.1 GB".to_string(),
         },
         // Gemma 3 4B - Balanced tier
         ModelDef {
@@ -159,7 +165,43 @@ pub fn get_available_models() -> Vec<ModelDef> {
                 top_p: 0.9,
                 stop_tokens: vec!["<end_of_turn>".to_string()],
             },
-            description: "High quality • 2.4 GB • Needs ~3.5 GB RAM • Best for detailed summaries".to_string(),
+            description: "speed = ⭐⭐⭐ • intelligence = ⭐⭐⭐ • space required = ~2.4 GB".to_string(),
+        },
+        // Gemma 4 E2B - Next-gen quality, low VRAM
+        ModelDef {
+            name: "gemma4:e2b".to_string(),
+            display_name: "Gemma 4 E2B — Next-gen (Recommended)".to_string(),
+            gguf_file: "gemma-4-E2B-it-UD-Q2_K_XL.gguf".to_string(),
+            template: "gemma4".to_string(),
+            download_url: "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-UD-Q2_K_XL.gguf".to_string(),
+            size_mb: 2400,
+            context_size: 131072,
+            layer_count: 36,
+            sampling: SamplingParams {
+                temperature: 0.2,
+                top_k: 40,
+                top_p: 0.9,
+                stop_tokens: vec!["<|turn|>".to_string()],
+            },
+            description: "speed = ⭐⭐⭐⭐ • intelligence = ⭐⭐⭐⭐ • space required = ~2.4 GB".to_string(),
+        },
+        // Gemma 4 E4B - Premium quality, best for complex meetings
+        ModelDef {
+            name: "gemma4:e4b".to_string(),
+            display_name: "Gemma 4 E4B — Premium".to_string(),
+            gguf_file: "gemma-4-E4B-it-UD-Q2_K_XL.gguf".to_string(),
+            template: "gemma4".to_string(),
+            download_url: "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-UD-Q2_K_XL.gguf".to_string(),
+            size_mb: 3760,
+            context_size: 131072,
+            layer_count: 42,
+            sampling: SamplingParams {
+                temperature: 0.2,
+                top_k: 40,
+                top_p: 0.9,
+                stop_tokens: vec!["<|turn|>".to_string()],
+            },
+            description: "speed = ⭐⭐ • intelligence = ⭐⭐⭐⭐⭐ • space required = ~3.8 GB".to_string(),
         },
     ]
 }
@@ -228,6 +270,16 @@ pub const DEEPSEEK_R1_TEMPLATE: &str = "\
 <|im_start|>assistant
 ";
 
+/// Gemma 4 chat template format
+/// Uses <|turn|> delimiters (different from Gemma 3's <start_of_turn>/<end_of_turn>)
+pub const GEMMA4_TEMPLATE: &str = "\
+<|turn|>system
+{system_prompt}<|turn|>
+<|turn|>user
+{user_prompt}<|turn|>
+<|turn|>model
+";
+
 /// Format a prompt using the specified template
 ///
 /// # Arguments
@@ -244,6 +296,7 @@ pub fn format_prompt(
 ) -> Result<String> {
     let template = match template_name {
         "gemma3" => GEMMA3_TEMPLATE,
+        "gemma4" => GEMMA4_TEMPLATE,
         "qwen3" => QWEN3_TEMPLATE,
         "deepseek-r1" => DEEPSEEK_R1_TEMPLATE,
         "chatml" => QWEN3_TEMPLATE, // ChatML is same structure as Qwen3
