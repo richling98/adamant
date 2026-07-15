@@ -1,7 +1,7 @@
 #![allow(unexpected_cfgs)]
 
 use anyhow::Result;
-use cpal::traits::{DeviceTrait, HostTrait};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use super::configuration::{AudioDevice, DeviceType};
 use super::platform;
@@ -60,6 +60,61 @@ fn get_macos_mic_auth_status() -> i64 {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn is_running_from_app_bundle() -> bool {
+    std::env::current_exe()
+        .ok()
+        .map(|path| {
+            path.components().any(|component| {
+                component
+                    .as_os_str()
+                    .to_string_lossy()
+                    .ends_with(".app")
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn can_open_default_input_stream() -> bool {
+    let host = cpal::default_host();
+    let Some(device) = host.default_input_device() else {
+        return false;
+    };
+
+    let Ok(config) = device.default_input_config() else {
+        return false;
+    };
+
+    let stream_config = config.config();
+    let stream_result = match config.sample_format() {
+        cpal::SampleFormat::F32 => device.build_input_stream(
+            &stream_config,
+            |_data: &[f32], _: &cpal::InputCallbackInfo| {},
+            |_err| {},
+            None,
+        ),
+        cpal::SampleFormat::I16 => device.build_input_stream(
+            &stream_config,
+            |_data: &[i16], _: &cpal::InputCallbackInfo| {},
+            |_err| {},
+            None,
+        ),
+        cpal::SampleFormat::U16 => device.build_input_stream(
+            &stream_config,
+            |_data: &[u16], _: &cpal::InputCallbackInfo| {},
+            |_err| {},
+            None,
+        ),
+        _ => return false,
+    };
+
+    let Ok(stream) = stream_result else {
+        return false;
+    };
+
+    stream.play().is_ok()
+}
+
 /// Ask macOS to authorize microphone access for this exact app identity.
 /// This creates the TCC Privacy entry for dev builds, even before Settings is opened.
 #[cfg(target_os = "macos")]
@@ -94,7 +149,23 @@ fn request_macos_mic_access() -> Result<bool> {
 /// Returns Ok(true) if the mic is accessible right now, Ok(false) if not.
 pub fn check_microphone_permission() -> Result<bool> {
     #[cfg(target_os = "macos")]
-    return Ok(get_macos_mic_auth_status() == 3); // 3 = AVAuthorizationStatusAuthorized
+    {
+        let status = get_macos_mic_auth_status();
+        if status == 3 {
+            return Ok(true);
+        }
+
+        // `tauri dev` runs the debug Mach-O directly, not as a .app bundle.
+        // In that mode macOS TCC can report NotDetermined for the bare binary
+        // even when the launcher/dev environment can actually open the mic.
+        // Probe the real CPAL capture path so the dev app doesn't block on a
+        // stale System Settings entry for a different identity (Adamant Dev).
+        if !is_running_from_app_bundle() {
+            return Ok(can_open_default_input_stream());
+        }
+
+        return Ok(false);
+    }
 
     #[cfg(not(target_os = "macos"))]
     {
@@ -118,6 +189,13 @@ pub fn trigger_audio_permission() -> Result<bool> {
     #[cfg(target_os = "macos")]
     {
         let status = get_macos_mic_auth_status();
+        if !is_running_from_app_bundle() {
+            if can_open_default_input_stream() {
+                info!("[trigger_audio_permission] Dev binary can open microphone via CPAL probe");
+                return Ok(true);
+            }
+        }
+
         return match status {
             3 => {
                 info!("[trigger_audio_permission] Microphone already authorized");

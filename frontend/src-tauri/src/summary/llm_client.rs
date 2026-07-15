@@ -20,8 +20,12 @@ pub struct ChatMessage {
 pub struct ChatRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
+    // OpenAI models (GPT-4o+, GPT-5+) use max_completion_tokens;
+    // other providers use max_tokens. Only one is populated per call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "max_completion_tokens")]
+    pub max_completion_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -241,6 +245,17 @@ pub async fn generate_summary(
         let (max_tokens_val, temperature_val, top_p_val) =
             (max_tokens, temperature, top_p);
 
+        // OpenAI-derived providers (OpenAI, OpenRouter, Custom OpenAI)
+        // have models that require max_completion_tokens instead of
+        // max_tokens. The generic OpenAI list now includes GPT-4o, GPT-5,
+        // and later models that reject the old field name.
+        let (max_tokens_field, max_completion_tokens_field) = match provider {
+            LLMProvider::OpenAI | LLMProvider::OpenRouter | LLMProvider::CustomOpenAI => {
+                (None, max_tokens_val)
+            }
+            _ => (max_tokens_val, None),
+        };
+
         // Ollama supports a "format": "json" field that forces structured
         // JSON output. This is essential for small local models that would
         // otherwise produce one JSON item and then drift into prose.
@@ -262,7 +277,8 @@ pub async fn generate_summary(
                     content: user_prompt.to_string(),
                 }
             ],
-            max_tokens: max_tokens_val,
+            max_tokens: max_tokens_field,
+            max_completion_tokens: max_completion_tokens_field,
             temperature: temperature_val,
             top_p: top_p_val,
             format: format_val,

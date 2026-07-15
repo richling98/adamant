@@ -7,6 +7,13 @@ use tracing::{error, info};
 pub struct MeetingsRepository;
 
 impl MeetingsRepository {
+    pub async fn count_all_meetings(pool: &SqlitePool) -> Result<i64, sqlx::Error> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM meetings")
+            .fetch_one(pool)
+            .await?;
+        Ok(count)
+    }
+
     pub async fn get_meetings(pool: &SqlitePool) -> Result<Vec<MeetingModel>, sqlx::Error> {
         let meetings =
             sqlx::query_as::<_, MeetingModel>("SELECT * FROM meetings ORDER BY created_at DESC")

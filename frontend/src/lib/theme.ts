@@ -17,7 +17,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   {
     value: 'mithril',
     label: 'Mithril',
-    description: 'A deep indigo-purple inspired by the provided reference.',
+    description: 'A deep indigo-purple with calm undertones.',
   },
   {
     value: 'bronze',
