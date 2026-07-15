@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ListTodo, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ListTodo, Plus, Trash2 } from "lucide-react";
 import debounce from "lodash/debounce";
 import { toast } from "sonner";
 import type { Todo } from "@/types";
@@ -77,10 +77,20 @@ function extractPlainTextFromJson(contentJson: string | null | undefined): strin
   }
 }
 
+function sortTodosForDisplay(items: Todo[]): Todo[] {
+  return [...items].sort((a, b) => {
+    const dateCompare = b.date.localeCompare(a.date);
+    if (dateCompare !== 0) return dateCompare;
+    const orderCompare = a.sort_order - b.sort_order;
+    if (orderCompare !== 0) return orderCompare;
+    return a.created_at.localeCompare(b.created_at);
+  });
+}
+
 export function TodosPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { fetchTodoDates } = useSidebar();
+  const { fetchTodoDates, todoRefreshVersion } = useSidebar();
   const dateParam = searchParams.get("date");
   const viewParam = searchParams.get("view");
   const todayStr = localDateKey();
@@ -91,12 +101,14 @@ export function TodosPage() {
   const [loading, setLoading] = useState(true);
   const [focusedTodoId, setFocusedTodoId] = useState<string | null>(null);
   const [showActionsHelp, setShowActionsHelp] = useState(false);
+  const [showAllComposer, setShowAllComposer] = useState(false);
+  const [expandRequest, setExpandRequest] = useState<{ date: string; version: number } | null>(null);
 
   const fetchTodos = useCallback(async () => {
     setLoading(true);
     try {
       const data = isAllView ? await getAllTodos() : await getTodosByDate(activeDate);
-      setTodos(data);
+      setTodos(sortTodosForDisplay(data));
     } catch (e) {
       toast.error("Failed to load to-dos");
     } finally {
@@ -106,7 +118,7 @@ export function TodosPage() {
 
   useEffect(() => {
     fetchTodos();
-  }, [fetchTodos]);
+  }, [fetchTodos, todoRefreshVersion]);
 
   const groupedTodos = useMemo(() => {
     if (!isAllView) return [];
@@ -159,29 +171,34 @@ export function TodosPage() {
     }
   };
 
-  const handleAdd = async (markdown: string, json: string | null) => {
+  const handleAddForDate = useCallback(async (date: string, markdown: string, json: string | null) => {
     try {
-      const newTodo = await apiCreateTodo(null, activeDate, json, markdown);
-      setTodos((prev) => [...prev, newTodo]);
+      const newTodo = await apiCreateTodo(null, date, json, markdown);
+      setTodos((prev) => sortTodosForDisplay([...prev, { ...newTodo, meeting_title: newTodo.meeting_title ?? "" }]));
+      setFocusedTodoId(newTodo.id);
+      setExpandRequest({ date, version: Date.now() });
       fetchTodoDates();
+      return true;
     } catch (e) {
-      toast.error("Failed to create to-do");
+      toast.error("Failed to create action");
+      return false;
     }
-  };
+  }, [fetchTodoDates]);
 
   const handleCreateBelow = useCallback(
     async (todo: Todo) => {
       try {
         const newTodo = await apiCreateTodo(null, todo.date, null, null);
+        const normalizedTodo = { ...newTodo, meeting_title: newTodo.meeting_title ?? "" };
 
         setTodos((prev) => {
           const next = [...prev];
           const currentIndex = next.findIndex((item) => item.id === todo.id);
           if (currentIndex === -1) {
-            return [...prev, newTodo];
+            return sortTodosForDisplay([...prev, normalizedTodo]);
           }
 
-          next.splice(currentIndex + 1, 0, newTodo);
+          next.splice(currentIndex + 1, 0, normalizedTodo);
           return next;
         });
 
@@ -190,11 +207,11 @@ export function TodosPage() {
           .map((item) => item.id);
         const currentIndex = reorderedIds.indexOf(todo.id);
         if (currentIndex !== -1) {
-          reorderedIds.splice(currentIndex + 1, 0, newTodo.id);
+          reorderedIds.splice(currentIndex + 1, 0, normalizedTodo.id);
           await apiReorderTodosByDate(todo.date, reorderedIds);
         }
 
-        setFocusedTodoId(newTodo.id);
+        setFocusedTodoId(normalizedTodo.id);
         fetchTodoDates();
       } catch (e) {
         toast.error("Failed to create to-do");
@@ -234,11 +251,19 @@ export function TodosPage() {
         </button>
 
         {isAllView ? (
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
-            <ListTodo className="w-4 h-4 text-primary" />
-            <h1 className="text-lg font-semibold text-zinc-100 leading-none">All Actions</h1>
-            <div
-              className="relative flex items-center"
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
+              <ListTodo className="w-4 h-4 text-primary" />
+              <h1 className="text-lg font-semibold text-zinc-100 leading-none">All Actions</h1>
+              <button
+                type="button"
+                onClick={() => setShowAllComposer(true)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-primary/25 bg-primary/10 text-primary transition-colors hover:border-primary/45 hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/35"
+                aria-label="Add action"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              <div
+                className="relative flex items-center"
               onMouseEnter={() => setShowActionsHelp(true)}
               onMouseLeave={() => setShowActionsHelp(false)}
             >
@@ -286,8 +311,14 @@ export function TodosPage() {
           {todos.length === 0 ? (
             <div className="flex flex-col items-center py-16 text-center">
               <p className="text-sm text-zinc-500 leading-relaxed max-w-md">
-                Adamant will automatically capture actions and to-do&apos;s from your meeting notes. Simply run &quot;AI cleanup&quot; on your meetings and Adamant will extract each meeting&apos;s action items.
+                Adamant will automatically capture actions and to-do&apos;s from your meeting notes. You can also add standalone actions manually.
               </p>
+              <div className="mt-6 w-full max-w-md">
+                <ActionComposer
+                  onAdd={(markdown, json) => handleAddForDate(todayStr, markdown, json)}
+                  label="Add your first action"
+                />
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -295,6 +326,12 @@ export function TodosPage() {
                 <span>{totalCount} total</span>
                 <span>{checked.length} completed</span>
               </div>
+              {showAllComposer && (
+                <InlineActionComposer
+                  onAdd={(markdown, json) => handleAddForDate(todayStr, markdown, json)}
+                  onCancel={() => setShowAllComposer(false)}
+                />
+              )}
               {groupedTodos.map((group, index) => (
                 <TodosDateGroup
                   key={group.date}
@@ -304,8 +341,10 @@ export function TodosPage() {
                   onDelete={handleDelete}
                   onUpdate={handleUpdate}
                   onCreateBelow={handleCreateBelow}
+                  onAddForDate={handleAddForDate}
                   focusedTodoId={focusedTodoId}
                   defaultExpanded={index === 0}
+                  expandSignal={expandRequest?.date === group.date ? expandRequest.version : 0}
                 />
               ))}
             </div>
@@ -318,14 +357,12 @@ export function TodosPage() {
             <div className="text-center py-16 text-zinc-500">
               <p className="text-sm">No actions for {formatDateLabel(activeDate)}</p>
               <p className="text-xs mt-1">
-                Run AI cleanup on a meeting to extract action items, or add one
-                manually.
+                Run AI cleanup on a meeting to extract action items, or use the plus button to add one manually.
               </p>
             </div>
           )}
 
-          {/* Add todo row */}
-          <AddTodoRow onAdd={handleAdd} />
+          <ActionComposer onAdd={(markdown, json) => handleAddForDate(activeDate, markdown, json)} />
 
           {/* Unchecked todos */}
           <div className="space-y-1">
@@ -511,39 +548,87 @@ function TodoRow({
   );
 }
 
-function AddTodoRow({
+function ActionComposer({
   onAdd,
+  label = "Add action",
 }: {
-  onAdd: (markdown: string, json: string | null) => void;
+  onAdd: (markdown: string, json: string | null) => Promise<boolean>;
+  label?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (isOpen) {
+    return (
+      <InlineActionComposer
+        onAdd={onAdd}
+        onCancel={() => setIsOpen(false)}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setIsOpen(true)}
+      className="group flex w-full items-center gap-3 rounded-lg py-1.5 text-left text-sm text-zinc-500 transition-colors hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-primary/25"
+      aria-label={label}
+    >
+      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-primary/35 bg-primary/10 text-primary transition-colors group-hover:border-primary/55 group-hover:bg-primary/15">
+        <Plus className="h-3 w-3" />
+      </span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function InlineActionComposer({
+  onAdd,
+  onCancel,
+}: {
+  onAdd: (markdown: string, json: string | null) => Promise<boolean>;
+  onCancel: () => void;
 }) {
   const [text, setText] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const handleSubmit = async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    onAdd(trimmed, null);
-    setText("");
+    const created = await onAdd(trimmed, null);
+    if (created) {
+      setText("");
+      onCancel();
+    }
   }
 
   return (
-    <div className="flex items-center gap-3 py-1.5 group">
-      <div className="w-4 h-4 rounded border border-zinc-600 shrink-0" />
+    <div className="flex items-center gap-3 rounded-lg py-1.5 group">
+      <div className="w-4 h-4 rounded border border-primary/45 bg-primary/10 shrink-0" />
       <input
+        ref={inputRef}
         type="text"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            handleSubmit();
+            void handleSubmit();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            onCancel();
           }
         }}
         className="flex-1 min-w-0 bg-transparent border-0 px-0 py-0.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-500 focus:outline-none focus:ring-0"
-        placeholder="Add a to-do"
-        aria-label="Add a to-do"
+        placeholder="Add an action"
+        aria-label="New action text"
       />
       <button
-        onClick={handleSubmit}
+        type="button"
+        onClick={() => void handleSubmit()}
         className="text-xs text-primary hover:text-primary/80 transition-colors"
       >
         Add
@@ -559,8 +644,10 @@ function TodosDateGroup({
   onDelete,
   onUpdate,
   onCreateBelow,
+  onAddForDate,
   focusedTodoId,
   defaultExpanded = false,
+  expandSignal = 0,
 }: {
   date: string;
   todos: Todo[];
@@ -568,8 +655,10 @@ function TodosDateGroup({
   onDelete: (id: string) => void;
   onUpdate: (id: string, markdown: string, json: string | null) => void;
   onCreateBelow: (todo: Todo) => void | Promise<void>;
+  onAddForDate: (date: string, markdown: string, json: string | null) => Promise<boolean>;
   focusedTodoId: string | null;
   defaultExpanded?: boolean;
+  expandSignal?: number;
 }) {
   const label = formatDateLabel(date);
   const [isExpanded, setIsExpanded] = useState(() => {
@@ -579,6 +668,12 @@ function TodosDateGroup({
     } catch {}
     return defaultExpanded;
   });
+  const [showComposer, setShowComposer] = useState(false);
+
+  useEffect(() => {
+    if (!expandSignal) return;
+    setIsExpanded(true);
+  }, [expandSignal]);
 
   const unchecked = todos.filter((t) => !t.is_checked);
   const checked = todos.filter((t) => t.is_checked);
@@ -586,27 +681,50 @@ function TodosDateGroup({
 
   return (
     <div className="rounded-xl border border-white/8 bg-white/[0.03]">
-      <button
-        onClick={() => {
-          setIsExpanded((prev) => {
-            const next = !prev;
-            try { localStorage.setItem(`todos-all-date-${date}`, String(next)); } catch {}
-            return next;
-          });
-        }}
-        className="flex items-center gap-2 w-full px-4 py-3 text-left transition-colors hover:bg-white/[0.04]"
-      >
-        <span className="text-zinc-500 flex-shrink-0">
-          {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </span>
-        <span className="flex-1 min-w-0 text-sm font-medium text-zinc-100 truncate">{label}</span>
-        <span className="text-xs text-zinc-500 flex-shrink-0">
-          {total} item{total !== 1 ? 's' : ''}
-        </span>
-      </button>
+      <div className="flex items-center transition-colors hover:bg-white/[0.04]">
+        <button
+          onClick={() => {
+            setIsExpanded((prev) => {
+              const next = !prev;
+              try { localStorage.setItem(`todos-all-date-${date}`, String(next)); } catch {}
+              return next;
+            });
+          }}
+          className="flex min-w-0 flex-1 items-center gap-2 px-4 py-3 text-left"
+        >
+          <span className="text-zinc-500 flex-shrink-0">
+            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          </span>
+          <span className="flex-1 min-w-0 text-sm font-medium text-zinc-100 truncate">{label}</span>
+          <span className="text-xs text-zinc-500 flex-shrink-0">
+            {total} item{total !== 1 ? 's' : ''}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setIsExpanded(true);
+            setShowComposer(true);
+          }}
+          className="mr-3 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 text-primary transition-colors hover:border-primary/45 hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/35"
+          aria-label={`Add action for ${label}`}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
 
       <div className={`overflow-hidden transition-all duration-200 ${isExpanded ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0'}`}>
         <div className="px-4 pb-4 pt-1">
+          {showComposer && (
+            <div className="mb-2">
+              <InlineActionComposer
+                onAdd={(markdown, json) => onAddForDate(date, markdown, json)}
+                onCancel={() => setShowComposer(false)}
+              />
+            </div>
+          )}
+
           {unchecked.length > 0 && (
             <div className="space-y-1">
               {unchecked.map((todo) => (
