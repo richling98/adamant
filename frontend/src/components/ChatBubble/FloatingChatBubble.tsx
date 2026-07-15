@@ -215,7 +215,7 @@ export function FloatingChatBubble() {
                 <div className="text-4xl">🧙‍♂️</div>
                 <div>
                   <p className="text-sm font-medium text-zinc-300">
-                    Hi, I&apos;m Adam the Wizard. Ask me anything about your meetings.
+                    Hi, I&apos;m Sam the Savant. Ask me anything about your meetings.
                   </p>
                   <p className="mt-1 text-xs text-zinc-500">
                     I have context from all of them.

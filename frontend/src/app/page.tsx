@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { invoke } from '@tauri-apps/api/core';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useRecordingState, RecordingStatus } from '@/contexts/RecordingStateContext';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -33,6 +34,7 @@ export default function Home() {
   const [hoverStartBtn, setHoverStartBtn] = useState(false);
   const [hoverTodosBtn, setHoverTodosBtn] = useState(false);
   const [hoverChatBtn, setHoverChatBtn] = useState(false);
+  const [isCreatingMeeting, setIsCreatingMeeting] = useState(false);
 
   const { transcriptModelConfig, uiTheme } = useConfig();
   const recordingState = useRecordingState();
@@ -191,14 +193,29 @@ export default function Home() {
         </div>
         <div className="flex flex-col items-center gap-4">
           <button
-            onClick={() => {
+            onClick={async () => {
+              if (isCreatingMeeting) return;
+              setIsCreatingMeeting(true);
               setIsMeetingActive(true);
               Analytics.trackButtonClick('start_new_meeting', 'home_page');
-              router.push('/meeting-details?id=new');
+              try {
+                const timestamp = new Date().toISOString().replace('T', '_').slice(0, 19).replace(/:/g, '-');
+                const meeting = await invoke<{ id: string }>('api_create_meeting', {
+                  title: `Meeting ${timestamp}`,
+                });
+                await refetchMeetings();
+                router.push(`/meeting-details?id=${meeting.id}`);
+              } catch (err) {
+                console.error('Failed to create meeting note:', err);
+                setIsMeetingActive(false);
+              } finally {
+                setIsCreatingMeeting(false);
+              }
             }}
+            disabled={isCreatingMeeting}
             onMouseEnter={() => setHoverStartBtn(true)}
             onMouseLeave={() => setHoverStartBtn(false)}
-            className="min-w-[220px] px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
+            className="min-w-[220px] px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
             style={getHomeButtonStyle(hoverStartBtn)}
           >
             Meet
@@ -218,7 +235,7 @@ export default function Home() {
             <button
               onClick={() => {
                 Analytics.trackButtonClick('open_chat', 'home_page');
-                window.dispatchEvent(new CustomEvent('open-floating-chat'));
+                router.push('/memory');
               }}
               onMouseEnter={() => setHoverChatBtn(true)}
               onMouseLeave={() => setHoverChatBtn(false)}

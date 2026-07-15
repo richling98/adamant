@@ -147,11 +147,13 @@ const Sidebar: React.FC = () => {
   // Button hover states for glass effect animations
   const [hoverCollapsedSettings, setHoverCollapsedSettings] = useState(false);
   const [hoverExpandedSettings, setHoverExpandedSettings] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => { setHasMounted(true); }, []);
   // Collapse state for the "Meeting Notes" unfiled section — persisted across restarts
   const [isMeetingNotesExpanded, setIsMeetingNotesExpanded] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('sidebar-meeting-notes-collapsed');
-      return stored === null ? true : stored !== 'true' ? false : true;
+      return stored === null ? true : stored === 'true';
     } catch {
       return true;
     }
@@ -1059,8 +1061,23 @@ const Sidebar: React.FC = () => {
                 <Home className="w-5 h-5 text-foreground/75" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">
+            <TooltipContent side="right" className="bg-zinc-800 text-zinc-100 border border-zinc-700">
               <p>Home</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => router.push('/memory')}
+                className={`p-2 rounded-lg transition-colors duration-150 ${pathname === '/memory' ? 'bg-white/10' : 'hover:bg-white/10'
+                  }`}
+              >
+                <span className="text-lg" style={{ filter: 'grayscale(1) brightness(1.5)' }}>🪄</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+              <p>Savant</p>
             </TooltipContent>
           </Tooltip>
 
@@ -1077,7 +1094,7 @@ const Sidebar: React.FC = () => {
                 <NotebookPen className="w-5 h-5 text-foreground/75" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">
+            <TooltipContent side="right" className="bg-zinc-800 text-zinc-100 border border-zinc-700">
               <p>Meeting Notes</p>
             </TooltipContent>
           </Tooltip>
@@ -1247,11 +1264,12 @@ const Sidebar: React.FC = () => {
       </button>
 
       <div
+        suppressHydrationWarning
         className={`h-screen bg-background border-r border-white/10 shadow-sm flex flex-col transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-64'
           }`}
       >
         {/*  Header with traffic light spacing */}
-        <div className="flex-shrink-0 h-22 flex items-center">
+        <div className="flex-shrink-0 h-22 flex items-center" suppressHydrationWarning>
 
           {/* Title container */}
 
@@ -1263,7 +1281,7 @@ const Sidebar: React.FC = () => {
                 {/* <span className="text-lg text-center border rounded-full bg-blue-50 border-white font-semibold text-gray-700 mb-2 block items-center">
                   <span>Adamant</span>
                 </span> */}
-                <Logo isCollapsed={isCollapsed} />
+                {hasMounted && <Logo isCollapsed={isCollapsed} />}
 
                 <div className="relative mb-1">
                   <InputGroup >
@@ -1305,6 +1323,15 @@ const Sidebar: React.FC = () => {
               >
                 <Home className="w-4 h-4 mr-2" />
                 <span>Home</span>
+              </div>
+            )}
+            {!isCollapsed && !isSearchMode && (
+              <div
+                onClick={() => router.push('/memory')}
+                className="p-3 text-lg font-semibold items-center hover:bg-white/10 h-10 flex mx-3 mt-0 rounded-lg cursor-pointer"
+              >
+                <span className="mr-2" style={{ filter: 'grayscale(1) brightness(1.5)' }}>🪄</span>
+                <span>Savant</span>
               </div>
             )}
           </div>
@@ -1582,7 +1609,7 @@ const Sidebar: React.FC = () => {
                               ? <ChevronDown className="h-3 w-3" />
                               : <ChevronRight className="h-3 w-3" />}
                           </span>
-                          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Actions</span>
+                          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Secretary</span>
                         </div>
                       </div>
 
