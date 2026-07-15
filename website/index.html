@@ -1,614 +1,654 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Adamant — AI Meeting Assistant for Mac</title>
-  <meta name="description" content="Adamant records, transcribes, and summarizes your meetings entirely on your Mac. No cloud. No bots. No token costs. Fully private, fully local." />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Adamant — AI Meeting Assistant for Mac</title>
+<meta name="description" content="Adamant records, transcribes, and summarizes your meetings entirely on your Mac. No cloud. No bots. No subscriptions. Fully private."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:#000;color:#fff;font-family:'Manrope',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 
-  <!-- Open Graph -->
-  <meta property="og:title" content="Adamant — AI Meeting Assistant for Mac" />
-  <meta property="og:description" content="Real-time transcription and AI summaries that never leave your machine." />
-  <meta property="og:image" content="https://raw.githubusercontent.com/richling98/adamant/main/website/logo.png" />
-  <meta property="og:type" content="website" />
-  <meta name="twitter:card" content="summary_large_image" />
+/* NAV */
+.nav-root{position:fixed;top:0;left:0;right:0;z-index:100;width:100%;padding:28px 20px;display:flex;justify-content:center;pointer-events:none}
+.nav-container{position:relative;width:100%;max-width:1180px;display:flex;align-items:center;justify-content:space-between;gap:12px;pointer-events:auto}
+.logo-pill{display:flex;align-items:center;gap:8px;padding:4px 18px 4px 8px;border-radius:999px;background:linear-gradient(120deg,rgba(10,28,20,.98) 0%,rgba(18,50,37,.98) 100%);backdrop-filter:blur(10px);border:1px solid rgba(45,170,120,.14);box-shadow:0 1px 12px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08);text-decoration:none;cursor:pointer}
+.logo-mark{width:28px;height:28px;border-radius:50%;background:transparent;border:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.logo-mark img{width:28px;height:28px;object-fit:contain}
+.logo-wordmark{font-family:'Manrope',system-ui,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,.92)}
+.links-pill{display:flex;align-items:center;padding:6px;gap:2px;background:rgba(20,20,20,.66);backdrop-filter:blur(16px);border-radius:999px;border:1px solid rgba(255,255,255,.06);box-shadow:inset -3px -2px 8px rgba(255,255,255,.07),0 8px 32px rgba(0,0,0,.5);position:absolute;left:50%;transform:translateX(-50%)}
+.links-pill::after{content:"";position:absolute;inset:0;border-radius:999px;padding:.7px;background:linear-gradient(160deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,.05) 30%, transparent 65%, rgba(255,255,255,.35) 100%);-webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.nav-link{padding:7px 18px;border-radius:999px;font-size:13.5px;font-weight:500;color:rgba(255,255,255,.6);text-decoration:none}
+.nav-link:hover{color:#fff;background:rgba(255,255,255,.07)}
+.cta-group{display:flex;align-items:center;gap:10px}
+.cta-primary{display:inline-flex;align-items:center;justify-content:center;padding:1px;border-radius:14px;background:transparent;text-decoration:none;cursor:pointer}
+.cta-inner{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:13px;background:#12170D;border:1px solid rgba(30,203,100,.45);color:#fff;font-size:13.5px;font-weight:600;white-space:nowrap;box-shadow:inset -4px 3px 9px rgba(30,203,100,.9),inset 3px -2px 8px rgba(30,203,100,.75);transition:box-shadow .2s ease,border-color .2s ease}
+.cta-icon{width:13px;height:13px;object-fit:contain;mix-blend-mode:screen}
+.cta-primary:hover .cta-inner{border-color:#1ecb64;box-shadow:inset 0 0 0 1px rgba(30,203,100,.45),inset -5px 4px 14px rgba(30,203,100,1),inset 4px -3px 12px rgba(30,203,100,.95)}
+.cta-dot{width:6px;height:6px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,.6)}
+.mobile-toggle{display:none;width:38px;height:38px;border-radius:999px;background:rgba(20,20,20,.8);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(10px);align-items:center;justify-content:center;cursor:pointer;color:#fff}
+.mobile-menu{position:fixed;top:72px;left:12px;right:12px;background:rgba(16,16,16,.94);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:12px;display:none;flex-direction:column;gap:4px;z-index:99}
+.mobile-menu.open{display:flex}
+.mobile-menu a{padding:14px 16px;border-radius:12px;color:rgba(255,255,255,.7);text-decoration:none;font-size:15px}
 
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+/* HERO — Adamant dark-green palette, matches the desktop app */
+.framer-hero{position:relative;background:#000;overflow:hidden;padding-top:88px;padding-bottom:80px}
 
-  <style>
-    html { scroll-behavior: smooth; }
-    :root {
-      --bg: #0a0a0a;
-      --surface: #111111;
-      --border: #1a1a1a;
-      --border-hover: #2a2a2a;
-      --text-primary: #ffffff;
-      --text-secondary: #999999;
-      --text-muted: #555555;
-      --accent: #10b981;
-    }
-    body { margin: 0; background-color: var(--bg); color: var(--text-secondary); font-family: 'Manrope', sans-serif; }
+/* Content — always visible, no JS required for text */
+.framer-hero-content{position:relative;z-index:10;max-width:1200px;margin:0 auto;padding:60px 24px 0;display:flex;flex-direction:column;align-items:center;text-align:center}
+.hero-inner{max-width:880px;display:flex;flex-direction:column;align-items:center}
+.hero-label{display:inline-flex;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(10px);font-size:12.5px;color:rgba(255,255,255,.82);margin-bottom:28px;box-shadow:0 2px 16px rgba(0,0,0,.3)}
+.hero-title{font-family:'Instrument Serif',Georgia,serif;font-size:clamp(46px,6.8vw,84px);line-height:.96;letter-spacing:-1.3px;font-weight:400;color:#fff;margin-bottom:24px;max-width:820px;text-align:center;text-wrap:balance}
+.hero-title .em{font-style:italic;font-weight:400}
+.hero-subtext{font-size:17px;line-height:1.7;color:rgba(255,255,255,.52);max-width:580px;margin-bottom:36px;text-align:center}
+.hero-cta-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;margin-bottom:28px}
+.hero-cta-note{font-size:11.5px;color:rgba(255,255,255,.34);letter-spacing:.2px}
 
-    /* ── MOCKUP ── */
-    .mockup-frame {
-      position: relative;
-      max-width: 1100px;
-      margin: 52px auto 0;
-      border-radius: 16px;
-      border: 1px solid #222;
-      background: #0e0e0e;
-      box-shadow:
-        0 0 0 1px rgba(255,255,255,0.04) inset,
-        0 60px 120px rgba(0,0,0,0.7),
-        0 0 80px rgba(16,185,129,0.07);
-      overflow: hidden;
-    }
-    /* title bar */
-    .mockup-titlebar {
-      height: 44px;
-      background: #111;
-      border-bottom: 1px solid #1e1e1e;
-      display: flex;
-      align-items: center;
-      padding: 0 18px;
-      gap: 10px;
-      flex-shrink: 0;
-    }
-    .mockup-dot { width: 11px; height: 11px; border-radius: 50%; }
-    .mockup-dot-red   { background: #3a1b1b; border: 1px solid #5a2020; }
-    .mockup-dot-yellow{ background: #2e2710; border: 1px solid #4d4012; }
-    .mockup-dot-green { background: #0e2a1a; border: 1px solid #1a4a28; }
-    .mockup-title { margin-left: 10px; font-size: 13px; color: #555; font-weight: 500; }
-    /* body */
-    .mockup-body {
-      display: flex;
-      height: 440px;
-      overflow: hidden;
-    }
-    /* sidebar */
-    .mockup-sidebar {
-      width: 220px;
-      flex-shrink: 0;
-      background: #0b0b0b;
-      border-right: 1px solid #1c1c1c;
-      display: flex;
-      flex-direction: column;
-      padding: 20px 14px 16px;
-      gap: 0;
-    }
-    .mockup-brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 6px 8px 20px;
-      border-bottom: 1px solid #1a1a1a;
-      margin-bottom: 16px;
-    }
-    .mockup-brand-icon {
-      width: 28px; height: 28px;
-      background: #1a3326;
-      border-radius: 8px;
-      border: 1px solid #2a4a38;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px;
-    }
-    .mockup-brand-name { font-size: 13px; font-weight: 600; color: #d0d0d0; }
-    .mockup-search {
-      background: #141414;
-      border: 1px solid #1e1e1e;
-      border-radius: 7px;
-      padding: 7px 10px;
-      font-size: 11px;
-      color: #444;
-      margin-bottom: 18px;
-    }
-    .mockup-section-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #404040;
-      margin-bottom: 8px;
-      padding: 0 4px;
-    }
-    .mockup-item {
-      font-size: 12px;
-      color: #606060;
-      padding: 7px 10px;
-      border-radius: 7px;
-      margin-bottom: 2px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .mockup-item-active {
-      background: #1a1a1a;
-      color: #e0e0e0;
-      font-weight: 500;
-    }
-    .mockup-item-icon { font-size: 11px; opacity: 0.5; flex-shrink: 0; }
-    .mockup-settings {
-      margin-top: auto;
-      font-size: 11px;
-      color: #404040;
-      padding: 8px 10px;
-      display: flex;
-      align-items: center;
-      gap: 7px;
-    }
-    /* main area: 3 equal columns */
-    .mockup-panels {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      min-width: 0;
-    }
-    .mockup-panel {
-      border-right: 1px solid #1c1c1c;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .mockup-panel:last-child { border-right: none; }
-    .mockup-panel-header {
-      height: 48px;
-      border-bottom: 1px solid #1c1c1c;
-      display: flex;
-      align-items: center;
-      padding: 0 20px;
-      gap: 10px;
-      flex-shrink: 0;
-    }
-    .mockup-panel-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: #c0c0c0;
-      letter-spacing: -0.2px;
-    }
-    .mockup-panel-action {
-      margin-left: auto;
-      font-size: 10px;
-      color: #404040;
-      border: 1px solid #242424;
-      border-radius: 5px;
-      padding: 3px 8px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .mockup-panel-body {
-      flex: 1;
-      padding: 20px;
-      overflow: hidden;
-    }
-    /* notes content */
-    .mockup-note-heading {
-      font-size: 13px;
-      font-weight: 700;
-      color: #d8d8d8;
-      margin-bottom: 4px;
-    }
-    .mockup-note-line {
-      font-size: 12px;
-      color: #585858;
-      line-height: 1.7;
-      margin-bottom: 2px;
-    }
-    .mockup-note-bullet {
-      font-size: 12px;
-      color: #505050;
-      line-height: 1.65;
-      padding-left: 14px;
-      position: relative;
-      margin-bottom: 3px;
-    }
-    .mockup-note-bullet::before { content: '•'; position: absolute; left: 0; color: #383838; }
-    /* transcript rows */
-    .mockup-tx-row { margin-bottom: 18px; }
-    .mockup-tx-meta { font-size: 11px; color: #484848; margin-bottom: 4px; }
-    .mockup-tx-text { font-size: 13px; color: #686868; line-height: 1.55; }
-    /* ai summary */
-    .mockup-ai-summary { font-size: 12px; color: #686868; line-height: 1.7; margin-bottom: 12px; }
-    .mockup-ai-heading { font-size: 13px; font-weight: 700; color: #d0d0d0; margin-bottom: 6px; margin-top: 14px; }
-    /* live pill */
-    .mockup-live {
-      margin-left: auto;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 10px;
-      color: #ef5555;
-      background: rgba(239,68,68,0.08);
-      border: 1px solid rgba(239,68,68,0.25);
-      border-radius: 999px;
-      padding: 2px 9px 2px 6px;
-    }
-    .mockup-live-dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: #ef4444;
-      box-shadow: 0 0 6px rgba(239,68,68,0.5);
-    }
-    /* faint glow overlay at top of mockup */
-    .mockup-glow {
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 300px;
-      background: radial-gradient(ellipse 70% 60% at 65% 0%, rgba(16,185,129,0.09) 0%, transparent 70%);
-      pointer-events: none;
-    }
-    .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
-    .feature-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 20px; transition: border-color 0.15s ease; }
-    .feature-card:hover { border-color: var(--border-hover); }
-    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 13px; transition: color 0.15s; }
-    .nav-link:hover { color: #fff; }
-    .ghost-btn { color: var(--text-secondary); text-decoration: none; padding: 9px 16px; border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; transition: border-color 0.15s; }
-    .ghost-btn:hover { border-color: var(--border-hover); }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  </style>
+/* A living, Palantir-inspired orb replaces the hero preview. */
+.orb-section{position:relative;z-index:12;width:100%;margin:12px auto -22px;display:grid;place-items:center;overflow:hidden}
+.palantir-stage{position:relative;top:-27px;width:clamp(290px,37vw,480px);aspect-ratio:1;display:grid;place-items:center;isolation:isolate}
+.palantir-stage::before{content:"";position:absolute;inset:2%;border-radius:50%;background:radial-gradient(circle,rgba(110,216,49,.22) 0%,rgba(110,216,49,.09) 34%,transparent 69%);filter:blur(20px);animation:orb-color-cycle 24s ease-in-out infinite}
+.palantir-orb{position:relative;width:70%;aspect-ratio:1;border-radius:50%;overflow:hidden;background:radial-gradient(circle at 33% 25%,rgba(240,255,224,.76) 0 1.6%,rgba(173,255,137,.20) 7%,transparent 20%),radial-gradient(circle at 67% 73%,rgba(80,220,115,.74),transparent 27%),radial-gradient(circle at 43% 58%,#0f6f42 0%,#07331f 47%,#010604 74%);box-shadow:inset 20px 18px 36px rgba(209,255,182,.22),inset -34px -30px 50px rgba(0,0,0,.84),0 0 30px rgba(110,216,49,.30),0 0 90px rgba(110,216,49,.18);animation:orb-turn 34s linear infinite,orb-color-cycle 24s ease-in-out infinite}
+.palantir-orb::before{content:"";position:absolute;inset:-20%;border-radius:48%;background:conic-gradient(from 70deg,transparent 0 12%,rgba(183,255,145,.06) 19%,transparent 31%,rgba(70,231,114,.5) 43%,transparent 57%,rgba(222,255,199,.18) 70%,transparent 82%);filter:blur(14px);mix-blend-mode:screen;animation:orb-swirl 12s linear infinite}
+.palantir-orb::after{content:"";position:absolute;inset:13%;border-radius:50%;background:radial-gradient(ellipse at 58% 38%,rgba(222,255,202,.43),transparent 12%),conic-gradient(from 220deg,transparent 0 18%,rgba(157,255,115,.38) 27%,transparent 39%,rgba(45,185,86,.54) 49%,transparent 63%,rgba(220,255,195,.22) 76%,transparent 91%);filter:blur(7px);mix-blend-mode:screen;animation:orb-swirl 17s linear infinite reverse}
+@keyframes orb-swirl{to{transform:rotate(360deg)}}
+@keyframes orb-turn{to{transform:rotate(360deg)}}
+@keyframes orb-color-cycle{0%,100%{filter:hue-rotate(0deg) saturate(1.1)}25%{filter:hue-rotate(72deg) saturate(1.2)}50%{filter:hue-rotate(151deg) saturate(1.05)}75%{filter:hue-rotate(290deg) saturate(1.25)}}
+@media(prefers-reduced-motion:reduce){.palantir-stage::before,.palantir-stage::after,.palantir-orb,.palantir-orb::before,.palantir-orb::after{animation:none}}
+.audience-ticker{position:relative;z-index:20;width:min(1180px,calc(100% - 24px));margin:8px auto -80px;padding:16px 0 15px;border-top:1px solid rgba(110,216,49,.14);background:rgba(0,0,0,.72);overflow:visible}
+.audience-fixed-label{position:absolute;top:-17px;left:0;z-index:2;padding:0 8px 0 0;background:#000;color:rgba(255,255,255,.48);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
+.audience-viewport{overflow:hidden}
+.audience-track{display:flex;width:max-content;animation:audience-scroll 58s linear infinite}
+.audience-group{display:flex;align-items:center;white-space:nowrap}
+.audience-label{margin:0 22px 0 0;color:rgba(255,255,255,.42);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.audience-item{display:inline-flex;align-items:center;color:rgba(255,255,255,.66);font-size:13px;font-weight:500}
+.audience-item::after{content:"·";margin:0 18px;color:rgba(110,216,49,.48);font-size:16px}
+@keyframes audience-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.audience-track{animation:none}.audience-ticker{overflow:auto}}
+.dash-titlebar{height:44px;background:#1C2117;border-bottom:1px solid rgba(110,216,49,.12);display:flex;align-items:center;padding:0 18px;gap:10px}
+.dash-dot{width:11px;height:11px;border-radius:50%}.dash-dot-r{background:#3a1b1b;border:1px solid #5a2020}.dash-dot-y{background:#2e2710;border:1px solid #4d4012}.dash-dot-g{background:#0e2a1a;border:1px solid #1a4a28}
+.dash-title{margin-left:8px;font-size:12.5px;color:#4a4a4a;font-weight:500}
+.dash-body{display:flex;height:520px}
+.dash-sidebar{width:220px;flex-shrink:0;background:#14180F;border-right:1px solid rgba(110,216,49,.12);padding:18px 14px;display:flex;flex-direction:column}
+.dash-brand{align-self:stretch;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 12px 4px 5px;border:1px solid rgba(45,170,120,.14);border-radius:999px;background:linear-gradient(120deg,rgba(10,28,20,.98) 0%,rgba(18,50,37,.98) 100%);box-shadow:0 1px 12px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08);margin-bottom:18px}
+.dash-brand-icon{width:28px;height:28px;background:transparent;border:none;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.dash-brand-icon img{width:28px;height:28px;object-fit:contain}
+.dash-brand-name{font-size:13px;font-weight:600;color:#c8c8c8}
+.dash-search{background:#1C2117;border:1px solid rgba(110,216,49,.14);border-radius:7px;padding:7px 10px;font-size:11px;color:#5a5a5a;margin-bottom:16px}
+.dash-item{font-size:12px;color:#5a5a5a;padding:7px 10px;border-radius:7px;margin-bottom:2px;display:flex;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-item-active{background:#1C2117;color:#e0e0e0;font-weight:500}
+.dash-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#3a3a3a;margin:8px 0 6px;padding:0 6px}
+.dash-panels{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;min-width:0}
+.dash-panel{border-right:1px solid rgba(110,216,49,.12);display:flex;flex-direction:column;overflow:hidden}
+.dash-panel:last-child{border-right:none}
+.dash-panel-header{height:44px;border-bottom:1px solid rgba(110,216,49,.12);display:flex;align-items:center;padding:0 16px;gap:8px}
+.dash-panel-title{font-size:12.5px;font-weight:600;color:#b0b0b0}
+.dash-live{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#ef5555;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.22);border-radius:999px;padding:2px 9px 2px 6px}
+.dash-live-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;box-shadow:0 0 6px rgba(239,68,68,.5)}
+.dash-panel-body{flex:1;padding:16px;overflow:hidden}
+.dash-h{font-size:12px;font-weight:700;color:#c8c8c8;margin-bottom:5px;margin-top:12px}
+.dash-h:first-child{margin-top:0}
+.dash-bullet{font-size:11.5px;color:#505050;line-height:1.6;padding-left:12px;position:relative;margin-bottom:3px}
+.dash-bullet::before{content:'•';position:absolute;left:0;color:#333}
+.dash-tx{margin-bottom:14px}
+.dash-tx-meta{font-size:10.5px;color:#424242;margin-bottom:3px}
+.dash-tx-text{font-size:12px;color:#5e5e5e;line-height:1.5}
+.dash-summary{font-size:11.5px;color:#5a5a5a;line-height:1.6}
+
+/* TOOLS */
+.tools-section{background:#000;padding:128px 24px 136px;border-top:1px solid rgba(110,216,49,.1)}
+.tools-inner{width:100%;max-width:1200px;margin:0 auto;min-width:0}
+.section-kicker{font-size:13px;line-height:1.2;letter-spacing:.35px;color:rgba(255,255,255,.46);margin-bottom:22px}
+.tools-title{font-family:'Instrument Serif',Georgia,serif;font-size:clamp(42px,5vw,68px);line-height:.98;letter-spacing:-1.1px;font-weight:400;color:#fff;max-width:none;margin-bottom:24px;white-space:nowrap}
+.tools-mobile-break{display:none}
+.tools-intro{font-size:17px;line-height:1.7;color:rgba(255,255,255,.5);max-width:none;margin-bottom:52px;white-space:nowrap}
+.tool-showcase{position:relative;width:100%;min-width:0;border:1px solid rgba(110,216,49,.16);border-radius:24px;background:#020704;box-shadow:0 30px 90px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden}
+.tool-video{display:block;width:100%;max-width:100%;min-width:0;aspect-ratio:16/9;object-fit:contain;background:#020704}
+.tool-showcase::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(7,16,11,0) 72%,rgba(7,16,11,.42) 100%)}
+.tool-bottom{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:28px;padding:28px 30px 30px;background:#07100b}
+.tool-description{display:flex;align-items:baseline;gap:16px;min-width:0}
+.tool-name{font-family:'Instrument Serif',Georgia,serif;font-size:28px;color:#fff;white-space:nowrap}
+.tool-copy{font-family:'Instrument Serif',Georgia,serif;font-size:21px;font-style:italic;line-height:1.25;color:rgba(255,255,255,.54)}
+.tool-tabs{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.tool-tab{appearance:none;border:1px solid rgba(255,255,255,.09);border-radius:999px;background:transparent;color:rgba(255,255,255,.58);font:inherit;font-size:14px;padding:11px 19px;cursor:pointer;transition:background .2s ease,color .2s ease,border-color .2s ease,transform .2s ease}
+.tool-tab:hover{color:#fff;border-color:rgba(110,216,49,.35);transform:translateY(-1px)}
+.tool-tab.active{background:#d8f2c8;border-color:#d8f2c8;color:#07100b}
+
+/* POWERFUL MODELS — Logo heroes, spacious, premium */
+.models-section{background:#000;border-top:1px solid rgba(110,216,49,.10);padding:128px 24px 136px;position:relative;overflow:hidden}
+.models-section::before{content:"";position:absolute;top:-100px;left:50%;transform:translateX(-50%);width:1100px;height:500px;background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(110,216,49,.08) 0%,transparent 68%);pointer-events:none}
+.models-inner{width:100%;max-width:1200px;margin:0 auto;position:relative;z-index:1}
+.models-title{font-family:'Instrument Serif',Georgia,serif;font-size:clamp(42px,5vw,68px);line-height:.98;letter-spacing:-1.1px;font-weight:400;color:#fff;margin-bottom:16px;white-space:nowrap}
+.models-title .em{font-style:italic;font-weight:400}
+.models-subtitle{font-size:17px;line-height:1.7;color:rgba(255,255,255,.50);margin-bottom:52px;max-width:520px}
+.models-mobile-break{display:none}
+@media(max-width:520px){.models-mobile-break{display:block}.models-subtitle{font-size:15px;margin-bottom:36px}.models-title{white-space:normal}}
+
+/* Main shell — mirrors .tool-showcase */
+.models-shell{position:relative;width:100%;border:1px solid rgba(110,216,49,.16);border-radius:24px;background:#020704;box-shadow:0 30px 90px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden;display:grid;grid-template-columns:1fr 1fr}
+.models-shell::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(7,16,11,0) 64%,rgba(7,16,11,.48) 100%);z-index:0}
+.models-vline{position:absolute;top:0;bottom:0;left:50%;width:1px;transform:translateX(-50%);background:linear-gradient(180deg,transparent,rgba(110,216,49,.18),transparent);z-index:1;pointer-events:none}
+@media(max-width:860px){.models-shell{grid-template-columns:1fr}.models-vline{display:none}.models-section{padding:96px 20px 100px}}
+@media(max-width:520px){.models-shell{border-radius:18px;max-width:calc(100vw - 28px);margin:0 auto}}
+
+/* Column */
+.ms-col{position:relative;z-index:1;padding:30px 28px 28px;display:flex;flex-direction:column;min-width:0;min-height:520px}
+@media(max-width:860px){.ms-col{min-height:0;padding:24px 20px 20px}}
+@media(max-width:520px){.ms-col{padding:20px 16px 18px}}
+
+/* Header */
+.ms-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:32px}
+.ms-head-left{display:flex;align-items:center;gap:10px}
+.ms-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;animation:model-status-pulse 2.8s ease-in-out infinite}
+.ms-dot--local{background:#6ed831;box-shadow:0 0 14px rgba(110,216,49,.6)}
+.ms-dot--cloud{background:#8ac0ff;box-shadow:0 0 14px rgba(122,184,255,.5);animation-delay:1.4s}
+@keyframes model-status-pulse{0%,100%{transform:scale(1);opacity:.72}50%{transform:scale(1.42);opacity:1}}
+.ms-head-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:rgba(255,255,255,.80)}
+.ms-head-tag{font-size:10px;letter-spacing:.04em;padding:5px 10px;border-radius:999px;font-weight:600;white-space:nowrap}
+.ms-head-tag--local{background:rgba(110,216,49,.10);border:1px solid rgba(110,216,49,.20);color:#88e050}
+.ms-head-tag--cloud{background:rgba(122,184,255,.08);border:1px solid rgba(122,184,255,.16);color:#8ac0ff}
+
+/* — LOCAL: same row-by-row language as cloud models — */
+.ms-local-list{display:flex;flex-direction:column;flex:1;gap:2px}
+.ms-local-row{display:flex;align-items:center;gap:14px;padding:13px 12px;border-radius:14px;border:1px solid transparent;transition:background .20s ease,border-color .20s ease,transform .20s ease}
+.ms-local-row:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.07);transform:translateX(3px)}
+.ms-local-logo{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.22)}
+.ms-local-logo img{width:100%;height:100%;object-fit:contain;display:block}
+.ms-local-logo--openai img{padding:8px}.ms-local-logo--nvidia img{padding:5px}.ms-local-logo--google img{padding:7px}.ms-local-logo--deepseek img{padding:5px}.ms-local-logo--qwen img{padding:7px}
+.ms-local-meta{flex:1;min-width:0}
+.ms-local-name{font-size:14px;font-weight:600;color:rgba(255,255,255,.90);line-height:1.2;letter-spacing:-.15px}
+.ms-local-desc{font-size:12px;color:rgba(255,255,255,.38);margin-top:3px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Local bottom — on-device LLMs */
+.ms-local-foot{margin-top:auto;padding-top:16px;border-top:1px solid rgba(255,255,255,.07)}
+.ms-lnote{font-size:11.5px;line-height:1.6;color:rgba(255,255,255,.36)}
+
+/* — CLOUD: logo list with presence — */
+.ms-cloud-list{display:flex;flex-direction:column;flex:1;gap:2px}
+.ms-cloud-row{display:flex;align-items:center;gap:14px;padding:13px 12px;border-radius:14px;border:1px solid transparent;transition:background .20s ease,border-color .20s ease,transform .20s ease}
+.ms-cloud-row:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.07);transform:translateX(3px)}
+.ms-cloud-logo{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-shadow:0 2px 14px rgba(0,0,0,.22)}
+.ms-cloud-logo img{width:100%;height:100%;object-fit:contain;display:block}
+.ms-cloud-logo--white{background:#fff;border:1px solid rgba(255,255,255,.14)}
+.ms-cloud-logo--white img{padding:8px}
+.ms-cloud-logo--nvidia{background:#fff}
+.ms-cloud-logo--nvidia img{padding:5px}
+.ms-cloud-logo--claude img{padding:0}
+.ms-cloud-logo--groq{background:#fff;border-color:#fff}
+.ms-cloud-logo--groq img{padding:6px}
+.ms-cloud-logo--or{background:#000;border-color:#000}
+.ms-cloud-logo--or img{padding:5px}
+.ms-cloud-logo--ollama{background:#fff;border-color:#fff}
+.ms-cloud-logo--ollama img{padding:6px}
+.ms-cloud-logo--claude{background:rgba(201,144,93,.14);border:1px solid rgba(201,144,93,.20);color:#d6ab85;font-weight:700;font-size:15px}
+.ms-cloud-logo--groq{background:#fff;border:1px solid #fff;color:#ff9398;font-weight:800;font-size:15px;letter-spacing:-.5px}
+.ms-cloud-logo--or{background:#000;border:1px solid #000;color:#8ac0ff;font-size:11px;font-weight:700;letter-spacing:.02em}
+.ms-cloud-logo--ollama{background:#fff;border:1px solid #fff;color:rgba(255,255,255,.6);font-weight:700;font-size:11px}
+.ms-cloud-meta{flex:1;min-width:0}
+.ms-cloud-name{font-size:14px;font-weight:600;color:rgba(255,255,255,.90);line-height:1.2;letter-spacing:-.15px}
+.ms-cloud-desc{font-size:12px;color:rgba(255,255,255,.38);margin-top:3px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-cloud-tag{font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.34);flex-shrink:0}
+
+.ms-cloud-bottom{margin-top:auto;padding-top:16px;border-top:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:0}
+.ms-c-any{margin-top:14px;display:flex;align-items:center;gap:12px;padding:14px 14px;border-radius:14px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.12)}
+.ms-c-any-ico{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:14px;color:rgba(255,255,255,.5);flex-shrink:0}
+.ms-c-any-title{font-size:13px;font-weight:600;color:#fff;letter-spacing:-.1px}
+.ms-c-any-sub{font-size:11px;color:rgba(255,255,255,.36);margin-top:2px;line-height:1.4}
+
+/* COMPARISON */
+.comparison-section{position:relative;background:#06100b;padding:112px 24px 132px;overflow:hidden}
+.comparison-section::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 58% 46% at 50% 28%,rgba(110,216,49,.08),transparent 72%);pointer-events:none}
+.comparison-inner{position:relative;width:100%;max-width:1200px;margin:0 auto;min-width:0}
+.comparison-title{font-family:'Instrument Serif',Georgia,serif;font-size:clamp(46px,5vw,70px);line-height:.98;letter-spacing:-1.2px;font-weight:400;color:#fff;margin:0 0 42px}
+.comparison-card{overflow:hidden;border:1px solid rgba(110,216,49,.16);border-radius:18px;background:rgba(2,7,4,.66);box-shadow:0 30px 90px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.04)}
+.comparison-table-scroll{overflow-x:auto}
+.comparison-table{width:100%;min-width:850px;border-collapse:collapse;table-layout:fixed}
+.comparison-table col.feature{width:35%}
+.comparison-table col.product{width:16.25%}
+.comparison-table th,.comparison-table td{border-bottom:1px solid rgba(110,216,49,.12);padding:20px 18px;text-align:center;vertical-align:middle}
+.comparison-table th:first-child,.comparison-table td:first-child{position:sticky;left:0;z-index:2;text-align:left;background:#07110b}
+.comparison-table thead th{height:116px;color:rgba(255,255,255,.52);font-size:12px;font-weight:600}
+.comparison-table thead th:first-child{z-index:3;color:rgba(255,255,255,.28);font-size:10px;letter-spacing:.13em;text-transform:uppercase}
+.comparison-table thead th.adamant{position:relative;color:#fff;background:linear-gradient(180deg,rgba(76,173,81,.2),rgba(76,173,81,.05));border-left:1px solid rgba(164,224,176,.24);border-right:1px solid rgba(164,224,176,.24)}
+.comparison-table thead th.adamant::before{content:"Privacy first";position:absolute;top:0;left:50%;transform:translate(-50%,-1px);width:max-content;padding:6px 10px;border-radius:0 0 7px 7px;background:#89e86f;color:#09200d;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.comparison-product-name{display:block;margin-bottom:7px;color:#fff;font-size:15px;letter-spacing:-.02em}
+.comparison-table .adamant .comparison-product-name{color:#89e86f}
+.comparison-product-type{display:block;color:rgba(255,255,255,.28);font-size:10px;font-weight:500}
+.comparison-table tbody td:first-child{color:rgba(255,255,255,.82);font-size:13px;font-weight:520}
+.comparison-table tbody td.adamant{background:rgba(76,173,81,.07);border-left:1px solid rgba(164,224,176,.24);border-right:1px solid rgba(164,224,176,.24)}
+.comparison-check{display:inline-grid;width:25px;height:25px;place-items:center;border-radius:50%;background:#163c20;color:#89e86f;font-size:16px;font-weight:800}
+.comparison-no{color:rgba(255,255,255,.28);font-size:18px;font-weight:400}
+.comparison-note{display:block;margin-top:8px;color:rgba(255,255,255,.28);font-size:10px;line-height:1.45}
+.comparison-cost-row td{background:rgba(255,255,255,.025);border-top:1px solid rgba(164,224,176,.24)}
+.comparison-cost-row td:first-child{background:#0b1710}
+.comparison-cost-row td.adamant{background:rgba(76,173,81,.14)}
+.comparison-cost-label{color:#fff;font-size:13px;font-weight:650}
+.comparison-cost{display:block;color:#fff;font-size:20px;font-weight:650;letter-spacing:-.04em}
+.comparison-cost-row .comparison-note{margin-top:5px}
+.comparison-sources{max-width:720px;margin:20px 0 0;color:rgba(255,255,255,.34);font-size:11px;line-height:1.65}
+.comparison-sources strong{color:rgba(255,255,255,.52);font-weight:600}
+.comparison-sources a{color:rgba(255,255,255,.52);text-underline-offset:3px}
+.comparison-sources a:hover{color:#89e86f}
+
+/* FOOTER */
+.site-footer{background:#06100b;border-top:1px solid rgba(110,216,49,.12);padding:72px 24px 28px}
+.site-footer-inner{width:100%;max-width:1200px;margin:0 auto}
+.footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:32px;padding-bottom:64px}
+.footer-brand{display:inline-flex;align-items:center;gap:9px;color:#fff;text-decoration:none;font-size:14px;font-weight:600}
+.footer-brand img{width:28px;height:28px;border-radius:8px}
+.footer-tagline{max-width:210px;margin:16px 0 0;color:rgba(255,255,255,.36);font-size:12px;line-height:1.6}
+.footer-group-title{margin:2px 0 15px;color:rgba(255,255,255,.28);font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase}
+.footer-link{display:block;width:max-content;margin-bottom:11px;color:rgba(255,255,255,.58);font-size:12px;text-decoration:none;transition:color .2s ease}
+.footer-link:hover{color:#89e86f}
+.comparison-cta{display:flex;justify-content:center;margin-top:42px}
+.comparison-cta .cta-inner{padding:12px 24px;font-size:14px;border-radius:15px}
+.footer-meta{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-top:22px;border-top:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.28);font-size:11px}
+.footer-meta a{color:inherit;text-underline-offset:3px}
+.footer-meta a:hover{color:#89e86f}
+
+/* THEMES */
+.themes-section{background:#0d1712;padding:112px 24px 136px;transition:background-color .35s ease}
+.themes-section.theme-rune{background:#0e131b}
+.themes-section.theme-mithril{background:#12111c}
+.themes-section.theme-bronze{background:#1a140f}
+.themes-section.theme-adamant{background:#0d1712}
+.themes-inner{width:100%;max-width:1200px;margin:0 auto;min-width:0}
+.themes-title{font-family:'Instrument Serif',Georgia,serif;font-size:clamp(42px,5vw,68px);line-height:.98;letter-spacing:-1.1px;font-weight:400;color:#fff;margin-bottom:28px;white-space:nowrap}
+.theme-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:38px}
+.theme-tab{appearance:none;border:1px solid rgba(255,255,255,.09);border-radius:999px;background:transparent;color:rgba(255,255,255,.58);font:inherit;font-size:14px;padding:11px 19px;cursor:pointer;transition:background .2s ease,color .2s ease,border-color .2s ease,transform .2s ease}
+.theme-tab:hover{color:#fff;border-color:rgba(110,216,49,.35);transform:translateY(-1px)}
+.theme-tab.active{background:#d8f2c8;border-color:#d8f2c8;color:#07100b}
+.themes-section.theme-adamant .theme-tab.active{background:hsl(142 68% 52%);border-color:hsl(142 68% 52%);color:#0d1712}
+.themes-section.theme-rune .theme-tab.active{background:hsl(214 96% 66%);border-color:hsl(214 96% 66%);color:#0e131b}
+.themes-section.theme-mithril .theme-tab.active{background:hsl(252 52% 62%);border-color:hsl(252 52% 62%);color:#12111c}
+.themes-section.theme-bronze .theme-tab.active{background:hsl(32 72% 62%);border-color:hsl(32 72% 62%);color:#1a140f}
+.theme-showcase{position:relative;width:100%;min-width:0;border:1px solid rgba(110,216,49,.16);border-radius:24px;background:#020704;box-shadow:0 30px 90px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden}
+.theme-video{display:block;width:100%;max-width:100%;min-width:0;aspect-ratio:16/9;object-fit:contain;background:#020704}
+
+@media (max-width:960px){
+.links-pill{display:none}.mobile-toggle{display:flex}
+.hero-title{font-size:clamp(36px,9vw,56px)}
+.dash-body{flex-direction:column;height:auto}
+.dash-sidebar{width:100%;border-right:none;border-bottom:1px solid rgba(110,216,49,.12);flex-direction:row;flex-wrap:wrap;gap:6px}
+.dash-sidebar .dash-brand{width:auto;align-self:auto;border-bottom:none;margin-bottom:0;margin-right:12px}
+.dash-search,.dash-section-label{display:none}
+.dash-panels{grid-template-columns:1fr}
+.dash-panel{border-right:none;border-bottom:1px solid rgba(110,216,49,.12)}
+.dashboard-section{margin-top:28px}
+.tools-section{padding:96px 20px 112px}
+.tool-bottom{align-items:flex-start;flex-direction:column;padding:24px}
+.tool-tabs{justify-content:flex-start}
+.footer-grid{grid-template-columns:1fr 1fr}
+.footer-grid>div:first-child{grid-column:1/-1}
+}
+@media (max-width:520px){
+.framer-hero{padding-top:78px;padding-bottom:56px}
+.nav-root{padding:12px 12px}
+.hero-label{font-size:11.5px}
+.hero-subtext{font-size:15px}
+.audience-ticker{margin-bottom:-56px}
+.dashboard-section{margin-top:24px;padding:0 14px}
+.tools-section{padding:76px 14px 88px}
+.tools-inner{width:calc(100vw - 28px)}
+.tools-title{width:100%;max-width:100%;font-size:clamp(46px,13vw,64px);white-space:normal}
+.tools-mobile-break{display:block}
+.tools-intro{font-size:15px;margin-bottom:32px;white-space:normal}
+.tool-showcase{width:100%;max-width:calc(100vw - 28px);border-radius:18px}
+.tool-video{aspect-ratio:4/3}
+.tool-bottom{padding:20px 18px 22px;gap:22px}
+.tool-description{align-items:flex-start;flex-direction:column;gap:5px}
+.tool-name{font-size:26px}
+.tool-copy{font-size:18px}
+.tool-tabs{gap:6px}
+.tool-tab{font-size:13px;padding:9px 14px}
+.comparison-section{padding:96px 20px 104px}
+.comparison-title{font-size:clamp(52px,16vw,72px);margin-bottom:28px}
+.comparison-card{border-radius:18px}
+.comparison-table th,.comparison-table td{padding:17px 14px}
+.comparison-table thead th{height:108px}
+.themes-section{padding:76px 14px 88px}
+.themes-title{font-size:clamp(46px,13vw,64px);white-space:normal}
+.theme-tabs{gap:6px;margin-bottom:24px}
+.theme-tab{font-size:13px;padding:9px 14px}
+.theme-showcase{max-width:calc(100vw - 28px);border-radius:18px}
+.theme-video{aspect-ratio:4/3}
+.site-footer{padding:64px 20px 24px}
+.footer-grid{gap:28px 20px;padding-bottom:48px}
+.comparison-cta{margin-top:32px}
+.footer-meta{align-items:flex-start;flex-direction:column;gap:10px}
+}
+</style>
 </head>
 <body>
-
-<!-- ── NAV ── -->
-<nav style="position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(10,10,10,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);">
-  <div style="max-width:1024px;margin:0 auto;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;">
-    <div style="display:flex;align-items:center;gap:8px;">
-      <img src="logo.png" alt="Adamant" style="width:22px;height:22px;object-fit:contain;" />
-      <span style="font-weight:600;color:#fff;font-size:14px;letter-spacing:-0.3px;">Adamant</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:24px;">
-      <div style="display:flex;gap:20px;">
-        <a href="#how-it-works" class="nav-link">How it works</a>
-        <a href="#features" class="nav-link">Features</a>
-        <a href="https://github.com/richling98/adamant" target="_blank" class="nav-link">GitHub</a>
-      </div>
-      <button onclick="downloadLatest()" style="background:var(--accent);color:#fff;font-size:13px;font-weight:600;padding:7px 16px;border:none;border-radius:5px;cursor:pointer;">↓ Download for Mac</button>
-    </div>
-  </div>
+<nav class="nav-root">
+<div class="nav-container">
+<a href="./" class="logo-pill"><div class="logo-mark"><img src="logo.png" alt=""/></div><span class="logo-wordmark">Adamant</span></a>
+<div class="links-pill"><a href="#tools" class="nav-link">Features</a><a href="https://github.com/richling98/adamant" target="_blank" class="nav-link">GitHub</a><a href="#comparison" class="nav-link">Compare</a></div>
+<div class="cta-group"><a class="cta-primary" onclick="downloadLatest()"><span class="cta-inner"><img class="cta-icon" src="download-icon.png" alt=""/>Buy once, own forever</span></a><button class="mobile-toggle" id="mobileToggle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button></div>
+</div>
 </nav>
+<div class="mobile-menu" id="mobileMenu">
+<a href="#tools">Features</a><a href="https://github.com/richling98/adamant" target="_blank">GitHub</a><a href="#comparison">Compare</a>
+<a href="#" onclick="downloadLatest();return false;" style="background:#fff;color:#000;font-weight:600;text-align:center;margin-top:6px;">Download for Mac</a>
+</div>
 
-<!-- ── HERO ── -->
-<section style="padding:112px 24px 72px;position:relative;">
-  <div style="max-width:1100px;margin:0 auto;">
+<header class="framer-hero">
 
-    <!-- Copy: centered above mockup -->
-    <div style="text-align:center;max-width:680px;margin:0 auto 0;">
-      <p class="section-label" style="margin-bottom:20px;">Open Source · macOS · Apple Silicon</p>
-      <h1 style="font-size:clamp(2rem,5vw,3.3rem);font-family:'Instrument Serif',Georgia,serif;font-weight:400;color:#fff;line-height:1.14;letter-spacing:-0.5px;margin-bottom:18px;">
-        AI meeting assistant.<br/>Everything stays on your Mac.
-      </h1>
-      <p style="font-size:1.06rem;color:var(--text-secondary);line-height:1.7;margin-bottom:34px;">
-        Record, transcribe, summarize — entirely on your Mac. Your LLM of choice. No cloud. No bots. No subscriptions.
-      </p>
-      <div style="display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;">
-        <button onclick="downloadLatest()" style="background:linear-gradient(180deg,#15d47d,#10b981);color:#031a0e;font-size:14px;font-weight:700;padding:11px 26px;border:none;border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 28px rgba(16,185,129,0.3);">
-          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          Download for Mac
-        </button>
-        <a href="https://github.com/richling98/adamant" target="_blank" class="ghost-btn">
-          <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-          View on GitHub
-          <span id="star-count" style="font-size:11px;color:var(--text-muted);"></span>
-        </a>
-      </div>
-    </div>
+<div class="framer-hero-content">
+<div class="hero-inner">
+<h1 class="hero-title">Your <span class="em">second brain</span> for everyday work.</h1>
+<p class="hero-subtext">Record, summarize, and chat with your meetings entirely on your Mac.<br/>No cloud. No subscriptions. Just private AI that works.</p>
+<div class="hero-cta-wrap">
+<a class="cta-primary" onclick="downloadLatest()"><span class="cta-inner" style="padding:12px 26px;font-size:14px;border-radius:15px;"><img class="cta-icon" src="download-icon.png" alt="" style="width:14px;height:14px"/>Buy once, own forever</span></a>
+<span class="hero-cta-note">Open source | macOS 14.4+ | Built for Apple Silicon</span>
+</div>
+</div>
+</div>
 
-    <!-- App mockup: full width, generous proportions -->
-    <div class="mockup-frame">
-      <div class="mockup-glow"></div>
+<section class="orb-section" aria-label="An animated orb cycling through Adamant's themes">
+<div class="palantir-stage" aria-hidden="true"><div class="palantir-orb"></div></div>
+</section>
+<div class="audience-ticker" aria-label="Built for a wide range of professionals and learners">
+<span class="audience-fixed-label">Built for:</span>
+<div class="audience-viewport">
+<div class="audience-track">
+<div class="audience-group">
+<span class="audience-item">Business development managers</span><span class="audience-item">College students</span><span class="audience-item">Researchers</span><span class="audience-item">Executives</span><span class="audience-item">Doctors</span><span class="audience-item">Interns</span><span class="audience-item">Secretaries</span><span class="audience-item">Lawyers</span><span class="audience-item">Executive assistants</span><span class="audience-item">Journalists</span><span class="audience-item">Educators</span><span class="audience-item">Product managers</span><span class="audience-item">Founders</span><span class="audience-item">Consultants</span><span class="audience-item">Recruiters</span><span class="audience-item">Customer success teams</span><span class="audience-item">Freelancers</span>
+</div>
+<div class="audience-group" aria-hidden="true">
+<span class="audience-item">Business development managers</span><span class="audience-item">College students</span><span class="audience-item">Researchers</span><span class="audience-item">Executives</span><span class="audience-item">Doctors</span><span class="audience-item">Interns</span><span class="audience-item">Secretaries</span><span class="audience-item">Lawyers</span><span class="audience-item">Executive assistants</span><span class="audience-item">Journalists</span><span class="audience-item">Educators</span><span class="audience-item">Product managers</span><span class="audience-item">Founders</span><span class="audience-item">Consultants</span><span class="audience-item">Recruiters</span><span class="audience-item">Customer success teams</span><span class="audience-item">Freelancers</span>
+</div>
+</div>
+</div>
+</div>
+</header>
 
-      <!-- Title bar -->
-      <div class="mockup-titlebar">
-        <span class="mockup-dot mockup-dot-red"></span>
-        <span class="mockup-dot mockup-dot-yellow"></span>
-        <span class="mockup-dot mockup-dot-green"></span>
-        <span class="mockup-title">Adamant</span>
-      </div>
-
-      <!-- App body -->
-      <div class="mockup-body">
-
-        <!-- Sidebar -->
-        <div class="mockup-sidebar">
-          <div class="mockup-brand">
-            <div class="mockup-brand-icon" style="overflow:hidden;padding:0;">
-              <img src="logo.png" alt="Adamant" style="width:28px;height:28px;object-fit:cover;display:block;border-radius:7px;" />
-            </div>
-            <span class="mockup-brand-name">Adamant</span>
-          </div>
-          <div class="mockup-search">Search meeting content...</div>
-          <div class="mockup-item" style="color:#909090;margin-bottom:10px;">
-            <span class="mockup-item-icon">⌂</span> Home
-          </div>
-          <div class="mockup-section-label">Meeting Notes</div>
-          <div class="mockup-item mockup-item-active">
-            <span class="mockup-item-icon" style="opacity:1;">▪</span> Q2 Strategy Review
-          </div>
-          <div class="mockup-item"><span class="mockup-item-icon">▪</span> Team Standup</div>
-          <div class="mockup-item"><span class="mockup-item-icon">▪</span> 1:1 with Sarah</div>
-          <div class="mockup-item"><span class="mockup-item-icon">▪</span> Eng Review</div>
-          <div class="mockup-item"><span class="mockup-item-icon">▪</span> Design Sync</div>
-          <div class="mockup-item"><span class="mockup-item-icon">▪</span> Investor Call</div>
-          <div class="mockup-settings">
-            <span>⚙</span> Settings
-          </div>
-        </div>
-
-        <!-- Notes panel -->
-        <div class="mockup-panels">
-          <div class="mockup-panel">
-            <div class="mockup-panel-header">
-              <span class="mockup-panel-title">My Notes</span>
-              <span class="mockup-panel-action">
-                <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2" stroke-width="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke-width="2"/></svg>
-                Copy
-              </span>
-            </div>
-            <div class="mockup-panel-body">
-              <div class="mockup-note-heading">Key Decisions</div>
-              <div class="mockup-note-bullet">Roadmap locked for Q3. No scope additions until July.</div>
-              <div class="mockup-note-bullet">New eng hire approved — targeting senior backend.</div>
-              <div class="mockup-note-heading" style="margin-top:18px;">Action Items</div>
-              <div class="mockup-note-bullet">Marcus: finalize API migration spec by Friday</div>
-              <div class="mockup-note-bullet">Sarah: unblock staging environment access</div>
-              <div class="mockup-note-bullet">Team: review updated OKRs before Thursday</div>
-              <div class="mockup-note-heading" style="margin-top:18px;">Discussion Highlights</div>
-              <div class="mockup-note-line">The rollout timeline was discussed at length. Current pace requires shipping the auth refactor before the Q3 feature flag launch.</div>
-            </div>
-          </div>
-
-          <!-- Transcript panel -->
-          <div class="mockup-panel">
-            <div class="mockup-panel-header">
-              <span class="mockup-panel-title">Transcript</span>
-              <span class="mockup-live"><span class="mockup-live-dot"></span> Live</span>
-            </div>
-            <div class="mockup-panel-body">
-              <div class="mockup-tx-row">
-                <div class="mockup-tx-meta">[00:00] Sarah</div>
-                <div class="mockup-tx-text">Let's lock in the Q3 scope. We've been slipping on decisions and it's starting to affect velocity.</div>
-              </div>
-              <div class="mockup-tx-row">
-                <div class="mockup-tx-meta">[00:35] Marcus</div>
-                <div class="mockup-tx-text">Auth refactor is 90% done. I can ship it by end of sprint if we freeze the current branch.</div>
-              </div>
-              <div class="mockup-tx-row">
-                <div class="mockup-tx-meta">[00:54] Sarah</div>
-                <div class="mockup-tx-text">Good. Let's do that. Staging is the other blocker — who has access?</div>
-              </div>
-              <div class="mockup-tx-row">
-                <div class="mockup-tx-meta">[01:08] Maya</div>
-                <div class="mockup-tx-text">I can unblock that today. DevOps gave me the credentials last week.</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- AI Summary panel -->
-          <div class="mockup-panel">
-            <div class="mockup-panel-header">
-              <span class="mockup-panel-title">AI notes</span>
-              <span class="mockup-panel-action">
-                <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2" stroke-width="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke-width="2"/></svg>
-                Copy
-              </span>
-            </div>
-            <div class="mockup-panel-body">
-              <div class="mockup-ai-heading">Summary</div>
-              <div class="mockup-ai-summary">The team aligned on freezing Q3 scope and shipping the auth refactor before feature flag launch. Staging access was identified as a blocker and will be resolved today.</div>
-              <div class="mockup-ai-heading">Key Decisions</div>
-              <div class="mockup-note-bullet">Q3 scope is locked — no additions until July</div>
-              <div class="mockup-note-bullet">Auth refactor ships end of sprint</div>
-              <div class="mockup-note-bullet">Senior backend hire approved</div>
-              <div class="mockup-ai-heading">Action Items</div>
-              <div class="mockup-note-bullet">Marcus: finalize migration spec by Friday</div>
-              <div class="mockup-note-bullet">Maya: unblock staging access today</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
+<section class="tools-section" id="tools">
+<div class="tools-inner">
+<p class="section-kicker">/ 01 · Intentionally crafted</p>
+<h2 class="tools-title">Three tools, one<span class="tools-mobile-break"><br/></span> native Mac app.</h2>
+<p class="tools-intro">Everything you need to turn meetings into useful work, without ever leaving your Mac.</p>
+<div class="tool-showcase">
+<video class="tool-video" id="toolVideo" autoplay muted loop playsinline preload="auto" aria-label="Scribe feature preview">
+<source src="assets/scribe-final-product-marketing-sync.mov" type="video/mp4"/>
+</video>
+<div class="tool-bottom">
+<div class="tool-description"><span class="tool-name" id="toolName">Scribe:</span><span class="tool-copy" id="toolCopy">Capture and summarize anything with AI</span></div>
+<div class="tool-tabs" role="tablist" aria-label="Adamant tools">
+<button class="tool-tab active" type="button" role="tab" aria-selected="true" data-tool="scribe">Scribe</button>
+<button class="tool-tab" type="button" role="tab" aria-selected="false" data-tool="secretary">Secretary</button>
+<button class="tool-tab" type="button" role="tab" aria-selected="false" data-tool="savant">Savant</button>
+</div>
+</div>
+</div>
+</div>
 </section>
 
-<!-- ── HOW IT WORKS ── -->
-<section id="how-it-works" style="padding:80px 24px;border-top:1px solid var(--border);">
-  <div style="max-width:1024px;margin:0 auto;">
-    <p class="section-label" style="margin-bottom:36px;font-family:'Instrument Serif',Georgia,serif;font-size:18px;color:#fff;">How it works</p>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:48px;max-width:720px;">
-      <div>
-        <!-- Waveform -->
-        <svg style="display:block;margin-bottom:20px;" width="48" height="28" viewBox="0 0 48 28" fill="none">
-          <rect x="0" y="12" width="3.5" height="4" rx="1.75" fill="#252525"/>
-          <rect x="5.5" y="8" width="3.5" height="12" rx="1.75" fill="#2a2a2a"/>
-          <rect x="11" y="4" width="3.5" height="20" rx="1.75" fill="#303030"/>
-          <rect x="16.5" y="7" width="3.5" height="14" rx="1.75" fill="#2a2a2a"/>
-          <rect x="22" y="10" width="3.5" height="8" rx="1.75" fill="#252525"/>
-          <rect x="27.5" y="3" width="3.5" height="22" rx="1.75" fill="#333"/>
-          <rect x="33" y="8" width="3.5" height="12" rx="1.75" fill="#2a2a2a"/>
-          <rect x="38.5" y="11" width="3.5" height="6" rx="1.75" fill="#252525"/>
-          <rect x="44" y="13" width="3.5" height="2" rx="1" fill="#202020"/>
-        </svg>
-        <div style="font-size:13px;color:var(--text-muted);font-weight:500;margin-bottom:10px;">01</div>
-        <div style="font-size:18px;color:#fff;font-family:'Instrument Serif',Georgia,serif;letter-spacing:-0.3px;margin-bottom:8px;">Record</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.7;">Open Zoom, Meet, or Teams. Hit record. Adamant captures mic + system audio locally.</p>
-      </div>
-      <div>
-        <!-- Text lines / transcript -->
-        <svg style="display:block;margin-bottom:20px;" width="48" height="28" viewBox="0 0 48 28" fill="none">
-          <rect x="0" y="3" width="30" height="2.5" rx="1.25" fill="#2a2a2a"/>
-          <rect x="0" y="10" width="48" height="2.5" rx="1.25" fill="#2e2e2e"/>
-          <rect x="0" y="17" width="38" height="2.5" rx="1.25" fill="#2a2a2a"/>
-          <rect x="0" y="24" width="22" height="2.5" rx="1.25" fill="#252525"/>
-          <rect x="24" y="23" width="2" height="5" rx="1" fill="#3a3a3a"/>
-        </svg>
-        <div style="font-size:13px;color:var(--text-muted);font-weight:500;margin-bottom:10px;">02</div>
-        <div style="font-size:18px;color:#fff;font-family:'Instrument Serif',Georgia,serif;letter-spacing:-0.3px;margin-bottom:8px;">Transcribe</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.7;">Whisper runs on your Mac's chips. Every word appears live — no internet, no round trips.</p>
-      </div>
-      <div>
-        <!-- Checklist / summary -->
-        <svg style="display:block;margin-bottom:20px;" width="48" height="28" viewBox="0 0 48 28" fill="none">
-          <rect x="0" y="1" width="6" height="6" rx="1.5" stroke="#2a2a2a" stroke-width="1.5" fill="none"/>
-          <rect x="9" y="3" width="24" height="2" rx="1" fill="#2a2a2a"/>
-          <rect x="0" y="11" width="6" height="6" rx="1.5" fill="#2e2e2e"/>
-          <polyline points="1.2,14 3,15.8 5.8,11.5" stroke="#0a0a0a" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-          <rect x="9" y="13" width="34" height="2" rx="1" fill="#2a2a2a"/>
-          <rect x="0" y="21" width="6" height="6" rx="1.5" stroke="#2a2a2a" stroke-width="1.5" fill="none"/>
-          <rect x="9" y="23" width="20" height="2" rx="1" fill="#252525"/>
-        </svg>
-        <div style="font-size:13px;color:var(--text-muted);font-weight:500;margin-bottom:10px;">03</div>
-        <div style="font-size:18px;color:#fff;font-family:'Instrument Serif',Georgia,serif;letter-spacing:-0.3px;margin-bottom:8px;">Summarize</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.7;">Decisions, action items, key points — auto-generated by your LLM of choice.</p>
-      </div>
-    </div>
-  </div>
+<section class="themes-section theme-adamant" id="themes">
+<div class="themes-inner">
+<p class="section-kicker">/ 02 · Elegantly personalized</p>
+<h2 class="themes-title">Four beautiful themes.</h2>
+<div class="theme-tabs" role="tablist" aria-label="Adamant themes">
+<button class="theme-tab active" type="button" role="tab" aria-selected="true" data-theme="adamant">Adamant</button>
+<button class="theme-tab" type="button" role="tab" aria-selected="false" data-theme="bronze">Bronze</button>
+<button class="theme-tab" type="button" role="tab" aria-selected="false" data-theme="rune">Rune</button>
+<button class="theme-tab" type="button" role="tab" aria-selected="false" data-theme="mithril">Mithril</button>
+</div>
+<div class="theme-showcase">
+<video class="theme-video theme-adamant" id="themeVideo" autoplay muted loop playsinline preload="auto" aria-label="Adamant theme preview">
+<source src="assets/themes-adamant.mov" type="video/mp4"/>
+</video>
+</div>
+</div>
 </section>
 
-<!-- ── FEATURES ── -->
-<section id="features" style="padding:80px 24px;border-top:1px solid var(--border);">
-  <div style="max-width:1024px;margin:0 auto;">
-    <p class="section-label" style="margin-bottom:36px;font-family:'Instrument Serif',Georgia,serif;font-size:18px;color:#fff;">Features</p>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:860px;">
-      <div class="feature-card">
-        <!-- Waveform bars -->
-        <svg style="display:block;margin-bottom:14px;" width="40" height="28" viewBox="0 0 40 28" fill="none">
-          <rect x="0" y="11" width="3" height="6" rx="1.5" fill="#282828"/>
-          <rect x="5" y="7" width="3" height="14" rx="1.5" fill="#2e2e2e"/>
-          <rect x="10" y="4" width="3" height="20" rx="1.5" fill="#333"/>
-          <rect x="15" y="8" width="3" height="12" rx="1.5" fill="#2e2e2e"/>
-          <rect x="20" y="11" width="3" height="6" rx="1.5" fill="#282828"/>
-          <rect x="25" y="5" width="3" height="18" rx="1.5" fill="#333"/>
-          <rect x="30" y="9" width="3" height="10" rx="1.5" fill="#2a2a2a"/>
-          <rect x="35" y="13" width="3" height="2" rx="1" fill="#222"/>
-        </svg>
-        <div style="font-size:16px;color:#fff;font-family:'Instrument Serif',Georgia,serif;margin-bottom:6px;">Local transcription</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">Whisper.cpp runs on-device. No audio ever leaves your Mac.</p>
-      </div>
-      <div class="feature-card">
-        <!-- Connected nodes -->
-        <svg style="display:block;margin-bottom:14px;" width="40" height="28" viewBox="0 0 40 28" fill="none">
-          <circle cx="20" cy="14" r="3.5" fill="#2e2e2e"/>
-          <circle cx="5" cy="6" r="2.5" fill="#252525"/>
-          <circle cx="5" cy="22" r="2.5" fill="#252525"/>
-          <circle cx="35" cy="6" r="2.5" fill="#252525"/>
-          <circle cx="35" cy="22" r="2.5" fill="#252525"/>
-          <line x1="16.8" y1="11.5" x2="7.2" y2="7.8" stroke="#222" stroke-width="1"/>
-          <line x1="16.8" y1="16.5" x2="7.2" y2="20.2" stroke="#222" stroke-width="1"/>
-          <line x1="23.2" y1="11.5" x2="32.8" y2="7.8" stroke="#222" stroke-width="1"/>
-          <line x1="23.2" y1="16.5" x2="32.8" y2="20.2" stroke="#222" stroke-width="1"/>
-        </svg>
-        <div style="font-size:16px;color:#fff;font-family:'Instrument Serif',Georgia,serif;margin-bottom:6px;">AI summaries</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">Ollama, Claude, Groq, or OpenRouter. Your LLM, your choice.</p>
-      </div>
-      <div class="feature-card">
-        <!-- Shield -->
-        <svg style="display:block;margin-bottom:14px;" width="40" height="28" viewBox="0 0 40 28" fill="none">
-          <path d="M20 3L9 7.5v8c0 6.5 4.5 10.5 11 12 6.5-1.5 11-5.5 11-12v-8L20 3z" stroke="#2e2e2e" stroke-width="1.5" fill="none"/>
-          <path d="M15 14.5l3.5 3.5 6.5-7" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <div style="font-size:16px;color:#fff;font-family:'Instrument Serif',Georgia,serif;margin-bottom:6px;">Private by default</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">No cloud, no accounts, no telemetry. Stored in SQLite on your machine.</p>
-      </div>
-      <div class="feature-card">
-        <!-- Folder + magnifier -->
-        <svg style="display:block;margin-bottom:14px;" width="40" height="28" viewBox="0 0 40 28" fill="none">
-          <path d="M3 10h26v13a2 2 0 01-2 2H5a2 2 0 01-2-2V10z" stroke="#2e2e2e" stroke-width="1.5" fill="none"/>
-          <path d="M3 10V8a2 2 0 012-2h7l2.5 4" stroke="#2e2e2e" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
-          <circle cx="30.5" cy="18" r="4" stroke="#333" stroke-width="1.5" fill="none"/>
-          <line x1="33.3" y1="21" x2="37" y2="25" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <div style="font-size:16px;color:#fff;font-family:'Instrument Serif',Georgia,serif;margin-bottom:6px;">Folders &amp; search</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">Organize meetings into folders. Full-text search across all transcripts.</p>
-      </div>
-      <div class="feature-card">
-        <!-- Chip with pins -->
-        <svg style="display:block;margin-bottom:14px;" width="40" height="28" viewBox="0 0 40 28" fill="none">
-          <rect x="12" y="6" width="16" height="16" rx="2" stroke="#2e2e2e" stroke-width="1.5" fill="none"/>
-          <rect x="16" y="10" width="8" height="8" rx="1" fill="#232323"/>
-          <line x1="16" y1="6" x2="16" y2="2" stroke="#2a2a2a" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="24" y1="6" x2="24" y2="2" stroke="#2a2a2a" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="16" y1="22" x2="16" y2="26" stroke="#2a2a2a" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="24" y1="22" x2="24" y2="26" stroke="#2a2a2a" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="12" y1="12" x2="8" y2="12" stroke="#2a2a2a" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="12" y1="17" x2="8" y2="17" stroke="#2a2a2a" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="28" y1="12" x2="32" y2="12" stroke="#2a2a2a" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="28" y1="17" x2="32" y2="17" stroke="#2a2a2a" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <div style="font-size:16px;color:#fff;font-family:'Instrument Serif',Georgia,serif;margin-bottom:6px;">Apple Silicon</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">Optimized for M-series chips with Metal GPU acceleration for Whisper.</p>
-      </div>
-      <div class="feature-card">
-        <!-- Code brackets -->
-        <svg style="display:block;margin-bottom:14px;" width="40" height="28" viewBox="0 0 40 28" fill="none">
-          <path d="M15 6L7 14l8 8" stroke="#2e2e2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M25 6l8 8-8 8" stroke="#2e2e2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <line x1="22" y1="4" x2="18" y2="24" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <div style="font-size:16px;color:#fff;font-family:'Instrument Serif',Georgia,serif;margin-bottom:6px;">Open source</div>
-        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">MIT license. Read the code. Self-hostable. No vendor lock-in.</p>
-      </div>
+<section class="models-section" id="models">
+<div class="models-inner">
+<p class="section-kicker">/ 03 · Under the hood</p>
+<h2 class="models-title">Powerful models <span class="em">built-in</span>.</h2>
+<p class="models-subtitle">Download our local models or use any cloud model.</p>
+
+<div class="models-shell">
+<div class="models-vline"></div>
+
+  <div class="ms-col">
+    <div class="ms-head">
+      <div class="ms-head-left"><div class="ms-dot ms-dot--local"></div><span class="ms-head-title">Local models</span></div>
+      <span class="ms-head-tag ms-head-tag--local">100% private · On-device</span>
     </div>
+    <div class="ms-local-list">
+      <div class="ms-local-row"><div class="ms-local-logo ms-local-logo--openai"><img src="openai-logo.webp" alt="OpenAI Whisper" loading="lazy"></div><div class="ms-local-meta"><div class="ms-local-name">OpenAI's Whisper.cpp</div><div class="ms-local-desc">Transcription · tiny through large-v3</div></div><span class="ms-cloud-tag">STT</span></div>
+      <div class="ms-local-row"><div class="ms-local-logo ms-local-logo--nvidia"><img src="nvidia-logo.png" alt="NVIDIA Parakeet" loading="lazy"></div><div class="ms-local-meta"><div class="ms-local-name">NVIDIA Parakeet</div><div class="ms-local-desc">Fast real-time transcription · TDT 0.6B</div></div><span class="ms-cloud-tag">STT</span></div>
+      <div class="ms-local-row"><div class="ms-local-logo ms-local-logo--google"><img src="google-logo.png" alt="Google Gemma" loading="lazy"></div><div class="ms-local-meta"><div class="ms-local-name">Google Gemma</div><div class="ms-local-desc">On-device reasoning: Gemma 3 and Gemma 4</div></div><span class="ms-cloud-tag">LLM</span></div>
+      <div class="ms-local-row"><div class="ms-local-logo ms-local-logo--qwen"><img src="qwen-logo.webp" alt="Qwen" loading="lazy"></div><div class="ms-local-meta"><div class="ms-local-name">Qwen</div><div class="ms-local-desc">On-device reasoning · Qwen 3 1.7B</div></div><span class="ms-cloud-tag">LLM</span></div>
+      <div class="ms-local-row"><div class="ms-local-logo ms-local-logo--deepseek"><img src="deepseek-logo.png" alt="DeepSeek" loading="lazy"></div><div class="ms-local-meta"><div class="ms-local-name">DeepSeek</div><div class="ms-local-desc">On-device reasoning · DeepSeek R1 1.5B</div></div><span class="ms-cloud-tag">LLM</span></div>
+    </div>
+    <div class="ms-local-foot"><p class="ms-lnote">Zero cloud cost when using local models. Own your LLMs with no compromise.</p></div>
   </div>
+
+  <div class="ms-col">
+    <div class="ms-head">
+      <div class="ms-head-left"><div class="ms-dot ms-dot--cloud"></div><span class="ms-head-title">Cloud models</span></div>
+      <span class="ms-head-tag ms-head-tag--cloud">Opt-in · Bring your own key</span>
+    </div>
+    <div class="ms-cloud-list">
+      <div class="ms-cloud-row"><div class="ms-cloud-logo ms-cloud-logo--white"><img src="openai-logo.webp" alt="OpenAI" loading="lazy"></div><div class="ms-cloud-meta"><div class="ms-cloud-name">OpenAI</div><div class="ms-cloud-desc">Frontier intelligence at reasonable costs.</div></div><span class="ms-cloud-tag">LLM</span></div>
+      <div class="ms-cloud-row"><div class="ms-cloud-logo ms-cloud-logo--claude"><img src="claude-white.png" alt="Claude" loading="lazy"></div><div class="ms-cloud-meta"><div class="ms-cloud-name">Claude</div><div class="ms-cloud-desc">The most powerful models from Anthropic.</div></div><span class="ms-cloud-tag">LLM</span></div>
+      <div class="ms-cloud-row"><div class="ms-cloud-logo ms-cloud-logo--groq"><img src="groq-white.png" alt="Groq" loading="lazy"></div><div class="ms-cloud-meta"><div class="ms-cloud-name">Groq</div><div class="ms-cloud-desc">Fast models at affordable costs.</div></div><span class="ms-cloud-tag">LLM</span></div>
+      <div class="ms-cloud-row"><div class="ms-cloud-logo ms-cloud-logo--or"><img src="openrouter-white.png" alt="OpenRouter" loading="lazy"></div><div class="ms-cloud-meta"><div class="ms-cloud-name">OpenRouter</div><div class="ms-cloud-desc">Access 100+ models with one key.</div></div><span class="ms-cloud-tag">LLM</span></div>
+      <div class="ms-cloud-row"><div class="ms-cloud-logo ms-cloud-logo--ollama"><img src="ollama-white.png" alt="Ollama" loading="lazy"></div><div class="ms-cloud-meta"><div class="ms-cloud-name">Ollama</div><div class="ms-cloud-desc">Run any open model.</div></div><span class="ms-cloud-tag">LLM</span></div>
+    </div>
+    <div class="ms-cloud-bottom"><div class="ms-c-any"><div class="ms-c-any-ico">◎</div><div><div class="ms-c-any-title">Any OpenAI-compatible endpoint</div><div class="ms-c-any-sub">Custom base URL — your infra, your auth.</div></div></div></div>
+  </div>
+</div>
+</div>
 </section>
 
-<!-- ── FOOTER ── -->
-<footer style="border-top:1px solid var(--border);padding:32px 24px;">
-  <div style="max-width:1024px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
-    <div style="display:flex;align-items:center;gap:8px;">
-      <img src="logo.png" alt="Adamant" style="width:20px;height:20px;object-fit:contain;opacity:0.4;" />
-      <span style="font-size:13px;color:var(--text-muted);">Adamant</span>
-    </div>
-    <div style="display:flex;gap:20px;font-size:13px;">
-      <a href="https://github.com/richling98/adamant" target="_blank" class="nav-link">GitHub</a>
-      <a href="https://github.com/richling98/adamant/releases" target="_blank" class="nav-link">Releases</a>
-      <a href="https://github.com/richling98/adamant/issues" target="_blank" class="nav-link">Issues</a>
-    </div>
-    <span style="font-size:12px;color:#333;">MIT License · © 2026</span>
-  </div>
+<section class="comparison-section" id="comparison">
+<div class="comparison-inner">
+<p class="section-kicker">/ 04 · Adamant versus peers</p>
+<h2 class="comparison-title">The Adamant difference.</h2>
+<div class="comparison-card">
+<div class="comparison-table-scroll">
+<table class="comparison-table">
+<colgroup>
+<col class="feature"><col class="product"><col class="product"><col class="product"><col class="product">
+</colgroup>
+<thead>
+<tr>
+<th scope="col">Top features</th>
+<th scope="col" class="adamant"><span class="comparison-product-name">Adamant</span></th>
+<th scope="col"><span class="comparison-product-name">Granola</span></th>
+<th scope="col"><span class="comparison-product-name">Fireflies AI</span></th>
+<th scope="col"><span class="comparison-product-name">Otter.ai</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Real-time transcription</td>
+<td class="adamant"><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+</tr>
+<tr>
+<td>AI summaries and action items</td>
+<td class="adamant"><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+</tr>
+<tr>
+<td>No meeting bot required</td>
+<td class="adamant"><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+</tr>
+<tr>
+<td>Capture from any meeting app</td>
+<td class="adamant"><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+</tr>
+<tr>
+<td>Searchable meeting history and AI chat</td>
+<td class="adamant"><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+</tr>
+<tr>
+<td>Local or on-device processing</td>
+<td class="adamant"><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-no" aria-label="No">&mdash;</span></td>
+<td><span class="comparison-no" aria-label="No">&mdash;</span></td>
+<td><span class="comparison-no" aria-label="No">&mdash;</span></td>
+</tr>
+<tr>
+<td>Open source or self-hostable</td>
+<td class="adamant"><span class="comparison-check" aria-label="Yes">&#10003;</span><span class="comparison-note">MIT licensed</span></td>
+<td><span class="comparison-no" aria-label="No">&mdash;</span></td>
+<td><span class="comparison-no" aria-label="No">&mdash;</span></td>
+<td><span class="comparison-no" aria-label="No">&mdash;</span></td>
+</tr>
+<tr>
+<td>Bring your own model or provider</td>
+<td class="adamant"><span class="comparison-check" aria-label="Yes">&#10003;</span></td>
+<td><span class="comparison-no" aria-label="No">&mdash;</span></td>
+<td><span class="comparison-no" aria-label="No">&mdash;</span></td>
+<td><span class="comparison-no" aria-label="No">&mdash;</span></td>
+</tr>
+<tr class="comparison-cost-row">
+<td><span class="comparison-cost-label">First month's cost</span></td>
+<td class="adamant"><span class="comparison-cost">$20</span><span class="comparison-note">Buy once, own forever.</span></td>
+<td><span class="comparison-cost">$14</span><span class="comparison-note">per user / month</span></td>
+<td><span class="comparison-cost">$10</span><span class="comparison-note">per seat / month</span></td>
+<td><span class="comparison-cost">$8.33</span><span class="comparison-note">per user / month</span></td>
+</tr>
+<tr class="comparison-cost-row">
+<td><span class="comparison-cost-label">First year's cost</span></td>
+<td class="adamant"><span class="comparison-cost">$20</span><span class="comparison-note">Same one-time purchase</span></td>
+<td><span class="comparison-cost">$168</span><span class="comparison-note">$14 x 12 months</span></td>
+<td><span class="comparison-cost">$120</span><span class="comparison-note">$10 x 12 months</span></td>
+<td><span class="comparison-cost">$99.96</span><span class="comparison-note">$8.33 x 12 months</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p class="comparison-sources"><strong>Sources:</strong> <a href="https://github.com/richling98/adamant" target="_blank" rel="noreferrer">Adamant</a> · <a href="https://www.granola.ai/pricing" target="_blank" rel="noreferrer">Granola</a> · <a href="https://fireflies.ai/pricing" target="_blank" rel="noreferrer">Fireflies AI</a> · <a href="https://otter.ai/pricing" target="_blank" rel="noreferrer">Otter.ai</a>. Pricing uses each product's paid monthly plan, before taxes, and excludes free tiers. Reviewed July 2026.</p>
+<div class="comparison-cta"><a class="cta-primary" onclick="downloadLatest()"><span class="cta-inner"><img class="cta-icon" src="download-icon.png" alt="">Buy once, own forever</span></a></div>
+</div>
+</section>
+
+<footer class="site-footer">
+<div class="site-footer-inner">
+<div class="footer-grid">
+<div>
+<a class="footer-brand" href="./"><img src="logo.png" alt=""><span>Adamant</span></a>
+<p class="footer-tagline">Private meeting intelligence, built to stay on your machine.</p>
+</div>
+<div>
+<p class="footer-group-title">Product</p>
+<a class="footer-link" href="#tools">Features</a>
+<a class="footer-link" href="#models">Models</a>
+<a class="footer-link" href="#comparison">Compare</a>
+</div>
+<div>
+<p class="footer-group-title">Resources</p>
+<a class="footer-link" href="https://github.com/richling98/adamant" target="_blank" rel="noreferrer">GitHub</a>
+<a class="footer-link" href="https://github.com/richling98/adamant#readme" target="_blank" rel="noreferrer">Documentation</a>
+<a class="footer-link" href="https://github.com/richling98/adamant/releases" target="_blank" rel="noreferrer">Releases</a>
+</div>
+<div>
+<p class="footer-group-title">Trust</p>
+<a class="footer-link" href="https://github.com/richling98/adamant/blob/main/docs/PRIVACY_POLICY.md" target="_blank" rel="noreferrer">Privacy policy</a>
+<a class="footer-link" href="https://github.com/richling98/adamant/blob/main/LICENSE.md" target="_blank" rel="noreferrer">MIT license</a>
+<a class="footer-link" href="https://github.com/richling98/adamant/issues" target="_blank" rel="noreferrer">Report an issue</a>
+</div>
+</div>
+<div class="footer-meta"><span>Adamant · Open source · © 2026</span><a href="https://github.com/richling98/adamant" target="_blank" rel="noreferrer">Made for private work</a></div>
+</div>
 </footer>
 
-<!-- ── SCRIPTS ── -->
 <script>
-  const GITHUB_REPO = 'richling98/adamant';
-
-  async function downloadLatest() {
-    try {
-      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
-      const data = await res.json();
-      const dmg = data.assets?.find(a => a.name.endsWith('.dmg'));
-      if (dmg) {
-        window.location.href = dmg.browser_download_url;
-      } else {
-        window.open(`https://github.com/${GITHUB_REPO}/releases/latest`, '_blank');
-      }
-    } catch {
-      window.open(`https://github.com/${GITHUB_REPO}/releases/latest`, '_blank');
+const GITHUB_REPO='richling98/adamant';
+async function downloadLatest(){try{const r=await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);const d=await r.json();const dmg=d.assets?.find(a=>a.name.endsWith('.dmg'));if(dmg){window.location.href=dmg.browser_download_url;return;}}catch{}window.open(`https://github.com/${GITHUB_REPO}/releases/latest`,'_blank');}
+const tog=document.getElementById('mobileToggle');const mobMenu=document.getElementById('mobileMenu');
+tog?.addEventListener('click',()=>mobMenu.classList.toggle('open'));
+document.addEventListener('click',(e)=>{if(!mobMenu.contains(e.target)&&!tog.contains(e.target)) mobMenu.classList.remove('open');});
+const toolVideo=document.getElementById('toolVideo');
+const toolName=document.getElementById('toolName');
+const toolCopy=document.getElementById('toolCopy');
+const toolData={
+  scribe:{name:'Scribe:',copy:'Capture and summarize anything with AI',src:'assets/scribe-final-product-marketing-sync.mov'},
+  secretary:{name:'Secretary:',copy:"Capture to-do's and actions from meetings instantly",src:'assets/secretary-final.mov'},
+  savant:{name:'Savant:',copy:'Chat with all of your meetings like your second brain.',src:'assets/hero-video-v4.mp4'}
+};
+const activeTab=document.querySelector('.tool-tab.active');
+if(activeTab&&toolVideo){
+  const tool=toolData[activeTab.dataset.tool];
+  if(tool){toolVideo.src=tool.src;toolVideo.load();}
+}
+document.querySelectorAll('.tool-tab').forEach((tab)=>{
+  tab.addEventListener('click',()=>{
+    const tool=toolData[tab.dataset.tool];
+    if(!tool||!toolVideo)return;
+    document.querySelectorAll('.tool-tab').forEach((button)=>{
+      const active=button===tab;
+      button.classList.toggle('active',active);
+      button.setAttribute('aria-selected',active?'true':'false');
+    });
+    toolName.textContent=tool.name;
+    toolCopy.textContent=tool.copy;
+    toolVideo.setAttribute('aria-label',`${tool.name} feature preview`);
+    if(toolVideo.currentSrc.endsWith(tool.src)){
+      toolVideo.currentTime=0;
+      toolVideo.play().catch(()=>{});
+      return;
     }
-  }
-
-  async function loadGithubStats() {
-    try {
-      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}`);
-      const data = await res.json();
-      if (data.stargazers_count != null) {
-        const stars = data.stargazers_count >= 1000
-          ? `${(data.stargazers_count / 1000).toFixed(1)}k`
-          : data.stargazers_count;
-        document.getElementById('star-count').textContent = `★ ${stars}`;
-      }
-    } catch {}
-  }
-
-  loadGithubStats();
+    toolVideo.src=tool.src;
+    toolVideo.load();
+    toolVideo.play().catch(()=>{});
+  });
+});
+const themeData={
+  adamant:{src:'assets/themes-adamant.mov'},
+  bronze:{src:'assets/themes-bronze.mov'},
+  rune:{src:'assets/themes-rune.mov'},
+  mithril:{src:'assets/themes-mithril.mov'}
+};
+const themeVideo=document.getElementById('themeVideo');
+const themesSection=document.getElementById('themes');
+const activeThemeTab=document.querySelector('.theme-tab.active');
+if(activeThemeTab&&themeVideo){
+  const t=themeData[activeThemeTab.dataset.theme];
+  if(t){themeVideo.src=t.src;themeVideo.load();}
+}
+document.querySelectorAll('.theme-tab').forEach((tab)=>{
+  tab.addEventListener('click',()=>{
+    const theme=tab.dataset.theme;
+    if(!themeVideo||!themesSection||!theme)return;
+    document.querySelectorAll('.theme-tab').forEach((button)=>{
+      const active=button===tab;
+      button.classList.toggle('active',active);
+      button.setAttribute('aria-selected',active?'true':'false');
+    });
+    themesSection.className=`themes-section theme-${theme}`;
+    themeVideo.className=`theme-video theme-${theme}`;
+    themeVideo.setAttribute('aria-label',`${tab.textContent} theme preview`);
+    if(themeVideo.currentSrc.endsWith(themeData[theme].src))return;
+    themeVideo.src=themeData[theme].src;
+    themeVideo.load();
+    themeVideo.play().catch(()=>{});
+  });
+});
 </script>
-
 </body>
 </html>

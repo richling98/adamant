@@ -1,0 +1,61 @@
+{
+  version: 2,
+  mediaFileName: 'CleanShot 2026-07-13 at 23.53.13.mp4',
+  cutSegments: [
+    {
+      start: 0,
+      name: '',
+      selected: true,
+    },
+    {
+      start: 1.5672776911076443,
+      end: 4.165659126365054,
+      name: '',
+      selected: true,
+    },
+    {
+      start: 4.165659126365054,
+      name: '',
+      selected: true,
+    },
+    {
+      start: 4.5781006240249615,
+      end: 7.671411856474259,
+      name: '',
+      selected: true,
+    },
+    {
+      start: 7.671411856474259,
+      name: '',
+      selected: true,
+    },
+    {
+      start: 8.331318252730108,
+      end: 16.580148205928236,
+      name: '',
+      selected: true,
+    },
+    {
+      start: 16.580148205928236,
+      name: '',
+      selected: true,
+    },
+    {
+      start: 20.044656786271453,
+      end: 23.96285101404056,
+      name: '',
+      selected: true,
+    },
+    {
+      start: 23.96285101404056,
+      name: '',
+      selected: true,
+    },
+    {
+      start: 46.853354134165365,
+      end: 52.875,
+      name: '',
+      selected: true,
+    },
+  ],
+}

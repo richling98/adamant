@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A preview comparison of Adamant, Granola, Fireflies AI, and Otter.ai.">
+  <title>Adamant vs. the alternatives</title>
+  <style>
+    :root {
+      --bg: #07100b;
+      --surface: #0d1712;
+      --surface-raised: #111d16;
+      --line: rgba(164, 224, 176, 0.14);
+      --line-strong: rgba(164, 224, 176, 0.24);
+      --text: #f4f8f3;
+      --muted: #8b9b90;
+      --quiet: #5c6b60;
+      --green: #89e86f;
+      --green-dark: #163c20;
+      --amber: #e6bd72;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { background: var(--bg); }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 80% -10%, rgba(64, 137, 70, 0.18), transparent 34rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; }
+
+    .shell {
+      width: min(1180px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 34px 0 80px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 104px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+
+    .brand img {
+      width: 29px;
+      height: 29px;
+      border-radius: 9px;
+    }
+
+    .preview-label {
+      color: var(--quiet);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .intro {
+      max-width: 760px;
+      margin-bottom: 56px;
+    }
+
+    .eyebrow {
+      margin: 0 0 20px;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 740px;
+      margin: 0;
+      font-size: clamp(42px, 7vw, 76px);
+      line-height: 0.98;
+      letter-spacing: -0.075em;
+      font-weight: 620;
+    }
+
+    .lede {
+      max-width: 600px;
+      margin: 26px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.7;
+    }
+
+    .comparison-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(13, 23, 18, 0.76);
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.24);
+    }
+
+    .table-scroll { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      min-width: 850px;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    col.feature { width: 35%; }
+    col.product { width: 16.25%; }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 20px 18px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    th:first-child, td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      text-align: left;
+      background: var(--surface);
+    }
+    tr:last-child td { border-bottom: 0; }
+
+    thead th {
+      height: 116px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    thead th:first-child {
+      z-index: 3;
+      color: var(--quiet);
+      font-size: 10px;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    thead th.adamant {
+      position: relative;
+      color: var(--text);
+      background: linear-gradient(180deg, rgba(76, 173, 81, 0.2), rgba(76, 173, 81, 0.05));
+      border-left: 1px solid var(--line-strong);
+      border-right: 1px solid var(--line-strong);
+    }
+
+    thead th.adamant::before {
+      content: "Privacy first";
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translate(-50%, -1px);
+      width: max-content;
+      padding: 6px 10px;
+      border-radius: 0 0 7px 7px;
+      background: var(--green);
+      color: #09200d;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .product-name {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--text);
+      font-size: 15px;
+      letter-spacing: -0.02em;
+    }
+
+    .adamant .product-name { color: var(--green); }
+
+    .product-type {
+      display: block;
+      color: var(--quiet);
+      font-size: 10px;
+      font-weight: 500;
+    }
+
+    tbody td:first-child {
+      color: #d4ded5;
+      font-size: 13px;
+      font-weight: 520;
+    }
+
+    tbody td.adamant {
+      background: rgba(76, 173, 81, 0.07);
+      border-left: 1px solid var(--line-strong);
+      border-right: 1px solid var(--line-strong);
+    }
+
+    .check {
+      display: inline-grid;
+      width: 25px;
+      height: 25px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--green-dark);
+      color: var(--green);
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .no {
+      color: #4e5d52;
+      font-size: 18px;
+      font-weight: 400;
+    }
+
+    .na {
+      display: inline-block;
+      color: var(--amber);
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .note {
+      display: block;
+      margin-top: 8px;
+      color: var(--quiet);
+      font-size: 10px;
+      line-height: 1.45;
+    }
+
+    .footnotes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 26px;
+      padding-top: 22px;
+      border-top: 1px solid var(--line);
+    }
+
+    .footnotes p {
+      margin: 0;
+      color: var(--quiet);
+      font-size: 11px;
+      line-height: 1.65;
+    }
+
+    .footnotes strong { color: var(--muted); font-weight: 600; }
+    .footnotes a { color: var(--muted); text-underline-offset: 3px; }
+    .footnotes a:hover { color: var(--green); }
+
+    .cost-row td {
+      background: rgba(255, 255, 255, 0.025);
+      border-top: 1px solid var(--line-strong);
+    }
+
+    .cost-row td:first-child { background: var(--surface-raised); }
+    .cost-row td.adamant { background: rgba(76, 173, 81, 0.14); }
+
+    .cost-label {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .cost {
+      display: block;
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: -0.04em;
+    }
+
+    .cost-row .note { margin-top: 5px; }
+
+    @media (max-width: 700px) {
+      .shell { width: min(100% - 28px, 1180px); padding-top: 20px; }
+      .topbar { margin-bottom: 76px; }
+      .preview-label { font-size: 9px; }
+      .intro { margin-bottom: 36px; }
+      .lede { font-size: 15px; }
+      .comparison-card { border-radius: 12px; }
+      th, td { padding: 17px 14px; }
+      thead th { height: 108px; }
+      .footnotes { grid-template-columns: 1fr; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="index.html" aria-label="Adamant home">
+        <img src="logo.png" alt="">
+        <span>Adamant</span>
+      </a>
+      <span class="preview-label">Comparison section preview</span>
+    </header>
+
+    <section class="intro" aria-labelledby="page-title">
+      <p class="eyebrow">Choose your meeting intelligence layer</p>
+      <h1 id="page-title">The difference is where your conversation goes.</h1>
+      <p class="lede">A quick look at how Adamant compares with popular tools for capturing, understanding, and keeping your meeting knowledge.</p>
+    </section>
+
+    <section aria-label="Feature comparison">
+      <div class="comparison-card">
+        <div class="table-scroll">
+          <table>
+            <colgroup>
+              <col class="feature">
+              <col class="product">
+              <col class="product">
+              <col class="product">
+              <col class="product">
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Top features</th>
+                <th scope="col" class="adamant">
+                  <span class="product-name">Adamant</span>
+                </th>
+                <th scope="col">
+                  <span class="product-name">Granola</span>
+                </th>
+                <th scope="col">
+                  <span class="product-name">Fireflies AI</span>
+                </th>
+                <th scope="col">
+                  <span class="product-name">Otter.ai</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Real-time transcription</td>
+                <td class="adamant"><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+              </tr>
+              <tr>
+                <td>AI summaries and action items</td>
+                <td class="adamant"><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+              </tr>
+              <tr>
+                <td>No meeting bot required</td>
+                <td class="adamant"><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+              </tr>
+              <tr>
+                <td>Capture from any meeting app</td>
+                <td class="adamant"><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+              </tr>
+              <tr>
+                <td>Searchable meeting history and AI chat</td>
+                <td class="adamant"><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="check" aria-label="Yes">&#10003;</span></td>
+              </tr>
+              <tr>
+                <td>Local or on-device processing</td>
+                <td class="adamant"><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="no" aria-label="No">&mdash;</span></td>
+                <td><span class="no" aria-label="No">&mdash;</span></td>
+                <td><span class="no" aria-label="No">&mdash;</span></td>
+              </tr>
+              <tr>
+                <td>Open source or self-hostable</td>
+                <td class="adamant"><span class="check" aria-label="Yes">&#10003;</span><span class="note">MIT licensed</span></td>
+                <td><span class="no" aria-label="No">&mdash;</span></td>
+                <td><span class="no" aria-label="No">&mdash;</span></td>
+                <td><span class="no" aria-label="No">&mdash;</span></td>
+              </tr>
+              <tr>
+                <td>Bring your own model or provider</td>
+                <td class="adamant"><span class="check" aria-label="Yes">&#10003;</span></td>
+                <td><span class="no" aria-label="No">&mdash;</span></td>
+                <td><span class="no" aria-label="No">&mdash;</span></td>
+                <td><span class="no" aria-label="No">&mdash;</span></td>
+              </tr>
+              <tr class="cost-row">
+                <td><span class="cost-label">First month's cost</span></td>
+                <td class="adamant"><span class="cost">$20</span><span class="note">Buy once, own forever.</span></td>
+                <td><span class="cost">$14</span><span class="note">per user / month</span></td>
+                <td><span class="cost">$10</span><span class="note">per seat / month</span></td>
+                <td><span class="cost">$8.33</span><span class="note">per user / month</span></td>
+              </tr>
+              <tr class="cost-row">
+                <td><span class="cost-label">First year's cost</span></td>
+                <td class="adamant"><span class="cost">$20</span><span class="note">Same one-time purchase</span></td>
+                <td><span class="cost">$168</span><span class="note">$14 x 12 months</span></td>
+                <td><span class="cost">$120</span><span class="note">$10 x 12 months</span></td>
+                <td><span class="cost">$99.96</span><span class="note">$8.33 x 12 months</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="footnotes">
+        <p><strong>Reading the table:</strong> A check means the product publicly describes the capability. A dash means it is not a stated product capability. Prices use each product's paid monthly plan, before taxes, and exclude free tiers.</p>
+        <p><strong>Sources:</strong> <a href="https://github.com/richling98/adamant" target="_blank" rel="noreferrer">Adamant</a> · <a href="https://www.granola.ai/pricing" target="_blank" rel="noreferrer">Granola</a> · <a href="https://fireflies.ai/pricing" target="_blank" rel="noreferrer">Fireflies AI</a> · <a href="https://otter.ai/pricing" target="_blank" rel="noreferrer">Otter.ai</a>. Reviewed July 2026.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
