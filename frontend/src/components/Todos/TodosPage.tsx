@@ -253,7 +253,7 @@ export function TodosPage() {
         {isAllView ? (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
               <ListTodo className="w-4 h-4 text-primary" />
-              <h1 className="text-lg font-semibold text-zinc-100 leading-none">All Actions</h1>
+              <h1 className="text-lg font-semibold text-zinc-100 leading-none">Your to do's</h1>
               <button
                 type="button"
                 onClick={() => setShowAllComposer(true)}
@@ -322,9 +322,25 @@ export function TodosPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider flex items-center justify-between">
-                <span>{totalCount} total</span>
-                <span>{checked.length} completed</span>
+              <div className="rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-zinc-400">
+                    <span className="inline-block w-2 h-2 rounded-full bg-rose-500 mr-1.5" />
+                    {unchecked.length} incomplete to do{(unchecked.length !== 1 ? "'s" : "")}
+                  </span>
+                  <span className="text-xs text-zinc-400">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5" />
+                    {checked.length} completed
+                  </span>
+                </div>
+                <div
+                  className="h-2 bg-zinc-700 rounded-full overflow-hidden transition-all duration-500"
+                  style={{
+                    background: totalCount > 0
+                      ? `linear-gradient(to right, #f43f5e 0%, #f43f5e calc(${(unchecked.length / totalCount) * 100}% - 12px), #22c55e calc(${(unchecked.length / totalCount) * 100}% + 12px), #22c55e 100%)`
+                      : '#3f3f46',
+                  }}
+                />
               </div>
               {showAllComposer && (
                 <InlineActionComposer
@@ -697,7 +713,7 @@ function TodosDateGroup({
           </span>
           <span className="flex-1 min-w-0 text-sm font-medium text-zinc-100 truncate">{label}</span>
           <span className="text-xs text-zinc-500 flex-shrink-0">
-            {total} item{total !== 1 ? 's' : ''}
+            {unchecked.length} to do{unchecked.length !== 1 ? "'s" : "'s"} | {checked.length} complete
           </span>
         </button>
         <button

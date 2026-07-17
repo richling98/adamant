@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::collections::VecDeque;
+use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use anyhow::Result;
@@ -673,6 +674,10 @@ impl AudioCapture {
     }
 }
 
+/// Echo guard window: if system speech ended within this many milliseconds,
+/// mic speech is assumed to be echo and tagged as "system" (no [you] marker).
+const ECHO_GUARD_DURATION_MS: u64 = 1_500;
+
 /// VAD-driven audio processing pipeline
 /// Uses Voice Activity Detection to segment speech in real-time and send only speech to Whisper
 pub struct AudioPipeline {
@@ -700,6 +705,8 @@ pub struct AudioPipeline {
     emitted_segment_count: u64,
     forced_flush_segment_count: u64,
     dropped_short_segment_count: u64,
+    last_system_speech_end: Option<Instant>,
+    system_is_speaking: bool,
 }
 
 impl AudioPipeline {
@@ -776,6 +783,8 @@ impl AudioPipeline {
             emitted_segment_count: 0,
             forced_flush_segment_count: 0,
             dropped_short_segment_count: 0,
+            last_system_speech_end: None,
+            system_is_speaking: false,
         }
     }
 
@@ -926,6 +935,15 @@ impl AudioPipeline {
                     self.speech_presence_refreshes += 1;
                 }
 
+                if source == DeviceType::System {
+                    if vad_result.speech_present && !self.system_is_speaking {
+                        self.system_is_speaking = true;
+                    } else if !vad_result.speech_present && self.system_is_speaking {
+                        self.system_is_speaking = false;
+                        self.last_system_speech_end = Some(Instant::now());
+                    }
+                }
+
                 if vad_result.forced_flush_count > 0 {
                     self.forced_flush_segment_count += vad_result.forced_flush_count as u64;
                 }
@@ -970,12 +988,25 @@ impl AudioPipeline {
                 );
             }
 
+            // Echo guard: if the mic is emitting speech but system audio recently
+            // contained speech, this is likely acoustic echo. Tag it as "system"
+            // so it doesn't get the [you] marker in the UI.
+            let effective_source = if source == DeviceType::Microphone {
+                self.last_system_speech_end
+                    .map(|t| t.elapsed().as_millis() as u64 <= ECHO_GUARD_DURATION_MS)
+                    .unwrap_or(false)
+                    .then_some(DeviceType::System)
+                    .unwrap_or(source)
+            } else {
+                source
+            };
+
             let transcription_chunk = AudioChunk {
                 data: segment.samples,
                 sample_rate: 16_000,
                 timestamp: segment.start_timestamp_ms / 1000.0,
                 chunk_id: self.chunk_id_counter,
-                device_type: source,
+                device_type: effective_source,
             };
 
             if let Err(e) = self.transcription_sender.send(transcription_chunk) {
