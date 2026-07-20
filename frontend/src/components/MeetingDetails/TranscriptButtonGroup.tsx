@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Copy, Mic, Pause, Play, Square } from 'lucide-react';
 import Analytics from '@/lib/analytics';
+import { useRecordingState } from '@/contexts/RecordingStateContext';
+import { useEffect, useState } from 'react';
 
 
 interface TranscriptButtonGroupProps {
@@ -25,6 +27,12 @@ interface TranscriptButtonGroupProps {
 }
 
 
+const formatDuration = (seconds: number): string => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
 export function TranscriptButtonGroup({
   transcriptCount,
   onCopyTranscript,
@@ -37,6 +45,15 @@ export function TranscriptButtonGroup({
   onResumeRecording,
   className = '',
 }: TranscriptButtonGroupProps) {
+  const { activeDuration } = useRecordingState();
+  const [displaySeconds, setDisplaySeconds] = useState(0);
+
+  useEffect(() => {
+    if (activeDuration !== null) {
+      setDisplaySeconds(Math.floor(activeDuration));
+    }
+  }, [activeDuration]);
+
   return (
     <div className={className}>
       <ButtonGroup>
@@ -107,6 +124,7 @@ export function TranscriptButtonGroup({
               <>
                 <Square className="lg:mr-2" size={16} fill="currentColor" />
                 <span className="hidden lg:inline">End Recording</span>
+                <span className="ml-2 text-white/80 text-xs font-mono tabular-nums">{formatDuration(displaySeconds)}</span>
               </>
             ) : (
               <>
