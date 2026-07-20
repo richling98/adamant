@@ -22,6 +22,12 @@ const PILL_BACKGROUND_BY_THEME: Record<string, string> = {
   bronze: 'linear-gradient(120deg, rgba(39, 25, 14, 0.98) 0%, rgba(60, 42, 22, 0.98) 100%)',
   adamant: 'linear-gradient(120deg, rgba(10, 28, 20, 0.98) 0%, rgba(18, 50, 37, 0.98) 100%)',
 };
+const PILL_BORDER_BY_THEME: Record<string, string> = {
+  rune: 'rgba(96, 165, 250, 0.12)',
+  mithril: 'rgba(125, 116, 201, 0.12)',
+  bronze: 'rgba(217, 160, 90, 0.14)',
+  adamant: 'rgba(45, 170, 120, 0.14)',
+};
 const PILL_SHADOW_BY_THEME: Record<string, string> = {
   rune: '0 1px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
   mithril: '0 1px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.08)',
@@ -147,21 +153,20 @@ export default function Home() {
   };
 
   const pillBackground = PILL_BACKGROUND_BY_THEME[uiTheme] ?? PILL_BACKGROUND_BY_THEME.rune;
+  const pillBorder = PILL_BORDER_BY_THEME[uiTheme] ?? PILL_BORDER_BY_THEME.rune;
   const pillShadow = PILL_SHADOW_BY_THEME[uiTheme] ?? PILL_SHADOW_BY_THEME.rune;
 
-  // Clean 3D pill body like Logo pill, with light-green (primary) outline retained
   const getHomeButtonStyle = (isHovered: boolean): React.CSSProperties => ({
     backgroundImage: pillBackground,
     backgroundRepeat: 'no-repeat',
     backdropFilter: 'blur(24px)',
     WebkitBackdropFilter: 'blur(24px)',
-    border: `1.5px solid ${isHovered ? 'hsl(var(--primary) / 0.95)' : 'hsl(var(--primary) / 0.65)'}`,
+    border: `1.5px solid ${isHovered ? 'rgba(255,255,255,0.20)' : pillBorder}`,
     color: 'rgba(255,255,255,0.92)',
     fontWeight: 600,
-    letterSpacing: '0.02em',
     boxShadow: isHovered
-      ? `${pillShadow}, 0 0 48px hsl(var(--primary) / 0.32), 0 12px 32px rgba(0,0,0,0.35)`
-      : `${pillShadow}, 0 0 32px hsl(var(--primary) / 0.18), 0 6px 18px rgba(0,0,0,0.22)`,
+      ? `${pillShadow}, 0 12px 32px rgba(0,0,0,0.35)`
+      : `${pillShadow}, 0 6px 18px rgba(0,0,0,0.22)`,
     transform: isHovered ? 'translateY(-2px) scale(1.04)' : 'translateY(0) scale(1)',
   } as React.CSSProperties);
 
@@ -215,7 +220,7 @@ export default function Home() {
             disabled={isCreatingMeeting}
             onMouseEnter={() => setHoverStartBtn(true)}
             onMouseLeave={() => setHoverStartBtn(false)}
-            className="min-w-[220px] px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="min-w-[220px] px-6 py-3 rounded-2xl font-semibold text-base transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
             style={getHomeButtonStyle(hoverStartBtn)}
           >
             Meet
@@ -226,7 +231,7 @@ export default function Home() {
               onClick={() => router.push('/todos')}
               onMouseEnter={() => setHoverTodosBtn(true)}
               onMouseLeave={() => setHoverTodosBtn(false)}
-              className="min-w-[150px] px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
+              className="min-w-[150px] px-6 py-3 rounded-2xl font-semibold text-base transition-all duration-300"
               style={getHomeButtonStyle(hoverTodosBtn)}
             >
               Tasks
@@ -239,7 +244,7 @@ export default function Home() {
               }}
               onMouseEnter={() => setHoverChatBtn(true)}
               onMouseLeave={() => setHoverChatBtn(false)}
-              className="min-w-[150px] px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
+              className="min-w-[150px] px-6 py-3 rounded-2xl font-semibold text-base transition-all duration-300"
               style={getHomeButtonStyle(hoverChatBtn)}
             >
               Chat
