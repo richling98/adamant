@@ -123,7 +123,7 @@ export default function RootLayout({
                             {showOnboarding ? (
                               <OnboardingFlow onComplete={handleOnboardingComplete} />
                             ) : (
-                              <div className="flex">
+                              <div className="flex h-screen">
                                 <Suspense fallback={null}>
                                   <Sidebar />
                                 </Suspense>

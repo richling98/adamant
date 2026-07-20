@@ -10,9 +10,9 @@ interface MainContentProps {
 const MainContent: React.FC<MainContentProps> = ({ children }) => {
   const { isCollapsed } = useSidebar();
 
-  return (
+    return (
     <main 
-      className={`flex-1 transition-all duration-300 ${
+      className={`flex-1 overflow-y-auto custom-scrollbar transition-all duration-300 ${
         isCollapsed ? 'ml-16' : 'ml-64'
       }`}
     >
