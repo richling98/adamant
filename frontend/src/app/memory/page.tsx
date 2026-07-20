@@ -5,6 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Send, RefreshCw, Loader2, File, Sparkles, BookOpen, Brain } from "lucide-react";
 import type { ModelConfig } from "@/services/configService";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -307,13 +309,34 @@ export default function MemoryPage() {
                 className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                     msg.role === "user"
-                      ? "bg-primary/20 text-primary-foreground border border-primary/20"
+                      ? "bg-primary/20 text-primary-foreground border border-primary/20 whitespace-pre-wrap"
                       : "bg-white/5 text-foreground border border-white/10"
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === "assistant" ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                        em: ({ children }) => <em className="italic">{children}</em>,
+                        ul: ({ children }) => <ul className="my-1 list-disc pl-4 space-y-0.5">{children}</ul>,
+                        ol: ({ children }) => <ol className="my-1 list-decimal pl-4 space-y-0.5">{children}</ol>,
+                        li: ({ children }) => <li className="leading-snug">{children}</li>,
+                        h1: ({ children }) => <h1 className="text-base font-semibold text-foreground mt-3 mb-1">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-base font-semibold text-foreground mt-3 mb-1">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-semibold text-foreground mt-2 mb-1">{children}</h3>,
+                        code: ({ children }) => <code className="rounded bg-white/10 px-1 py-0.5 text-xs font-mono">{children}</code>,
+                        pre: ({ children }) => <pre className="rounded bg-white/5 p-2 text-xs font-mono overflow-x-auto my-1.5 border border-white/10">{children}</pre>,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
               {/* Citation cards */}
