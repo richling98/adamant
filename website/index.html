@@ -266,6 +266,11 @@ body{background:#000;color:#fff;font-family:'Manrope',system-ui,sans-serif;-webk
 .themes-section.theme-rune .theme-tab.active{background:hsl(214 96% 66%);border-color:hsl(214 96% 66%);color:#0e131b}
 .themes-section.theme-mithril .theme-tab.active{background:hsl(252 52% 62%);border-color:hsl(252 52% 62%);color:#12111c}
 .themes-section.theme-bronze .theme-tab.active{background:hsl(32 72% 62%);border-color:hsl(32 72% 62%);color:#1a140f}
+.theme-desc{font-size:14px;font-style:italic;color:rgba(255,255,255,.55);margin:-26px 0 38px;min-height:1.2em;transition:color .35s ease}
+.themes-section.theme-adamant .theme-desc{color:rgba(255,255,255,.55)}
+.themes-section.theme-rune .theme-desc{color:rgba(255,255,255,.55)}
+.themes-section.theme-mithril .theme-desc{color:rgba(255,255,255,.55)}
+.themes-section.theme-bronze .theme-desc{color:rgba(255,255,255,.55)}
 .theme-showcase{position:relative;width:100%;min-width:0;border:1px solid rgba(110,216,49,.16);border-radius:24px;background:#020704;box-shadow:0 30px 90px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden}
 .theme-video{display:block;width:100%;max-width:100%;min-width:0;aspect-ratio:16/9;object-fit:contain;background:#020704}
 
@@ -398,6 +403,7 @@ body{background:#000;color:#fff;font-family:'Manrope',system-ui,sans-serif;-webk
 <button class="theme-tab" type="button" role="tab" aria-selected="false" data-theme="rune">Rune</button>
 <button class="theme-tab" type="button" role="tab" aria-selected="false" data-theme="mithril">Mithril</button>
 </div>
+<p class="theme-desc" id="themeDesc">Forthright and calm in the face of chaos.</p>
 <div class="theme-showcase">
 <video class="theme-video theme-adamant" id="themeVideo" autoplay muted loop playsinline preload="auto" aria-label="Adamant theme preview">
 <source src="assets/themes-adamant.mov" type="video/mp4"/>
@@ -588,8 +594,8 @@ const toolName=document.getElementById('toolName');
 const toolCopy=document.getElementById('toolCopy');
 const toolData={
   scribe:{name:'Scribe:',copy:'Capture and summarize anything with AI',src:'assets/scribe-final-product-marketing-sync.mov'},
-  secretary:{name:'Secretary:',copy:"Capture to-do's and actions from meetings instantly",src:'assets/secretary-final.mov'},
-  savant:{name:'Savant:',copy:'Chat with all of your meetings like your second brain.',src:'assets/hero-video-v4.mp4'}
+  secretary:{name:'Secretary:',copy:"Our AI automatically captured to-do's and actions from your meetings",src:'assets/secretary-final.mov'},
+  savant:{name:'Savant:',copy:'Chat with all of your meetings like your second brain.',src:'assets/savant-final-cut.mov'}
 };
 const activeTab=document.querySelector('.tool-tab.active');
 if(activeTab&&toolVideo){
@@ -619,17 +625,18 @@ document.querySelectorAll('.tool-tab').forEach((tab)=>{
   });
 });
 const themeData={
-  adamant:{src:'assets/themes-adamant.mov'},
-  bronze:{src:'assets/themes-bronze.mov'},
-  rune:{src:'assets/themes-rune.mov'},
-  mithril:{src:'assets/themes-mithril.mov'}
+  adamant:{src:'assets/themes-adamant.mov',desc:'Forthright and calm in the face of chaos.'},
+  bronze:{src:'assets/themes-bronze.mov',desc:'Grounded to what is important.'},
+  rune:{src:'assets/themes-rune.mov',desc:'Mystic solitude begets true creation.'},
+  mithril:{src:'assets/themes-mithril.mov',desc:'Only in darkness is the light truly appreciated.'}
 };
 const themeVideo=document.getElementById('themeVideo');
+const themeDesc=document.getElementById('themeDesc');
 const themesSection=document.getElementById('themes');
 const activeThemeTab=document.querySelector('.theme-tab.active');
 if(activeThemeTab&&themeVideo){
   const t=themeData[activeThemeTab.dataset.theme];
-  if(t){themeVideo.src=t.src;themeVideo.load();}
+  if(t){themeVideo.src=t.src;themeVideo.load();if(themeDesc)themeDesc.textContent=t.desc;}
 }
 document.querySelectorAll('.theme-tab').forEach((tab)=>{
   tab.addEventListener('click',()=>{
@@ -643,6 +650,7 @@ document.querySelectorAll('.theme-tab').forEach((tab)=>{
     themesSection.className=`themes-section theme-${theme}`;
     themeVideo.className=`theme-video theme-${theme}`;
     themeVideo.setAttribute('aria-label',`${tab.textContent} theme preview`);
+    if(themeDesc)themeDesc.textContent=themeData[theme].desc;
     if(themeVideo.currentSrc.endsWith(themeData[theme].src))return;
     themeVideo.src=themeData[theme].src;
     themeVideo.load();
