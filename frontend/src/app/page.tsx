@@ -229,7 +229,7 @@ export default function Home() {
               className="min-w-[150px] px-6 py-3 rounded-2xl font-medium text-base transition-all duration-300"
               style={getHomeButtonStyle(hoverTodosBtn)}
             >
-              Actions
+              Tasks
             </button>
 
             <button

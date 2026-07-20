@@ -103,16 +103,19 @@ export function TodosPage() {
   const [showActionsHelp, setShowActionsHelp] = useState(false);
   const [showAllComposer, setShowAllComposer] = useState(false);
   const [expandRequest, setExpandRequest] = useState<{ date: string; version: number } | null>(null);
+  const hasLoaded = useRef(false);
 
   const fetchTodos = useCallback(async () => {
-    setLoading(true);
+    const isInitialLoad = !hasLoaded.current;
+    if (isInitialLoad) setLoading(true);
     try {
       const data = isAllView ? await getAllTodos() : await getTodosByDate(activeDate);
       setTodos(sortTodosForDisplay(data));
     } catch (e) {
-      toast.error("Failed to load to-dos");
+      toast.error("Failed to load tasks");
     } finally {
-      setLoading(false);
+      if (isInitialLoad) setLoading(false);
+      hasLoaded.current = true;
     }
   }, [activeDate, isAllView]);
 
@@ -148,7 +151,7 @@ export function TodosPage() {
       setTodos((prev) =>
         prev.map((t) => (t.id === id ? { ...t, is_checked: !checked } : t)),
       );
-      toast.error("Failed to update to-do");
+      toast.error("Failed to update task");
     }
   };
 
@@ -159,7 +162,7 @@ export function TodosPage() {
       fetchTodoDates();
     } catch (e) {
       fetchTodos();
-      toast.error("Failed to delete to-do");
+      toast.error("Failed to delete task");
     }
   };
 
@@ -167,7 +170,7 @@ export function TodosPage() {
     try {
       await apiUpdateTodo(id, json, markdown);
     } catch (e) {
-      toast.error("Failed to save to-do");
+      toast.error("Failed to save task");
     }
   };
 
@@ -214,7 +217,7 @@ export function TodosPage() {
         setFocusedTodoId(normalizedTodo.id);
         fetchTodoDates();
       } catch (e) {
-        toast.error("Failed to create to-do");
+        toast.error("Failed to create task");
       }
     },
     [fetchTodoDates, todos],
@@ -253,7 +256,7 @@ export function TodosPage() {
         {isAllView ? (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
               <ListTodo className="w-4 h-4 text-primary" />
-              <h1 className="text-lg font-semibold text-zinc-100 leading-none">Your to do's</h1>
+              <h1 className="text-lg font-semibold text-zinc-100 leading-none">Your tasks</h1>
               <button
                 type="button"
                 onClick={() => setShowAllComposer(true)}
@@ -270,7 +273,7 @@ export function TodosPage() {
               <button
                 type="button"
                 className="inline-flex items-center text-zinc-500 transition-colors hover:text-zinc-300"
-                aria-label="About actions"
+                aria-label="About tasks"
                 aria-expanded={showActionsHelp}
                 onClick={() => setShowActionsHelp((prev) => !prev)}
               >
@@ -278,7 +281,7 @@ export function TodosPage() {
               </button>
               {showActionsHelp && (
                 <div className="absolute left-1/2 top-full z-50 mt-2 w-72 -translate-x-1/2 rounded-md border border-white/10 bg-primary px-3 py-2 text-sm leading-relaxed text-primary-foreground shadow-xl">
-                  We automatically capture actions and to-do&apos;s from your meetings using AI. You can modify or add actions as you please.
+                  We automatically capture tasks from your meetings using AI. You can modify or add tasks as you please.
                 </div>
               )}
             </div>
@@ -311,7 +314,7 @@ export function TodosPage() {
           {todos.length === 0 ? (
             <div className="flex flex-col items-center py-16 text-center">
               <p className="text-sm text-zinc-500 leading-relaxed max-w-md">
-                Adamant will automatically capture actions and to-do&apos;s from your meeting notes. You can also add standalone actions manually.
+                Adamant will automatically capture tasks from your meeting notes. You can also add standalone tasks manually.
               </p>
               <div className="mt-6 w-full max-w-md">
                 <ActionComposer
@@ -326,7 +329,7 @@ export function TodosPage() {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-zinc-400">
                     <span className="inline-block w-2 h-2 rounded-full bg-rose-500 mr-1.5" />
-                    {unchecked.length} incomplete to do{(unchecked.length !== 1 ? "'s" : "")}
+                    {unchecked.length} incomplete task{unchecked.length !== 1 ? "s" : ""}
                   </span>
                   <span className="text-xs text-zinc-400">
                     <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5" />
@@ -334,12 +337,14 @@ export function TodosPage() {
                   </span>
                 </div>
                 <div
-                  className="h-2 bg-zinc-700 rounded-full overflow-hidden transition-all duration-500"
-                  style={{
-                    background: totalCount > 0
-                      ? `linear-gradient(to right, #f43f5e 0%, #f43f5e calc(${(unchecked.length / totalCount) * 100}% - 12px), #22c55e calc(${(unchecked.length / totalCount) * 100}% + 12px), #22c55e 100%)`
-                      : '#3f3f46',
-                  }}
+                  className="h-2 rounded-full overflow-hidden"
+                  style={
+                    totalCount === 0
+                      ? { backgroundColor: '#3f3f46' }
+                      : {
+                          backgroundImage: `linear-gradient(to right, #f43f5e 0%, #f43f5e calc(${(unchecked.length / totalCount) * 100}% - 10px), #22c55e calc(${(unchecked.length / totalCount) * 100}% + 10px), #22c55e 100%)`,
+                        }
+                  }
                 />
               </div>
               {showAllComposer && (
@@ -371,7 +376,7 @@ export function TodosPage() {
           {/* Empty state */}
           {todos.length === 0 && (
             <div className="text-center py-16 text-zinc-500">
-              <p className="text-sm">No actions for {formatDateLabel(activeDate)}</p>
+              <p className="text-sm">No tasks for {formatDateLabel(activeDate)}</p>
               <p className="text-xs mt-1">
                 Run AI cleanup on a meeting to extract action items, or use the plus button to add one manually.
               </p>
@@ -538,7 +543,7 @@ function TodoRow({
             className={`flex-1 min-w-0 bg-transparent border-0 px-0 py-0.5 text-base outline-none placeholder:text-zinc-500 focus:outline-none focus:ring-0 ${
               todo.is_checked ? "line-through text-zinc-500" : "text-zinc-100"
             }`}
-            placeholder="Untitled to-do"
+            placeholder="Untitled task"
             aria-label="To-do text"
           />
         </div>
@@ -556,7 +561,7 @@ function TodoRow({
       <button
         onClick={() => onDelete(todo.id)}
         className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-opacity p-1"
-        aria-label="Delete to-do"
+        aria-label="Delete task"
       >
         <Trash2 className="w-4 h-4" />
       </button>
@@ -713,7 +718,7 @@ function TodosDateGroup({
           </span>
           <span className="flex-1 min-w-0 text-sm font-medium text-zinc-100 truncate">{label}</span>
           <span className="text-xs text-zinc-500 flex-shrink-0">
-            {unchecked.length} to do{unchecked.length !== 1 ? "'s" : "'s"} | {checked.length} complete
+            {unchecked.length} task{unchecked.length !== 1 ? "s" : ""} | {checked.length} complete
           </span>
         </button>
         <button

@@ -194,14 +194,14 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       void fetchTodoDates();
       if (event.payload.status === 'completed') {
         if (event.payload.count === 0) {
-          toast.info('No personal actions found');
+          toast.info('No personal tasks found');
         } else {
           toast.success(
-            event.payload.count === 1 ? '1 action captured' : `${event.payload.count} actions captured`,
+            event.payload.count === 1 ? '1 task captured' : `${event.payload.count} tasks captured`,
           );
         }
       } else if (event.payload.status === 'failed') {
-        toast.warning(event.payload.error || 'AI Cleanup finished, but action capture was unavailable');
+        toast.warning(event.payload.error || 'AI Cleanup finished, but task capture was unavailable');
       }
     }).then((cleanup) => {
       unlisten = cleanup;
